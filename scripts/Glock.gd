@@ -1324,7 +1324,9 @@ var pistol_root: Node3D
 var pistol_parts := {}
 var pistol_rest := {}          # transform de reposo de cada pieza, en espacio del modelo
 var pistol_scale := 1.0        # metros de arma por unidad del modelo
-var pistol_slide_dir := Vector3(0, 0, 1)   # avance de la corredera, en espacio del modelo
+var pistol_slide_dir := Vector3(0, 0, 1)   # avance de la corredera, en espacio local
+var pistol_mag_down := Vector3(0, -1, 0)   # hacia abajo, en espacio local del cargador
+var pistol_slide_units := Vector3(0, 0, 1) # metros -> unidades locales de la corredera
 var pistol_trigger_axis := Vector3(1, 0, 0)
 var pistol_trigger_pivot := Vector3.ZERO
 var pistol_ok := false
@@ -1360,11 +1362,12 @@ func _build_high_fidelity_pistol() -> bool:
     # (~1.6), y colándolos en la caja envolvente falseaban el eje del cañón y la
     # escala (el arma salía gigante y girada 90°). Se miden aparte porque sólo
     # hacen falta para saber si se dibujan, y no se dibujan.
+    var skip_names := _subtree_mesh_names(pistol_parts, ["Shell", "Bullet"])
     var gun_verts := PackedVector3Array()
     for part_name in pistol_parts:
         if part_name == "Shell" or part_name == "Bullet":
             continue
-        gun_verts.append_array(_collect_rigid_verts(pistol_parts[part_name], []))
+        gun_verts.append_array(_part_verts(inst, pistol_parts[part_name], []))
     if gun_verts.is_empty():
         push_error("El arma de alta fidelidad no tiene vértices medibles")
         return false
@@ -1377,10 +1380,10 @@ func _build_high_fidelity_pistol() -> bool:
     var ax_h: int = order[1]
     var ax_w: int = order[2]
 
-    var c_sight := _centroid(_collect_rigid_verts(pistol_parts["Sight"], []))
-    var c_barrel := _centroid(_collect_rigid_verts(pistol_parts["Barrel"], []))
-    var c_frame := _centroid(_collect_rigid_verts(pistol_parts["Frame"], []))
-    var c_lock := _centroid(_collect_rigid_verts(pistol_parts["SlideLock"], [])) if pistol_parts.has("SlideLock") else c_frame
+    var c_sight := _centroid(_part_verts(inst, pistol_parts["Sight"], []))
+    var c_barrel := _centroid(_part_verts(inst, pistol_parts["Barrel"], []))
+    var c_frame := _centroid(_part_verts(inst, pistol_parts["Frame"], []))
+    var c_lock := _centroid(_part_verts(inst, pistol_parts["SlideLock"], [])) if pistol_parts.has("SlideLock") else c_frame
 
     var unit: Array[Vector3] = [Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)]
     # La mira va arriba (+Y) y la boca delante (-Z). El signo de la anchura se
@@ -1406,9 +1409,20 @@ func _build_high_fidelity_pistol() -> bool:
         -centre.z))
 
     # Ejes de la mecánica, traducidos al espacio del modelo.
-    pistol_slide_dir = rot.transposed() * Vector3(0, 0, 1)
-    pistol_trigger_axis = rot.transposed() * Vector3(1, 0, 0)
-    pistol_trigger_pivot = _centroid(_collect_rigid_verts(pistol_parts["Trigger"], []))
+    # Las piezas se mueven en el espacio LOCAL de su nodo padre, así que la
+    # direccion y el pivote hay que expresarlos ahí, no en el del modelo.
+    var slide_node := pistol_parts["Slide"] as Node3D
+    var trigger_node := pistol_parts["Trigger"] as Node3D
+    var mag_node := pistol_parts["Magazine"] as Node3D
+    # `transform.origin` vive en el espacio del PADRE de la pieza, así que el
+    # vector de un metro hay que expresarlo ahí: padre->inst, luego inst->arma
+    # (rot traspuesta) y por último dividir por la escala del arma.
+    pistol_slide_units = _meters_in_parent(inst, slide_node, rot, Vector3(0, 0, 1))
+    pistol_slide_dir = pistol_slide_units.normalized()
+    pistol_mag_down = _meters_in_parent(inst, mag_node, rot, Vector3(0, -1, 0))
+    pistol_trigger_axis = _dir_in_parent(inst, trigger_node, rot.transposed() * Vector3(1, 0, 0))
+    var trig_pivot_inst := _centroid(_part_verts(inst, trigger_node, []))
+    pistol_trigger_pivot = _local_chain(trigger_node, inst).affine_inverse() * trig_pivot_inst
 
     for part_name in pistol_parts:
         pistol_rest[part_name] = (pistol_parts[part_name] as Node3D).transform
@@ -1425,6 +1439,55 @@ func _build_high_fidelity_pistol() -> bool:
         " caja=", box.size.snapped(Vector3(0.001,0.001,0.001)), " ejes=", [ax_len, ax_h, ax_w],
         " cierre_x=", snappedf(c_lock[ax_w] - c_frame[ax_w], 0.0001))
     return true
+
+
+## Vértices de una pieza expresados en el espacio de `reference` (el nodo que se
+## cuelga del arma). Medir en el espacio de la propia pieza NO vale: se deja
+## fuera la rotación del nodo raíz del GLB, que sí se aplica al dibujar, y el
+## arma sale girada 90°.
+func _part_verts(reference: Node3D, part: Node3D, skip: Array) -> PackedVector3Array:
+    var out := PackedVector3Array()
+    var part_in_ref: Transform3D = _local_chain(part, reference)
+    var stack: Array = [part]
+    while not stack.is_empty():
+        var node = stack.pop_back()
+        if node is MeshInstance3D and node.mesh != null and not skip.has(node.name):
+            var xf: Transform3D = part_in_ref * _local_chain(node, part)
+            for i in range(node.mesh.get_surface_count()):
+                for v in node.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+                    out.append(xf * v)
+        for child in node.get_children():
+            stack.append(child)
+    return out
+
+
+## Nombres de las mallas dentro de las piezas indicadas, para poder excluirlas.
+func _subtree_mesh_names(parts: Dictionary, part_names: Array) -> Array:
+    var names: Array = []
+    for part_name in part_names:
+        if not parts.has(part_name):
+            continue
+        var stack: Array = [parts[part_name]]
+        while not stack.is_empty():
+            var node = stack.pop_back()
+            if node is MeshInstance3D:
+                names.append(node.name)
+            for child in node.get_children():
+                stack.append(child)
+    return names
+
+
+## Vector, en unidades del padre de `node`, que corresponde a UN METRO del arma
+## en la dirección `weapon_dir` (medida en el frame del arma).
+func _meters_in_parent(reference: Node3D, node: Node3D, rot: Basis, weapon_dir: Vector3) -> Vector3:
+    var parent_in_ref: Transform3D = _local_chain(node.get_parent(), reference)
+    return parent_in_ref.basis.inverse() * (rot.transposed() * weapon_dir) / pistol_scale
+
+
+## Dirección de `dir_in_ref` expresada en el espacio local del padre de `node`.
+func _dir_in_parent(reference: Node3D, node: Node3D, dir_in_ref: Vector3) -> Vector3:
+    var parent_in_ref: Transform3D = _local_chain(node.get_parent(), reference)
+    return (parent_in_ref.basis.inverse() * dir_in_ref).normalized()
 
 
 ## Vértices de todas las mallas bajo `root`, expresados en el espacio de `root`.
@@ -1448,7 +1511,7 @@ func _apply_pistol_parts() -> void:
     if not pistol_ok:
         return
     var slide := pistol_parts["Slide"] as Node3D
-    slide.transform.origin = (pistol_rest["Slide"] as Transform3D).origin + pistol_slide_dir * (slide_pos / pistol_scale)
+    slide.transform.origin = (pistol_rest["Slide"] as Transform3D).origin + pistol_slide_units * slide_pos
 
     var trigger := pistol_parts["Trigger"] as Node3D
     var trig := Basis(pistol_trigger_axis, -0.30 * trigger_visual)
@@ -1462,4 +1525,4 @@ func _apply_pistol_parts() -> void:
     var in_t := clampf((reload_elapsed - RELOAD_MAG_IN_T) / 0.30, 0.0, 1.0)
     var away := _smooth(out_t) * (1.0 - _smooth(in_t)) if reloading else 0.0
     var down := pistol_rest["Magazine"] as Transform3D
-    mag.transform.origin = down.origin + pistol_slide_dir * (-0.055 / pistol_scale * away) + Vector3(0, -0.09 / pistol_scale * away, 0)
+    mag.transform.origin = down.origin + pistol_slide_units * (-0.055 * away) + pistol_mag_down * (0.09 * away)
