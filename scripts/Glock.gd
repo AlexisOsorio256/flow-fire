@@ -1325,7 +1325,8 @@ var pistol_parts := {}
 var pistol_rest := {}          # transform de reposo de cada pieza, en espacio del modelo
 var pistol_scale := 1.0        # metros de arma por unidad del modelo
 var pistol_slide_dir := Vector3(0, 0, 1)   # avance de la corredera, en espacio local
-var pistol_mag_down := Vector3(0, -1, 0)   # hacia abajo, en espacio local del cargador
+var pistol_mag_down := Vector3(0, -1, 0)   # (sin uso; se conserva el nombre por claridad del eje)
+var pistol_mag_rest_weapon := Transform3D.IDENTITY  # cargador en reposo, frame del arma
 var pistol_slide_units := Vector3(0, 0, 1) # metros -> unidades locales de la corredera
 var pistol_trigger_axis := Vector3(1, 0, 0)
 var pistol_trigger_pivot := Vector3.ZERO
@@ -1426,6 +1427,10 @@ func _build_high_fidelity_pistol() -> bool:
 
     for part_name in pistol_parts:
         pistol_rest[part_name] = (pistol_parts[part_name] as Node3D).transform
+    # Pose de reposo del cargador expresada en el frame del arma (que es el de
+    # recoil_node: gun_frame cuelga de el sin transformacion).
+    pistol_mag_rest_weapon = (recoil_node as Node3D).global_transform.affine_inverse() * \
+        (pistol_parts["Magazine"] as Node3D).global_transform
 
     # La bala en recámara y la vaina sin expulsar no se dibujan: la munición la
     # lleva la lógica, y el casquillo que sale lo pone el juego.
@@ -1633,9 +1638,23 @@ func _apply_pistol_parts() -> void:
     # Cargador: la lógica manda. Sale del brocal a los 0.40 s y vuelve a los
     # 1.10 s, los mismos instantes que usa la animación del autor para las
     # manos, así que el gesto y el objeto coinciden en el tiempo.
+    # El cargador lo mueve el hueso Magazine del rig viejo, no una aproximacion
+    # por tiempos. Ese hueso ya esta animado por el autor en sincronia con las
+    # manos, y _apply_bone_poses lo devuelve a reposo en cuanto la logica da el
+    # cargador por asentado, asi que la animacion y la mecanica siguen siendo
+    # las mismas que con el arma vieja: lo unico que cambia es que ahora arrastra
+    # la malla del cargador nuevo.
+    #
+    # Se reutiliza la conjugacion que ya usaba _mag_screen_box en DevTools: el
+    # hueso y el arma no comparten ejes, asi que la pose relativa del hueso hay
+    # que llevarla al frame del arma antes de aplicarla.
     var mag := pistol_parts["Magazine"] as Node3D
-    var out_t := clampf((reload_elapsed - RELOAD_MAG_OUT_T) / 0.22, 0.0, 1.0)
-    var in_t := clampf((reload_elapsed - RELOAD_MAG_IN_T) / 0.30, 0.0, 1.0)
-    var away := _smooth(out_t) * (1.0 - _smooth(in_t)) if reloading else 0.0
-    var down := pistol_rest["Magazine"] as Transform3D
-    mag.transform.origin = down.origin + pistol_slide_units * (-0.055 * away) + pistol_mag_down * (0.09 * away)
+    if bone_magazine < 0 or skeleton == null or recoil_node == null:
+        mag.transform = pistol_rest["Magazine"] as Transform3D
+        return
+    var skel_from_weapon: Transform3D = ((model_root as Node3D).transform *
+        _local_chain(skeleton, model_root)).affine_inverse()
+    var weapon_from_skel: Transform3D = skel_from_weapon.affine_inverse()
+    var rel_skel: Transform3D = skeleton.get_bone_global_pose(bone_magazine) * skeleton.get_bone_global_rest(bone_magazine).affine_inverse()
+    var rel_weapon: Transform3D = weapon_from_skel * rel_skel * skel_from_weapon
+    mag.global_transform = (recoil_node as Node3D).global_transform * (rel_weapon * pistol_mag_rest_weapon)
