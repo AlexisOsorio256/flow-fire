@@ -683,6 +683,30 @@ func _build_model() -> void:
         push_error("No se pudo medir la malla del Glock: se usan cotas nominales")
         _build_reference_markers({})
 
+    _install_pistol()
+
+
+## Sustituye la malla de arma del rig viejo por la pistola de alta fidelidad,
+## conservando brazos, esqueleto y animaciones.
+##
+## De momento es OPT-IN con --newgun: la ruta nueva todavia no esta demostrada
+## como mejor. Capturada con la misma camara que la vieja, sale girada sobre su
+## eje y con los materiales en crudo (se ve metalica y clara donde deberia verse
+## polimero negro y corredera nitrurada). Mientras eso no este resuelto el juego
+## usa la de siempre, y la nueva solo se enciende para seguir trabajandola. Las
+## dos rutas tienen que poder capturarse con la misma camara: por eso la vieja
+## no se borra hasta que la nueva demuestre ser mejor.
+func _install_pistol() -> void:
+    if not OS.get_cmdline_user_args().has("--newgun"):
+        print("GLOCK arma=rig_viejo (la OWK 19 se prueba con --newgun)")
+        return
+    if not _build_high_fidelity_pistol():
+        push_warning("Se conserva la malla de arma del rig viejo")
+        return
+    if glock_mesh != null:
+        glock_mesh.visible = false
+    print("GLOCK arma=owk19 (brazos y animaciones del rig viejo)")
+
 
 
 ## Mide la malla tal como viene del GLB: vértices en su espacio de bind, caja
@@ -1276,3 +1300,166 @@ func _apply_bone_poses() -> void:
         var angle := -0.30 * trigger_visual
         var trigger_basis := rest_trigger.basis.rotated(Vector3(1, 0, 0), angle)
         skeleton.set_bone_pose_rotation(bone_trigger, trigger_basis.get_rotation_quaternion())
+    _apply_pistol_parts()
+
+
+## ---------------------------------------------------------------------------
+## Arma de alta fidelidad (OWK 19) como piezas rígidas.
+##
+## El asset NO trae esqueleto ni animaciones a propósito, así que no se toca ni
+## una línea de la mecánica: `slide_pos`, `trigger_visual`, `reload_elapsed` y
+## el resto del estado siguen siendo la única autoridad y aquí sólo se traducen
+## a transforms de nodo. Los brazos y sus animaciones siguen siendo del rig
+## viejo; lo único que se oculta es su malla de arma.
+##
+## El modelo se alinea midiendo su geometría, igual que el resto del arma: el
+## eje más largo es el cañón y el más corto la anchura, y los signos salen del
+## sitio real de la mira (arriba), el cañón (delante) y el cierre de corredera
+## (izquierda). No se asume ninguna orientación del exportador.
+## ---------------------------------------------------------------------------
+const PISTOL_PATH := "res://assets/models/owk19_pistol.glb"
+const PISTOL_PARTS := ["Slide", "Frame", "SlideLock", "Barrel", "Sight", "Magazine", "Shell", "Bullet", "Trigger"]
+
+var pistol_root: Node3D
+var pistol_parts := {}
+var pistol_rest := {}          # transform de reposo de cada pieza, en espacio del modelo
+var pistol_scale := 1.0        # metros de arma por unidad del modelo
+var pistol_slide_dir := Vector3(0, 0, 1)   # avance de la corredera, en espacio del modelo
+var pistol_trigger_axis := Vector3(1, 0, 0)
+var pistol_trigger_pivot := Vector3.ZERO
+var pistol_ok := false
+
+## Carga la pistola, la mide, la alinea al frame del arma y se la cuelga a
+## gun_frame (que ya está en metros). Devuelve true si quedó utilizable.
+func _build_high_fidelity_pistol() -> bool:
+    var packed := load(PISTOL_PATH) as PackedScene
+    if packed == null:
+        push_error("No se pudo cargar el arma de alta fidelidad: " + PISTOL_PATH)
+        return false
+    if gun_frame == null:
+        push_error("El arma de alta fidelidad necesita el frame del arma ya construido")
+        return false
+
+    var inst := packed.instantiate()
+    var holder := Node3D.new()
+    holder.name = "PistolOWK19"
+    gun_frame.add_child(holder)
+    holder.add_child(inst)
+
+    for part_name in PISTOL_PARTS:
+        var node := inst.find_child(part_name, true, false) as Node3D
+        if node != null:
+            pistol_parts[part_name] = node
+    for required in ["Slide", "Frame", "Barrel", "Sight", "Trigger", "Magazine"]:
+        if not pistol_parts.has(required):
+            push_error("Al arma de alta fidelidad le falta la pieza '%s'" % required)
+            return false
+
+    # La medida del arma EXCLUYE Shell y Bullet: en este asset son dos objetos
+    # sueltos de 2x2x2.3 unidades, mucho mayores que cualquier pieza del arma
+    # (~1.6), y colándolos en la caja envolvente falseaban el eje del cañón y la
+    # escala (el arma salía gigante y girada 90°). Se miden aparte porque sólo
+    # hacen falta para saber si se dibujan, y no se dibujan.
+    var gun_verts := PackedVector3Array()
+    for part_name in pistol_parts:
+        if part_name == "Shell" or part_name == "Bullet":
+            continue
+        gun_verts.append_array(_collect_rigid_verts(pistol_parts[part_name], []))
+    if gun_verts.is_empty():
+        push_error("El arma de alta fidelidad no tiene vértices medibles")
+        return false
+    var box := _bounds(gun_verts)
+
+    # Eje del cañón = el más largo; altura = el mediano; anchura = el más corto.
+    var order := [0, 1, 2]
+    order.sort_custom(func(a, b): return box.size[a] > box.size[b])
+    var ax_len: int = order[0]
+    var ax_h: int = order[1]
+    var ax_w: int = order[2]
+
+    var c_sight := _centroid(_collect_rigid_verts(pistol_parts["Sight"], []))
+    var c_barrel := _centroid(_collect_rigid_verts(pistol_parts["Barrel"], []))
+    var c_frame := _centroid(_collect_rigid_verts(pistol_parts["Frame"], []))
+    var c_lock := _centroid(_collect_rigid_verts(pistol_parts["SlideLock"], [])) if pistol_parts.has("SlideLock") else c_frame
+
+    var unit: Array[Vector3] = [Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, 1)]
+    # La mira va arriba (+Y) y la boca delante (-Z). El signo de la anchura se
+    # elige para que la base sea una rotación propia (determinante +1).
+    var s_h := 1.0 if c_sight[ax_h] > c_frame[ax_h] else -1.0
+    var s_len := 1.0 if c_barrel[ax_len] > c_frame[ax_len] else -1.0
+    var d_len: Vector3 = unit[ax_len] * s_len
+    var d_h: Vector3 = unit[ax_h] * s_h
+    var d_w: Vector3 = unit[ax_w]
+    var w_basis := Basis(Vector3(0, 0, -1), Vector3(0, 1, 0), Vector3(1, 0, 0))
+    var rot := w_basis * Basis(d_len, d_h, d_w).transposed()
+    if rot.determinant() < 0.0:
+        d_w = -d_w
+        rot = w_basis * Basis(d_len, d_h, d_w).transposed()
+
+    pistol_scale = GUN_LENGTH / maxf(box.size[ax_len], 0.000001)
+    var scaled := rot.scaled(Vector3(pistol_scale, pistol_scale, pistol_scale))
+    var framed := _box_in_frame(box, scaled)
+    var centre := framed.position + framed.size * 0.5
+    holder.transform = Transform3D(scaled, Vector3(
+        -centre.x,
+        GUN_TOP_OVER_ORIGIN - (framed.position.y + framed.size.y),
+        -centre.z))
+
+    # Ejes de la mecánica, traducidos al espacio del modelo.
+    pistol_slide_dir = rot.transposed() * Vector3(0, 0, 1)
+    pistol_trigger_axis = rot.transposed() * Vector3(1, 0, 0)
+    pistol_trigger_pivot = _centroid(_collect_rigid_verts(pistol_parts["Trigger"], []))
+
+    for part_name in pistol_parts:
+        pistol_rest[part_name] = (pistol_parts[part_name] as Node3D).transform
+
+    # La bala en recámara y la vaina sin expulsar no se dibujan: la munición la
+    # lleva la lógica, y el casquillo que sale lo pone el juego.
+    for hidden in ["Shell", "Bullet"]:
+        if pistol_parts.has(hidden):
+            (pistol_parts[hidden] as Node3D).visible = false
+
+    pistol_ok = true
+    print("PISTOL_OWK19 piezas=", pistol_parts.size(), " escala=", snappedf(pistol_scale, 0.00001),
+        " largo_modelo=", snappedf(box.size[ax_len], 0.0001),
+        " caja=", box.size.snapped(Vector3(0.001,0.001,0.001)), " ejes=", [ax_len, ax_h, ax_w],
+        " cierre_x=", snappedf(c_lock[ax_w] - c_frame[ax_w], 0.0001))
+    return true
+
+
+## Vértices de todas las mallas bajo `root`, expresados en el espacio de `root`.
+func _collect_rigid_verts(root: Node3D, skip: Array) -> PackedVector3Array:
+    var out := PackedVector3Array()
+    var stack: Array = [root]
+    while not stack.is_empty():
+        var node = stack.pop_back()
+        if node is MeshInstance3D and node.mesh != null and not skip.has(node.name):
+            var xf: Transform3D = _local_chain(node, root)
+            for i in range(node.mesh.get_surface_count()):
+                for v in node.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+                    out.append(xf * v)
+        for child in node.get_children():
+            stack.append(child)
+    return out
+
+
+## Traduce el estado mecánico (que no cambia) a transforms de las piezas.
+func _apply_pistol_parts() -> void:
+    if not pistol_ok:
+        return
+    var slide := pistol_parts["Slide"] as Node3D
+    slide.transform.origin = (pistol_rest["Slide"] as Transform3D).origin + pistol_slide_dir * (slide_pos / pistol_scale)
+
+    var trigger := pistol_parts["Trigger"] as Node3D
+    var trig := Basis(pistol_trigger_axis, -0.30 * trigger_visual)
+    trigger.transform = Transform3D(trig, pistol_trigger_pivot - trig * pistol_trigger_pivot)
+
+    # Cargador: la lógica manda. Sale del brocal a los 0.40 s y vuelve a los
+    # 1.10 s, los mismos instantes que usa la animación del autor para las
+    # manos, así que el gesto y el objeto coinciden en el tiempo.
+    var mag := pistol_parts["Magazine"] as Node3D
+    var out_t := clampf((reload_elapsed - RELOAD_MAG_OUT_T) / 0.22, 0.0, 1.0)
+    var in_t := clampf((reload_elapsed - RELOAD_MAG_IN_T) / 0.30, 0.0, 1.0)
+    var away := _smooth(out_t) * (1.0 - _smooth(in_t)) if reloading else 0.0
+    var down := pistol_rest["Magazine"] as Transform3D
+    mag.transform.origin = down.origin + pistol_slide_dir * (-0.055 / pistol_scale * away) + Vector3(0, -0.09 / pistol_scale * away, 0)
