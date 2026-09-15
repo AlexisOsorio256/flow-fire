@@ -113,12 +113,18 @@ Perfil A/B por subsistema, misma escena, cámara y duración:
 
 | Subsistema | Coste | % del frame |
 |---|---|---|
-| 8 luces omni del interior | **12.2 ms** | 31% |
-| sombra direccional | 2.4 ms | 6% |
-| bodycam post | 1.8 ms | 5% |
-| viewmodel completo | 1.9 ms | 5% |
-| glow | 0.3 ms | 1% |
-| niebla | 0.2 ms | <1% |
+| 8 luces omni del interior | **12.2 ms** | 44% |
+| sombra direccional | 2.7 ms | 7% |
+| bodycam post | 1.9 ms | 5% |
+| viewmodel completo (ambas mallas) | 1.1 ms | 3% |
+| glow | 0.7 ms | 2% |
+| niebla | ~0 | <1% |
+| ImpactFX bajo estrés | ~0 | <1% |
+
+Base: **24.9 FPS / 40.2 ms** en la HD 520 a 1920x1080, vsync off, 3 repeticiones
+de 6 s. Adoptar la OWK 19 no solo mejoro la imagen: el viewmodel bajo de 1.9 a
+1.1 ms, porque son 9 piezas rigidas sin skinning en vez de 12 primitivas
+skinned.
 
 Las omni son el único cuello de botella grande que queda, y **no se puede
 abaratarlas por culling**. Comprobado, no supuesto:
