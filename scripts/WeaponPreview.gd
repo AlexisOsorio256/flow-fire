@@ -33,9 +33,9 @@ func _ready() -> void:
     const ARMATURE_SCALE := 48.2968
     var visual_scale := DESIRED_LENGTH / LOCAL_LENGTH
     var root_scale := visual_scale / ARMATURE_SCALE
-    var target_basis := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+    var target_basis := Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, -1))
     model.transform.basis = target_basis.scaled(Vector3(root_scale, root_scale, root_scale))
-    model.position = Vector3(0.17, -0.185, -0.345)
+    model.position = Vector3.ZERO
     add_child(model)
 
     var bullet_mesh := model.find_child("Glock19_001", true, false) as MeshInstance3D
@@ -44,9 +44,9 @@ func _ready() -> void:
 
     var cam := Camera3D.new()
     add_child(cam)
-    cam.position = Vector3.ZERO
-    cam.rotation = Vector3.ZERO
-    cam.fov = 82.0
+    cam.position = Vector3(0.32, 0.10, 0.0)
+    cam.look_at(Vector3(0.0, 0.0, 0.0), Vector3.UP)
+    cam.fov = 34.0
     cam.current = true
 
     await get_tree().process_frame

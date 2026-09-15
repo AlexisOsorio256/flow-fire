@@ -427,7 +427,7 @@ func _spawn_shell() -> void:
     get_tree().current_scene.add_child(shell)
     shell.global_transform = ejection_port.global_transform
     var basis := ejection_port.global_transform.basis
-    var local_vel := Vector3(1.5 + randf() * 1.1, -1.0 - randf() * 0.6, 1.7 + randf() * 0.9)
+    var local_vel := Vector3(-1.5 - randf() * 1.1, 1.5 + randf() * 0.7, -1.0 - randf() * 0.6)
     shell.linear_velocity = basis * local_vel + player_velocity * 0.8
     shell.angular_velocity = Vector3(randf_range(-16.0, 16.0), randf_range(-16.0, 16.0), randf_range(-16.0, 16.0))
 
@@ -503,9 +503,10 @@ func _build_model() -> void:
     if packed != null:
         model_root = packed.instantiate()
         model_root.name = "GlockModel"
-        # Modelo local: +X derecha, +Y cañón, +Z arriba.
-        # Godot arma local: +X derecha, -Z cañón (adelante), +Y arriba.
-        var target_basis := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+        # Modelo local REAL: +X lateral, +Y arriba, +Z cañón/adelante.
+        # Godot arma local: -Z adelante, +Y arriba, +X derecha.
+        # Se invierte X para conservar base derecha (det +1) tras mapear Z->-Z.
+        var target_basis := Basis(Vector3(-1, 0, 0), Vector3(0, 1, 0), Vector3(0, 0, -1))
         model_root.transform.basis = target_basis.scaled(Vector3(root_scale, root_scale, root_scale))
         model_root.position = Vector3(0.0, 0.0, 0.0)
         recoil_node.add_child(model_root)
@@ -536,13 +537,13 @@ func _build_model() -> void:
     muzzle = Node3D.new()
     muzzle.name = "Muzzle"
     marker_parent.add_child(muzzle)
-    muzzle.position = Vector3(0.0, 0.0235, 0.0145)
+    muzzle.position = Vector3(0.0, 0.0145, 0.0235)
     _build_flash()
 
     ejection_port = Node3D.new()
     ejection_port.name = "EjectionPort"
     marker_parent.add_child(ejection_port)
-    ejection_port.position = Vector3(0.0036, 0.010, 0.016)
+    ejection_port.position = Vector3(-0.0036, 0.010, 0.010)
 
 
 func _build_flash() -> void:
@@ -605,9 +606,10 @@ func _setup_bones() -> void:
     if root_idx >= 0:
         var root_rest := skeleton.get_bone_global_rest(root_idx)
         var inverse_root := root_rest.basis.inverse()
-        # Modelo local: +Y = frente del cañón, +Z = arriba.
-        slide_axis = (inverse_root * Vector3(0, -1, 0)).normalized()
-        magazine_axis = (inverse_root * Vector3(0, 0, -1)).normalized()
+        # Modelo local corregido: +Z = frente del cañón, +Y = arriba.
+        # La corredera abre hacia atrás (-Z); el cargador baja (-Y).
+        slide_axis = (inverse_root * Vector3(0, 0, -1)).normalized()
+        magazine_axis = (inverse_root * Vector3(0, -1, 0)).normalized()
 
 
 func _apply_bone_poses() -> void:
