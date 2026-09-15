@@ -106,6 +106,38 @@ No ampliar el juego para “aprovechar” que una tarea terminó pronto.
 - **Autoloads actuales:** `GameAudio`, `ImpactFX`, `Ballistics`.
 - **Escena principal:** `scenes/Main.tscn`.
 
+### Cuello de botella medido (HD 520, 1920×1080, Mobile)
+
+Perfil A/B por subsistema, misma escena, cámara y duración:
+
+| Subsistema | Coste | % del frame |
+|---|---|---|
+| 8 luces omni del interior | **12.2 ms** | 31% |
+| sombra direccional | 2.4 ms | 6% |
+| bodycam post | 1.8 ms | 5% |
+| viewmodel completo | 1.9 ms | 5% |
+| glow | 0.3 ms | 1% |
+| niebla | 0.2 ms | <1% |
+
+Las omni son el único cuello de botella grande que queda, y **no se puede
+abaratarlas por culling**. Comprobado, no supuesto:
+
+- trocear la sala (suelo, techo y paredes) en 36 mallas en vez de 6, para que
+  cada trozo lleve en su lista sólo las luces que le llegan: el coste de las
+  omni no cambió (12.27 ms contra 12.24 ms);
+- sacar el viewmodel a su propia capa de luz para que las ocho omni no entren
+  en su lista: sin ganancia medible, y el arma se oscurecía 1.7–4.4/255, así que
+  se descartó.
+
+El coste es intrínseco a ocho omni dinámicas de 9 m alumbrando toda la sala. La
+palanca que queda es dejar de renderizarlas en tiempo real: **horneado
+(LightmapGI)**, que exige convertir la parte estática de la sala a una escena
+editable y generar UV2. No se ha hecho todavía.
+
+Lo que **no** es un problema, medido y descartado: el shader procedural del arma
+(4 fbm por píxel) no cuesta nada — sustituirlo por un material plano no ahorra
+ni un milisegundo— y el script de animación tampoco.
+
 ### Autoridades existentes
 
 | Área | Autoridad principal |
