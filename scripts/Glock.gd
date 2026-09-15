@@ -1589,67 +1589,41 @@ func _install_arms() -> void:
     print("ARMS_MALLAS total=", mallas.size(), " brazos=", (brazos.name if brazos != null else "?"),
         " vertices_brazos=", mayor, " ocultas=", ocultas)
 
-    var cam_bone := -1
+    # Anclaje por el hueso del ARMA (`Rif_059`), no por el de camara: el arma es
+    # el punto cuya posicion fija la mecanica de FlowFire, y las manos vienen a
+    # ella por la animacion, no al reves. Ver el aviso de arriba sobre por que
+    # `Head_Cam_014` no vale.
+    var rif_bone := -1
     for b in range(arms_skeleton.get_bone_count()):
-        if arms_skeleton.get_bone_name(b).begins_with("Head_Cam"):
-            cam_bone = b
+        if arms_skeleton.get_bone_name(b).begins_with("Rif"):
+            rif_bone = b
             break
-    if cam_bone < 0:
-        push_warning("Los brazos nuevos no traen hueso de camara: no se puede anclar")
-        arms_root.queue_free()
+    if rif_bone < 0 or gun_frame == null:
+        push_warning("Los brazos nuevos no traen hueso de arma: no se pueden anclar")
+        holder.queue_free()
         arms_root = null
         return
-    # Se ancla corrigiendo en espacio mundo: se mide donde quedo el hueso de
-    # camara del rig y se aplica al envoltorio la correccion que lo lleva a la
-    # camara del juego. Asi no hay que reconstruir a mano la cadena de nodos ni
-    # suponer escalas.
-    (recoil_node as Node3D).force_update_transform()
-    camera.force_update_transform()
+    # La orientacion se corrige con el giro de 90 sobre X ya validado (la caja
+    # pasa a 0.664 x 0.323 x 0.678, la forma de unos brazos extendidos) y se
+    # toma la del frame del arma como referencia, no la base del hueso: una base
+    # de hueso de Blender apunta a lo largo del hueso, no segun los ejes.
+    # Dos correcciones de orientacion, ambas medidas:
+    #  - 90 grados sobre X: el rig trae Y y Z intercambiados (el largo del brazo
+    #    caia en vertical);
+    #  - 180 grados sobre el eje de vision: con solo lo anterior los codos
+    #    salian por ARRIBA en vez de por abajo.
+    var fix := Basis(Vector3.BACK, PI) * Basis(Vector3.RIGHT, PI * 0.5)
+    var rif_rest: Transform3D = arms_skeleton.get_bone_global_rest(rif_bone)
+    holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fix, Vector3.ZERO)
+    force_update_transform()
     arms_skeleton.force_update_transform()
-    var head_rest: Transform3D = arms_skeleton.get_bone_global_rest(cam_bone)
-    var head_world: Transform3D = arms_skeleton.global_transform * head_rest
-    # Alineacion por POSICION, no por la base del hueso. Anclar tambien la
-    # orientacion con la base del hueso metia una rotacion arbitraria (la base
-    # de un hueso de Blender apunta a lo largo del hueso, no segun los ejes del
-    # mundo): medido, los brazos quedaban con la profundidad en el eje vertical
-    # -- 0.678 m de alto y 0.323 de fondo, justo al reves.
-    #
-    # Ahora el montaje se deja alineado con los ejes del mundo y se traslada
-    # para que el hueso de camara del autor caiga sobre la camara del juego.
-    # Los ejes locales de la malla (anchura, grosor, largo) coinciden asi con
-    # los del mundo, que es lo que se espera de un rig FPS.
-    # Medido con el montaje alineado al mundo: la malla sale con X=0.664
-    # (anchura, correcta), Y=0.678 (que es el LARGO del brazo, no la altura) y
-    # Z=0.323 (el grosor). Es decir, el rig trae Y y Z intercambiados respecto a
-    # los ejes del mundo. Se corrige girando 90 grados sobre X, que lleva el
-    # largo al eje Z y deja la anchura en X.
-    # AVISO medido: `Head_Cam_014` NO es el ojo. Anclarlo a la camara del juego
-    # deja el ojo donde el autor puso un visor de previsualizacion, a la MISMA
-    # altura que los hombros. Distancias relativas a la camara con ese anclaje:
-    #
-    #   Hand_L 0.340 m   Hand_R 0.300 m   Rif 0.380 m   UpArm_L 0.195 m
-    #
-    # Las manos y el arma estan a distancias correctas -- o sea que la ESCALA del
-    # rig esta bien --, pero UpArm_L cae a altura y=0.000, la de la camara, y a
-    # 5 cm por delante, cuando un hombro real esta ~15 cm por debajo y ~20 por
-    # detras. Por eso los brazos envuelven la camara y llenan la pantalla: no es
-    # que sean grandes, es que la camara esta metida entre los hombros.
-    #
-    # El anclaje correcto es el hueso del ARMA (`Rif_059`): colgar de el la
-    # OWK 19 y rehacer los offsets de pose a partir de ahi. El arma es el punto
-    # cuya posicion fija la mecanica de FlowFire, y las manos vienen a ella por
-    # la animacion, no al reves. Queda pendiente.
-    var fix := Basis(Vector3.RIGHT, PI * 0.5)
-    holder.global_transform = Transform3D(fix, Vector3.ZERO)
-    arms_skeleton.force_update_transform()
-    var head_cero: Vector3 = (arms_skeleton.global_transform * head_rest).origin
-    holder.global_transform = Transform3D(fix, camera.global_position - head_cero)
+    var rif_pos: Vector3 = (arms_skeleton.global_transform * rif_rest).origin
+    holder.global_transform.origin += (gun_frame as Node3D).global_transform.origin - rif_pos
 
     if arms_mesh != null:
         arms_mesh.visible = false
     arms_ok = true
-    print("ARMS_CRANSH ok cam_rest=", head_rest.origin.snapped(Vector3(0.001, 0.001, 0.001)),
-        " anim=", arms_player.get_animation_list() if arms_player != null else [])
+    print("ARMS_CRANSH ok anclado_al_arma anim=", arms_player.get_animation_list() if arms_player != null else [])
 
 
 ## Vuelve a medir boca, mira y puerto de expulsion sobre el arma NUEVA.
