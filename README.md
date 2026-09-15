@@ -121,6 +121,9 @@ balística, física, calidad u optimización · assets de licencia dudosa.
 |---|---|
 | `scenes/Main.tscn` → `scripts/Main.gd` | Arranque, entorno, tests y herramientas de medida. |
 | `scripts/Player.gd` | `CharacterBody3D`, cámara corporal, bob, breathing, sprint, recoil. |
+| `scripts/Arms.gd` | Brazos en primera persona: mide el rig, lo alinea y resuelve la pose de agarre por IK. |
+| `scripts/GunMaterials.gd` | Materiales del arma por nombre de primitiva (con detalle procedural). |
+| `scripts/Springs.gd` | Resortes amortiguados con integración estable (subpasos adaptativos). |
 | `scripts/Glock.gd` | Arma: mide la base de la malla, alinea el modelo, coloca boca/mira/puerto, huesos, corredera, gatillo, recarga, fogonazo, expulsión. |
 | `scripts/Ballistics.gd` | Autoload: proyectiles, penetración, rebotes, daño. |
 | `scripts/Target.gd` | Blancos `RigidBody3D` colgantes con daño por zona. |
@@ -130,6 +133,7 @@ balística, física, calidad u optimización · assets de licencia dudosa.
 | `scripts/HUD.gd` | HUD bodycam + post-proceso. |
 | `scripts/WeaponPreview.gd` | Escena aislada para inspeccionar el arma. |
 | `shaders/bodycam.gdshader` | Distorsión, chroma, grano, viñeta y blur. |
+| `shaders/gun.gdshader` | Detalle procedural del arma y los brazos (sin texturas en el GLB). |
 | `tools/process_audio.sh` | Normaliza los WAV por familia (ataque, cola, pico). |
 | `tools/make_timeline_media.sh` | Convierte los frames de `--timeline` en contacto + vídeo. |
 
@@ -149,13 +153,18 @@ balística, física, calidad u optimización · assets de licencia dudosa.
 
 Obligatorio después de cada cambio:
 
+**Los 4 tests devuelven exit code 0/1**: si algo se rompe, el comando falla y no
+basta con leer la salida. Verificado con pruebas negativas (apuntar al techo,
+ADS desplazado, recarga rota: los tres devuelven 1).
+
 ```bash
 # 1) Compila/importa y no rompe scripts
 godot4 --headless --path . --editor --quit
 
-# 2) Disparo, balística y Jolt
+# 2) Disparo, balística, Jolt y recamarado
 godot4 --headless --path . -- --autotest
-# Esperado: targets > 0, first_health < 100 y munición consistente.
+# Esperado: passed=true, targets > 0, la salud del blanco baja, se gasta 1 bala
+# y la recámara queda alimentada (chamber=1).
 
 # 3) Mira centrada
 godot4 --headless --path . -- --aimtest
@@ -165,11 +174,13 @@ godot4 --headless --path . -- --aimtest
 
 # 4) Penetración y orificios
 godot4 --headless --path . -- --pentest
-# Esperado: decals_after > decals_before y el blanco recibe daño.
+# Esperado: passed=true, decals_after > decals_before Y el blanco recibe daño
+# (las dos cosas: se comprobó que un disparo al techo falla el test).
 
 # 5) Recarga vacía y conservación de munición
 godot4 --headless --path . -- --reloadtest
 # Esperado: passed=true, mag=16, chamber=1, reserve=0, total=17.
+# (Comprobado también en negativo: si el cargador no se asienta, devuelve 1.)
 ```
 
 **Herramientas de medida** (no son tests: sirven para no suponer):
@@ -178,8 +189,8 @@ godot4 --headless --path . -- --reloadtest
 # Medida del arma: largo/escala, caja real en frame de arma, boca/mira/puerto,
 # recorrido de corredera y cargador, y pose viva.
 godot4 --path . --rendering-driver vulkan -- --geometrydebug
-# Esperado: GLOCK_MEDIDA largo_m=0.186, GUNBOX size=(0.0296, 0.1286, 0.186),
-# TRAVEL Slide en +Z (atrás) y Magazine en -Y (abajo), sin ERROR ni WARNING.
+# Esperado: passed=true con largo_m=0.186, caja (0.0296, 0.1286, 0.186),
+# corredera viajando en +Z y cargador en -Y. Devuelve exit code.
 
 # Timeline: secuencia guionizada (quieto, caminando, apuntar, disparos, recarga)
 # con un frame cada 0.1 s y sus métricas (mira, boca, caja del arma, cámara).

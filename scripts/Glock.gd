@@ -4,8 +4,8 @@ signal shot_fired
 signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 
 const MAG_SIZE := 17
-const GRAVITY := 9.8
 const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
+const ARMS_SCRIPT := preload("res://scripts/Arms.gd")
 const ADS_SIGHT_DISTANCE := 0.55  # Ojo -> mira trasera con el brazo extendido.
 const ADS_SIGHT_DROP := 0.008  # La mira queda algo bajo el centro para no taparlo.
 const HIP_POS := Vector3(0.0, -0.05, 0.0)  # Pose de lista: el arma va baja.
@@ -13,23 +13,14 @@ const HIP_POS := Vector3(0.0, -0.05, 0.0)  # Pose de lista: el arma va baja.
 var camera: Camera3D
 var pose_root: Node3D
 var recoil_node: Node3D
-var slide: Node3D
-var barrel_group: Node3D
-var mag_group: Node3D
-var trigger_mesh: MeshInstance3D
 var muzzle: Node3D
 var ejection_port: Node3D
 var muzzle_flash: MeshInstance3D
 var muzzle_flash_2: MeshInstance3D
 var muzzle_light: OmniLight3D
+var viewmodel_light: OmniLight3D
 
-var slide_mat: StandardMaterial3D
-var frame_mat: StandardMaterial3D
-var steel_mat: StandardMaterial3D
-var dark_mat: StandardMaterial3D
 var brass_mat: StandardMaterial3D
-var hand_mat: StandardMaterial3D
-var sight_mat: StandardMaterial3D
 var flash_mat: StandardMaterial3D
 
 var mag := 17
@@ -66,8 +57,6 @@ var reload_empty := false
 var reload_slide_released := false
 var reload_mag_seated := false
 var mag_inserted_sound := false
-var mag_base_y := -0.135
-var mag_base_z := 0.022
 
 var player_speed := 0.0
 var look_delta := Vector2.ZERO
@@ -76,16 +65,14 @@ var idle_phase := 0.0
 var sway := Vector2.ZERO
 var player_velocity := Vector3.ZERO
 
-var muzzle_world_pos := Vector3.ZERO
-
 var model_root: Node3D
+var arms: Node3D
 var gun_frame: Node3D
 var skeleton: Skeleton3D
 var glock_mesh: MeshInstance3D
 var bone_slide := -1
 var bone_trigger := -1
 var bone_magazine := -1
-var bone_barrel := -1
 var rest_slide := Transform3D.IDENTITY
 var rest_trigger := Transform3D.IDENTITY
 var rest_magazine := Transform3D.IDENTITY
@@ -101,6 +88,9 @@ var ads_offset := Vector3(-0.17, 0.138, 0.105)
 var gun_frame_bind := Basis.IDENTITY
 var bind_in_skeleton := Transform3D.IDENTITY
 var mesh_to_weapon := Transform3D.IDENTITY
+var gun_box := AABB()  # caja real de la malla en frame de arma
+var measured_length_m := 0.0  # largo medido de la malla (m)
+var alignment_ok := false     # la verificación de alineación pasó
 
 
 func _ready() -> void:
@@ -113,9 +103,37 @@ func _ready() -> void:
     pose_root.add_child(recoil_node)
 
     _build_materials()
+    _build_viewmodel_light()
     _build_model()
+    _build_arms()
     _setup_bones()
     _emit_ammo()
+
+
+## Luz corta de relleno para el arma. Es un viewmodel en un interior oscuro: sin
+## esto el negro de la corredera se lee como una mancha. Sin sombras y con rango
+## corto, así que no toca al resto de la escena.
+func _build_viewmodel_light() -> void:
+    viewmodel_light = OmniLight3D.new()
+    viewmodel_light.name = "ViewmodelLight"
+    viewmodel_light.light_color = Color(0.90, 0.93, 1.0)
+    viewmodel_light.light_energy = 1.1
+    viewmodel_light.omni_range = 1.0
+    viewmodel_light.shadow_enabled = false
+    viewmodel_light.position = Vector3(0.22, 0.30, 0.12)
+    add_child(viewmodel_light)
+
+
+## Brazos en primera persona, colgados de la raíz de pose para que acompañen
+## al arma sin heredar su retroceso.
+func _build_arms() -> void:
+    if not gun_box.has_volume():
+        push_warning("Sin caja medida del arma: no se colocan los brazos")
+        return
+    arms = ARMS_SCRIPT.new()
+    arms.name = "Arms"
+    pose_root.add_child(arms)
+    arms.setup(self)
 
 
 func setup(cam: Camera3D) -> void:
@@ -160,7 +178,11 @@ func start_reload() -> bool:
         return false
     reloading = true
     reload_elapsed = 0.0
-    reload_empty = chamber <= 0 and slide_locked
+    # Recarga en vacío = no hay cartucho en recámara: hay que soltar la
+    # corredera para alimentarlo. Antes exigía además slide_locked, así que una
+    # recarga con la recámara vacía y la corredera en batería dejaba el arma
+    # cargada pero sin cartucho listo (mag=17, chamber=0).
+    reload_empty = chamber <= 0
     reload_total = 2.36 if reload_empty else 1.72
     reload_slide_released = false
     reload_mag_seated = false
@@ -202,6 +224,14 @@ func _update_trigger(delta: float) -> void:
     if trigger_held and trigger_ready and _can_fire():
         _fire()
         return
+
+    # Gatillo en seco: con la recámara vacía y la corredera en batería la aguja
+    # golpea en vacío. Antes no sonaba nada y el arma parecía muerta.
+    if trigger_held and trigger_ready and not reloading and chamber <= 0 and not slide_locked:
+        trigger_ready = false
+        trigger_latched = true
+        trigger_reset_timer = 0.075
+        GameAudio.play_2d("empty")
 
     if not trigger_held:
         if trigger_latched:
@@ -290,11 +320,6 @@ func _update_slide(delta: float) -> void:
                 chamber = 1
                 _emit_ammo()
 
-    if slide != null:
-        slide.position.z = slide_pos
-    if barrel_group != null:
-        barrel_group.position.z = slide_pos * 0.34
-
     if slide_pos > 0.034 and mag <= 0 and chamber <= 0 and not reloading:
         slide_locked = true
         slide_pos = 0.039
@@ -322,15 +347,6 @@ func _update_reload(delta: float) -> void:
     var seat_start := 1.16 if reload_empty else 0.98
     var out_t := clampf((reload_elapsed - 0.1) / 0.3, 0.0, 1.0)
     var in_t := clampf((reload_elapsed - (seat_start - 0.22)) / 0.3, 0.0, 1.0)
-
-    if mag_group != null:
-        if reload_elapsed < seat_start - 0.22:
-            mag_group.position = Vector3(0.0, mag_base_y - 0.17 * _smooth(out_t), mag_base_z - 0.03 * _smooth(out_t))
-        elif reload_elapsed < seat_start:
-            mag_group.position = Vector3(0.0, mag_base_y - 0.14, mag_base_z - 0.01)
-        else:
-            mag_group.position = Vector3(0.0, mag_base_y - 0.14 * (1.0 - _smooth(in_t)), mag_base_z)
-        mag_group.rotation.x = deg_to_rad(-15.0 + 12.0 * _smooth(in_t))
 
     if reload_elapsed >= seat_start and not reload_mag_seated:
         _seat_reload_mag()
@@ -377,9 +393,6 @@ func _finish_reload() -> void:
         _seat_reload_mag()
     reloading = false
     mag_inserted_sound = false
-    if mag_group != null:
-        mag_group.position = Vector3(0.0, mag_base_y, mag_base_z)
-        mag_group.rotation.x = deg_to_rad(-15.0)
     mag_visual_drop = 0.0
     reload_pose_blend = 0.0
     _emit_ammo()
@@ -494,26 +507,9 @@ func _smooth(t: float) -> float:
 
 
 func _build_materials() -> void:
-    slide_mat = StandardMaterial3D.new()
-    slide_mat.albedo_color = Color(0.045, 0.048, 0.055)
-    slide_mat.metallic = 0.9
-    slide_mat.roughness = 0.28
-
-    frame_mat = StandardMaterial3D.new()
-    frame_mat.albedo_color = Color(0.028, 0.029, 0.032)
-    frame_mat.metallic = 0.05
-    frame_mat.roughness = 0.62
-
-    steel_mat = StandardMaterial3D.new()
-    steel_mat.albedo_color = Color(0.58, 0.59, 0.63)
-    steel_mat.metallic = 0.96
-    steel_mat.roughness = 0.24
-
-    dark_mat = StandardMaterial3D.new()
-    dark_mat.albedo_color = Color(0.006, 0.006, 0.009)
-    dark_mat.metallic = 0.35
-    dark_mat.roughness = 0.72
-
+    # Los materiales del arma los construye GunMaterials (por nombre de
+    # primitiva, con detalle procedural). Aquí sólo quedan el latón de los
+    # casquillos y el material del fogonazo.
     brass_mat = StandardMaterial3D.new()
     brass_mat.albedo_color = Color(0.78, 0.55, 0.16)
     brass_mat.metallic = 1.0
@@ -521,17 +517,6 @@ func _build_materials() -> void:
     brass_mat.emission_enabled = true
     brass_mat.emission = Color(0.25, 0.08, 0.01)
     brass_mat.emission_energy_multiplier = 0.5
-
-    hand_mat = StandardMaterial3D.new()
-    hand_mat.albedo_color = Color(0.16, 0.115, 0.088)
-    hand_mat.roughness = 0.78
-
-    sight_mat = StandardMaterial3D.new()
-    sight_mat.albedo_color = Color(0.62, 1.0, 0.58)
-    sight_mat.emission_enabled = true
-    sight_mat.emission = Color(0.35, 1.0, 0.38)
-    sight_mat.emission_energy_multiplier = 5.0
-    sight_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
     flash_mat = StandardMaterial3D.new()
     flash_mat.albedo_texture = preload("res://assets/textures/muzzle_flash.png")
@@ -577,18 +562,6 @@ func _build_model() -> void:
         push_error("No se pudo medir la malla del Glock: se usan cotas nominales")
         _build_reference_markers({})
 
-    slide = Node3D.new()
-    slide.name = "SlideMarker"
-    recoil_node.add_child(slide)
-    barrel_group = Node3D.new()
-    barrel_group.name = "BarrelMarker"
-    recoil_node.add_child(barrel_group)
-    mag_group = Node3D.new()
-    mag_group.name = "MagMarker"
-    recoil_node.add_child(mag_group)
-    trigger_mesh = MeshInstance3D.new()
-    trigger_mesh.name = "TriggerDummy"
-    recoil_node.add_child(trigger_mesh)
 
 
 ## Mide la malla tal como viene del GLB: vértices en su espacio de bind, caja
@@ -676,6 +649,7 @@ func _align_model_with_mesh(measure: Dictionary) -> void:
     model_root.position = Vector3.ZERO
     mesh_to_weapon = model_root.transform * bind_in_model
     model_units_per_meter = 1.0 / total_scale
+    measured_length_m = length_bind * total_scale
     _verify_alignment()
     print("GLOCK_MEDIDA largo_bind=", snappedf(length_bind, 0.000001),
         " escala=", snappedf(total_scale, 0.001),
@@ -694,12 +668,14 @@ func _verify_alignment() -> void:
         error = maxf(error, (residual * axis - axis).length())
     var scale := check.get_scale()
     var shear := maxf(maxf(absf(scale.x - scale.y), absf(scale.y - scale.z)), absf(scale.x - scale.z))
-    if error > 0.002 or shear > 0.002:
+    alignment_ok = error <= 0.002 and shear <= 0.002
+    if not alignment_ok:
         push_error("Alineación del Glock incorrecta: residual=%s escala=%s" % [residual, scale])
     if skeleton == null:
         return
     var catch_bone := skeleton.find_bone("SlideCatch")
     if catch_bone >= 0 and (mesh_to_weapon * _bone_origin_in_bind(catch_bone)).x > 0.0:
+        alignment_ok = false
         push_warning("La mano del modelo quedó espejada: el cierre de corredera sale a la derecha")
 
 
@@ -753,6 +729,7 @@ func _build_reference_markers(measure: Dictionary) -> void:
     for i in range(verts.size()):
         weapon_verts[i] = mesh_to_weapon * verts[i]
     var box := _bounds(weapon_verts)
+    gun_box = box
 
     # Corona del cañón: centroide de la banda delantera de la malla.
     muzzle.position = _band_centroid(weapon_verts, box, 0.0, 0.04, 0.0, 1.0)
@@ -871,14 +848,16 @@ func get_sight_world_position() -> Vector3:
 func _apply_model_materials() -> void:
     if glock_mesh == null or glock_mesh.mesh == null:
         return
-    var mats: Array[Material] = [
-        frame_mat, dark_mat, slide_mat,
-        steel_mat, steel_mat, dark_mat,
-        brass_mat, brass_mat, brass_mat,
-    ]
-    var count := mini(glock_mesh.mesh.get_surface_count(), mats.size())
-    for i in range(count):
-        glock_mesh.set_surface_override_material(i, mats[i])
+    var materials := GunMaterials.build()
+    var missing: Array[String] = []
+    for i in range(glock_mesh.mesh.get_surface_count()):
+        var surface_name: String = glock_mesh.mesh.surface_get_name(i)
+        if materials.has(surface_name):
+            glock_mesh.set_surface_override_material(i, materials[surface_name])
+        else:
+            missing.append(surface_name)
+    if not missing.is_empty():
+        push_warning("Primitivas del Glock sin material asignado: %s" % ", ".join(missing))
     glock_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
@@ -888,7 +867,6 @@ func _setup_bones() -> void:
     bone_slide = skeleton.find_bone("Slide")
     bone_trigger = skeleton.find_bone("Trigger")
     bone_magazine = skeleton.find_bone("Magazine")
-    bone_barrel = skeleton.find_bone("Barrel")
 
     if bone_slide >= 0:
         rest_slide = skeleton.get_bone_rest(bone_slide)
@@ -923,44 +901,3 @@ func _apply_bone_poses() -> void:
         var angle := -0.30 * trigger_visual
         var trigger_basis := rest_trigger.basis.rotated(Vector3(1, 0, 0), angle)
         skeleton.set_bone_pose_rotation(bone_trigger, trigger_basis.get_rotation_quaternion())
-
-
-func _box(parent: Node3D, mesh_name: String, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
-    var box := BoxMesh.new()
-    box.size = size
-    box.material = mat
-    var mesh := MeshInstance3D.new()
-    mesh.name = mesh_name
-    mesh.mesh = box
-    mesh.position = pos
-    parent.add_child(mesh)
-    return mesh
-
-
-func _cylinder(parent: Node3D, mesh_name: String, height: float, diameter: float, pos: Vector3, mat: Material, rotation_deg := Vector3.ZERO) -> MeshInstance3D:
-    var cyl := CylinderMesh.new()
-    cyl.height = height
-    cyl.top_radius = diameter * 0.5
-    cyl.bottom_radius = diameter * 0.5
-    cyl.radial_segments = 18
-    cyl.material = mat
-    var mesh := MeshInstance3D.new()
-    mesh.name = mesh_name
-    mesh.mesh = cyl
-    mesh.position = pos
-    mesh.rotation_degrees = rotation_deg
-    parent.add_child(mesh)
-    return mesh
-
-
-func _capsule(parent: Node3D, mesh_name: String, height: float, radius: float, pos: Vector3, mat: Material) -> MeshInstance3D:
-    var cap := CapsuleMesh.new()
-    cap.height = height
-    cap.radius = radius
-    cap.material = mat
-    var mesh := MeshInstance3D.new()
-    mesh.name = mesh_name
-    mesh.mesh = cap
-    mesh.position = pos
-    parent.add_child(mesh)
-    return mesh
