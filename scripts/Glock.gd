@@ -1590,6 +1590,7 @@ func _install_arms() -> void:
     # encima de la OWK 19. Se identifica la malla de brazos por ser la que mas
     # vertices tiene (14 852 tris frente a 8 139, 4 697 y 4 982) y se oculta el
     # resto: asi el criterio no depende de como nombre el importador.
+    var usar_owk := OS.get_cmdline_user_args().has("--owk")
     var mallas: Array = []
     var stack: Array = [arms_root]
     while not stack.is_empty():
@@ -1614,7 +1615,6 @@ func _install_arms() -> void:
     #                        animaciones, asi que encajan por construccion)
     #   --newarms --owk      brazos del autor + OWK 19 (mezcla: la pose de mano
     #                        esta horneada para la empuñadura del autor)
-    var usar_owk := OS.get_cmdline_user_args().has("--owk")
     var ocultas := 0
     for m in mallas:
         if m != brazos and usar_owk:
@@ -1661,7 +1661,12 @@ func _install_arms() -> void:
     # sea 1.38x mas baja. Por eso el guante envolvia la pistola entera. Se escala
     # el conjunto de brazos a la pistola REAL en vez de agrandar el arma, que ya
     # esta verificada contra las cotas de una Glock 19 (33 x 127 x 186 reales).
-    var escala_manos := 130.0 / 180.0
+    # La escala solo se aplica en el modo OWK: alli las manos hay que llevarlas a
+    # una pistola mas pequena que la del autor. En el paquete coherente NO se
+    # escala nada -- el autor modelo arma, manos y animaciones juntas y ya
+    # encajan; aplicar el factor ahi encogia tambien SU pistola (206 mm -> 149)
+    # y falseaba el tamano en pantalla.
+    var escala_manos := (130.0 / 180.0) if usar_owk else 1.0
     holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fix.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
     arms_skeleton.force_update_transform()
