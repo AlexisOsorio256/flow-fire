@@ -60,7 +60,8 @@ No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, cra
 
 Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 
-- Glock 19 + brazos/manos en `assets/models/fps_rig.glb`, mismo esqueleto y animaciones `Grip`, `Idle`, `Shoot`, `Reload`.
+- Glock 19 de alta fidelidad en `assets/models/owk19_pistol.glb` (OWK 19, OKgamedev, CC-BY 4.0): 11 568 tris en 9 piezas rígidas, movidas por la mecánica existente. Se recupera el arma low-poly anterior con `--oldgun`.
+- Brazos/manos y animaciones `Grip`, `Idle`, `Shoot`, `Reload` en `assets/models/fps_rig.glb` (rig de J-Toastie). De ese GLB sólo se usan ya los brazos y el esqueleto: su malla de arma no se dibuja.
 - Arma medida en runtime: orientación, escala, boca, mira, puerto de expulsión y unidades de pose se verifican en vez de depender de offsets ciegos.
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
 - Arma centrada en el encuadre en pose de lista y, al apuntar, vista desde detrás del arma con la mira clavada en el centro (donde impacta la bala).
@@ -265,7 +266,8 @@ Antes de controles táctiles, el input debe pasar por acciones reutilizables. **
 
 ## 6. Assets y licencias
 
-- **Modelo/rig actual:** `assets/models/fps_rig.glb` — “Fps Rig” de J-Toastie, CC-BY 3.0. Ver `CREDITS_MODELS.md`.
+- **Arma:** `assets/models/owk19_pistol.glb` — “OWK 19 Pistol 9mm (G19)” de OKgamedev, CC-BY 4.0 (`--oldgun` recupera la anterior).
+- **Brazos y animaciones:** `assets/models/fps_rig.glb` — “Fps Rig” de J-Toastie, CC-BY 3.0. Ver `CREDITS_MODELS.md`.
 - **Audio:** Freesound CC0, procesado con `tools/process_audio.sh`. Ver `CREDITS_AUDIO.md`.
 - **Texturas PBR:** Poly Haven CC0. Ver `CREDITS_TEXTURES.md`.
 - **Código del proyecto:** MIT. Ver `LICENSE`.

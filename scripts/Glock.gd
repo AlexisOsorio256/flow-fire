@@ -689,16 +689,18 @@ func _build_model() -> void:
 ## Sustituye la malla de arma del rig viejo por la pistola de alta fidelidad,
 ## conservando brazos, esqueleto y animaciones.
 ##
-## De momento es OPT-IN con --newgun: la ruta nueva todavia no esta demostrada
-## como mejor. Capturada con la misma camara que la vieja, sale girada sobre su
-## eje y con los materiales en crudo (se ve metalica y clara donde deberia verse
-## polimero negro y corredera nitrurada). Mientras eso no este resuelto el juego
-## usa la de siempre, y la nueva solo se enciende para seguir trabajandola. Las
-## dos rutas tienen que poder capturarse con la misma camara: por eso la vieja
-## no se borra hasta que la nueva demuestre ser mejor.
+## La OWK 19 es ya el arma por defecto. Se gano el puesto comparando con la
+## misma camara: en ADS y con la corredera atras se leen las estrias de la
+## corredera, el alza con sus puntos y el puerto de expulsion, donde el rig viejo
+## es un bloque liso. Ademas su cargador lo mueve el hueso animado del autor, su
+## boca/mira/puerto se miden sobre su propia geometria y sus texturas ocupan 38 MB
+## en vez de 208.
+##
+## La malla vieja sigue en el GLB porque es de donde salen los BRAZOS y las cuatro
+## animaciones, y se puede recuperar entera con --oldgun para seguir comparando.
 func _install_pistol() -> void:
-    if not OS.get_cmdline_user_args().has("--newgun"):
-        print("GLOCK arma=rig_viejo (la OWK 19 se prueba con --newgun)")
+    if OS.get_cmdline_user_args().has("--oldgun"):
+        print("GLOCK arma=rig_viejo (--oldgun)")
         return
     if not _build_high_fidelity_pistol():
         push_warning("Se conserva la malla de arma del rig viejo")
