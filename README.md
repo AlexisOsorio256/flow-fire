@@ -109,8 +109,12 @@ Cualquier IA o persona puede tomar un punto y abrir un PR. Mantener el rumbo:
 - [ ] Evitar que el arma se oculte detrás de geometría (viewmodel en capa/subviewport).
 - [ ] Recarga con animación esquelética completa y sincronizada al audio.
 - [ ] Fogonazo con geometría/partículas volumétricas más creíble.
+- [x] Penetración realista: orificio de entrada + salida y paso a través de
+      papel, madera y pladur. Prueba: `godot4 --headless --path . -- --pentest`.
+- [x] Orificios visibles como quads con texturas de entrada/salida y decales
+      que siguen a los blancos móviles.
 - [ ] Hacer casquillos más visibles en primera persona (escala/trayectoria).
-- [ ] Penetración y rebotes con más materiales reales.
+- [ ] Penetración en cristal y materiales más finos.
 - [ ] Optimizar Forward+ sin bajar calidad (LODs, sombras dinámicas, oclusión).
 - [ ] Migrar a un entorno urbano con assets reales.
 

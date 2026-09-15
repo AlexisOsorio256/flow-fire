@@ -22,6 +22,8 @@ func _ready() -> void:
         _run_capture()
     if OS.get_cmdline_user_args().has("--aimtest"):
         _run_aimtest()
+    if OS.get_cmdline_user_args().has("--pentest"):
+        _run_pentest()
 
 
 func _setup_environment() -> void:
@@ -82,6 +84,28 @@ func _build_hud() -> void:
     hud.name = "HUD"
     add_child(hud)
     hud.setup(player)
+
+
+func _run_pentest() -> void:
+    await get_tree().create_timer(0.7).timeout
+    var cam: Camera3D = player.camera
+    var eye: Vector3 = cam.global_position
+    var target_pos := Vector3(-4.0, 1.35, -18.0)
+    var to_target: Vector3 = (target_pos - eye).normalized()
+    player.yaw_target = atan2(-to_target.x, -to_target.z)
+    player.pitch_target = asin(clampf(to_target.y, -1.0, 1.0))
+    player.yaw = player.yaw_target
+    player.pitch = player.pitch_target
+    await get_tree().create_timer(0.25).timeout
+    var before := ImpactFX.decals.size()
+    player.weapon.force_fire_once()
+    await get_tree().create_timer(1.0).timeout
+    var targets := get_tree().get_nodes_in_group("targets")
+    var health := -1.0
+    if not targets.is_empty():
+        health = targets[0].health
+    print("PENTEST health=", health, " decals_before=", before, " decals_after=", ImpactFX.decals.size(), " mag=", player.weapon.mag, " chamber=", player.weapon.chamber)
+    get_tree().quit()
 
 
 func _run_aimtest() -> void:

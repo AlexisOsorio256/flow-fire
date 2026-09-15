@@ -122,12 +122,17 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         penetration_factor = float(collider.get_meta("penetration_factor", 0.78))
 
     if penetrable:
-        var exit_point: Vector3 = point + dir * thickness
-        ImpactFX.spawn_impact(exit_point, dir, collider, surface, true)
+        # Salida geométrica: punto de entrada + grosor proyectado según el ángulo.
+        var denom := maxf(0.25, absf(dir.dot(normal)))
+        var exit_point: Vector3 = point + dir * (thickness / denom)
+        var exit_normal: Vector3 = dir
+        ImpactFX.spawn_impact(exit_point, exit_normal, collider, surface, true)
         b.vel = b.vel * penetration_factor
-        b.pos = exit_point + dir * 0.012
+        # Lo sacamos bien afuera para que el próximo subpaso no vuelva a golpear el mismo cuerpo.
+        b.pos = exit_point + dir * 0.035
+        b.distance += 0.035
         b.penetrations += 1
-        if b.penetrations > 3 or b.vel.length() < 90.0:
+        if b.penetrations > 4 or b.vel.length() < 75.0:
             b.active = false
         return
 

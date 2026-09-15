@@ -17,6 +17,7 @@ var metal_mat: StandardMaterial3D
 var pillar_mat: StandardMaterial3D
 var lamp_mat: StandardMaterial3D
 var stand_mat: StandardMaterial3D
+var drywall_mat: StandardMaterial3D
 
 
 func build() -> void:
@@ -87,6 +88,11 @@ func _materials() -> void:
     stand_mat.metallic = 0.75
     stand_mat.roughness = 0.42
 
+    drywall_mat = StandardMaterial3D.new()
+    drywall_mat.albedo_color = Color(0.80, 0.78, 0.73)
+    drywall_mat.roughness = 0.92
+    drywall_mat.uv1_scale = Vector3(2, 2, 2)
+
 
 func _build_room() -> void:
     var floor := _static_box(self, "Floor", Vector3(24, 0.3, 42), Vector3(0, -0.15, -15), concrete_mat)
@@ -119,6 +125,10 @@ func _build_props() -> void:
     _make_drum(6.6, -11.0)
     _make_drum(-6.8, -25.0)
     _make_drum(7.2, -27.0)
+
+    # Pladur/yeso penetrable: entrada, salida y paso de bala visibles.
+    _make_drywall_panel(Vector3(-8.6, 0.0, -14.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
+    _make_drywall_panel(Vector3(8.6, 0.0, -18.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
 
 
 func _build_targets() -> void:
@@ -202,6 +212,19 @@ func _make_barrier(x: float, z: float, rot_y: float) -> void:
     for leg_x in [-1.0, 1.0]:
         var leg := _static_box(root, "BarrierLeg", Vector3(0.08, 1.05, 0.08), Vector3(leg_x, 0.52, 0), wood_mat)
         leg.set_meta("surface", "wood")
+
+
+func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> void:
+    var root := Node3D.new()
+    root.name = "DrywallPanel"
+    root.position = base
+    root.rotation.y = rot_y
+    add_child(root)
+    var body := _static_box(root, "DrywallSheet", Vector3(panel_size.x, panel_size.y, 0.06), Vector3(0.0, panel_size.y * 0.5, 0.0), drywall_mat)
+    body.set_meta("surface", "drywall")
+    body.set_meta("penetrable", true)
+    body.set_meta("thickness", 0.06)
+    body.set_meta("penetration_factor", 0.70)
 
 
 func _make_drum(x: float, z: float) -> void:

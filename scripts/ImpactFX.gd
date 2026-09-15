@@ -1,10 +1,11 @@
 extends Node3D
 
-const HOLE_TEXTURE: Texture2D = preload("res://assets/textures/bullet_hole.png")
+const HOLE_ENTRY: Texture2D = preload("res://assets/textures/bullet_hole_entry.png")
+const HOLE_EXIT: Texture2D = preload("res://assets/textures/bullet_hole_exit.png")
 const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png")
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
 
-var decals: Array[Decal] = []
+var decals: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
@@ -26,6 +27,9 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
         "paper":
             sound_name = "impact_wood"
             volume = -10.0
+        "drywall":
+            sound_name = "impact_concrete"
+            volume = -5.0
         _:
             sound_name = "impact_concrete"
     if not (is_exit and surface == "paper"):
@@ -59,44 +63,60 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
 
 
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
-    var size := 0.085
+    var size := 0.026
     match surface:
         "metal":
-            size = 0.055
+            size = 0.020
         "paper":
-            size = 0.032
-        "wood":
-            size = 0.07
+            size = 0.014
+        "wood", "drywall":
+            size = 0.024
+        _:
+            size = 0.026
     if is_exit:
-        size *= 0.78
+        size *= 1.35
 
-    var decal := Decal.new()
-    decal.texture_albedo = HOLE_TEXTURE
-    decal.size = Vector3(size, size, 0.17)
-    decal.albedo_mix = 1.0
-    decal.modulate = Color(1, 1, 1, 0.98)
-    decal.upper_fade = 0.14
-    decal.lower_fade = 0.14
-    decal.distance_fade_enabled = true
-    decal.distance_fade_begin = 26.0
-    decal.distance_fade_length = 8.0
-    decal.rotation_degrees = Vector3(0, randf_range(0.0, 360.0), 0)
+    var quad := QuadMesh.new()
+    quad.size = Vector2(size, size)
+    var mat := StandardMaterial3D.new()
+    mat.albedo_texture = HOLE_EXIT if is_exit else HOLE_ENTRY
+    mat.albedo_color = Color(1, 1, 1, 0.98 if is_exit else 1.0)
+    mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+    mat.roughness = 1.0
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+    quad.material = mat
 
-    var y_axis := -normal.normalized()
+    var decal := MeshInstance3D.new()
+    decal.name = "BulletHole"
+    decal.mesh = quad
+    decal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+    var n := normal.normalized()
+    if n.length_squared() < 0.01:
+        n = Vector3.UP
     var up_ref := Vector3.UP
-    if abs(y_axis.dot(up_ref)) > 0.94:
+    if absf(n.dot(up_ref)) > 0.94:
         up_ref = Vector3.RIGHT
-    var x_axis := up_ref.cross(y_axis).normalized()
-    var z_axis := x_axis.cross(y_axis).normalized()
-    decal.global_transform = Transform3D(Basis(x_axis, y_axis, z_axis), point + normal.normalized() * 0.009)
+    var x_axis := up_ref.cross(n).normalized()
+    if x_axis.length_squared() < 0.01:
+        x_axis = Vector3.RIGHT
+    var y_axis := n.cross(x_axis).normalized()
+    if y_axis.length_squared() < 0.01:
+        y_axis = Vector3.FORWARD
+    var basis := Basis(x_axis, y_axis, n)
+    basis = basis.rotated(n, randf_range(0.0, TAU))
+    var pos := point + n * (0.004 + (0.003 if is_exit else 0.0))
     add_child(decal)
+    decal.global_transform = Transform3D(basis, pos)
 
     if collider is Node3D and collider.get_meta("dynamic_decal", false):
         decal.reparent(collider, true)
 
     decals.append(decal)
-    if decals.size() > 120:
-        var old: Decal = decals.pop_front()
+    if decals.size() > 160:
+        var old: MeshInstance3D = decals.pop_front()
         if is_instance_valid(old):
             old.queue_free()
 
@@ -128,6 +148,8 @@ func _spawn_particles(point: Vector3, normal: Vector3, surface: String, is_exit:
                 pm.color = Color(0.42, 0.28, 0.14, 0.75)
             "paper":
                 pm.color = Color(0.82, 0.79, 0.72, 0.55)
+            "drywall":
+                pm.color = Color(0.78, 0.76, 0.71, 0.70)
             _:
                 pm.color = Color(0.53, 0.52, 0.50, 0.65)
 
