@@ -1558,14 +1558,36 @@ func _install_arms() -> void:
     holder.add_child(arms_root)
 
     # Fuera la pistola que trae el asset: el arma es la OWK 19. Los nombres que
-    # genera el importador llevan sufijo, asi que se filtra por prefijo.
+    # Ocultar la pistola que trae el asset. NO se puede filtrar por nombre: el
+    # importador renombra las mallas a Object_N y el filtro por "xd_frame" no
+    # casaba con ninguna, asi que la pistola del autor se seguia dibujando
+    # encima de la OWK 19. Se identifica la malla de brazos por ser la que mas
+    # vertices tiene (14 852 tris frente a 8 139, 4 697 y 4 982) y se oculta el
+    # resto: asi el criterio no depende de como nombre el importador.
+    var mallas: Array = []
     var stack: Array = [arms_root]
     while not stack.is_empty():
         var n = stack.pop_back()
-        if n is MeshInstance3D and n.mesh != null and str(n.name).begins_with("xd_frame"):
-            (n as MeshInstance3D).visible = false
+        if n is MeshInstance3D and n.mesh != null:
+            mallas.append(n)
         for c in n.get_children():
             stack.append(c)
+    var brazos: MeshInstance3D = null
+    var mayor := -1
+    for m in mallas:
+        var verts := 0
+        for si in range((m as MeshInstance3D).mesh.get_surface_count()):
+            verts += ((m as MeshInstance3D).mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+        if verts > mayor:
+            mayor = verts
+            brazos = m
+    var ocultas := 0
+    for m in mallas:
+        if m != brazos:
+            (m as MeshInstance3D).visible = false
+            ocultas += 1
+    print("ARMS_MALLAS total=", mallas.size(), " brazos=", (brazos.name if brazos != null else "?"),
+        " vertices_brazos=", mayor, " ocultas=", ocultas)
 
     var cam_bone := -1
     for b in range(arms_skeleton.get_bone_count()):
@@ -1587,6 +1609,11 @@ func _install_arms() -> void:
     var head_rest: Transform3D = arms_skeleton.get_bone_global_rest(cam_bone)
     var head_world: Transform3D = arms_skeleton.global_transform * head_rest
     holder.global_transform = camera.global_transform * head_world.affine_inverse() * holder.global_transform
+    # El anclaje por el hueso de camara deja el rig girado 180 grados: medido,
+    # las manos y el arma caian DETRAS de la camara (Hand_L a z=+0.219 y Rif a
+    # z=+0.366, cuando el avance del juego es -Z). Se gira sobre el eje Y
+    # tomando como pivote la propia camara, asi que el anclaje no se pierde.
+    holder.global_transform = camera.global_transform * Transform3D(Basis(Vector3.UP, PI), camera.global_position - Basis(Vector3.UP, PI) * camera.global_position) * head_world.affine_inverse() * holder.global_transform
 
     if arms_mesh != null:
         arms_mesh.visible = false
