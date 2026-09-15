@@ -41,6 +41,14 @@ const BENCH_VARIANTS := [
     {"id": "vm_lights_off", "label": "luces_viewmodel_off"},
     {"id": "viewmodel_off", "label": "viewmodel_oculto"},
     {"id": "fx_off", "label": "impact_fx_off"},
+    # Instrumentos para aislar el coste del viewmodel. NO son alternativas de
+    # produccion: existen solo para saber que parte de sus milisegundos es
+    # shader, que parte geometria y que parte script.
+    {"id": "vm_std_mat", "label": "viewmodel_material_plano"},
+    {"id": "vm_gun_off", "label": "solo_brazos"},
+    {"id": "vm_arms_off", "label": "solo_arma"},
+    {"id": "vm_meshes_off", "label": "ambas_mallas_off"},
+    {"id": "vm_static", "label": "viewmodel_sin_script"},
 ]
 const BENCH_DEFAULT_REPEATS := 2
 const BENCH_DEFAULT_WARMUP := 1.0
@@ -49,6 +57,8 @@ const BENCH_DEFAULT_DURATION := 6.0
 var _bench_stage_omnis: Array[OmniLight3D] = []
 var _bench_viewmodel_lights: Array[OmniLight3D] = []
 var _bench_sun: DirectionalLight3D
+var _bench_vm_orig_mats := {}
+var _bench_vm_flat_mats := {}
 var _bench_stress := false
 var _bench_capture := false
 var _bench_stress_accum := 0.0
@@ -181,6 +191,45 @@ func _bench_bind_nodes() -> void:
     print("FPSBENCH_BIND stage_omnis=", _bench_stage_omnis.size(),
         " vm_lights=", _bench_viewmodel_lights.size(),
         " sun=", _bench_sun != null)
+    _bench_bind_viewmodel_materials()
+
+
+## Prepara una version plana (StandardMaterial3D) de los materiales del arma,
+## con el mismo color/metal/rugosidad base pero sin el ruido procedural del
+## shader. Comparar `base` contra `vm_std_mat` dice cuanto del coste del
+## viewmodel es el shader y cuanto la geometria que hay debajo: si el material
+## plano no ahorra nada, el problema no es el shader.
+## Es un instrumento de medida, no una alternativa de produccion.
+func _bench_bind_viewmodel_materials() -> void:
+    _bench_vm_orig_mats.clear()
+    _bench_vm_flat_mats.clear()
+    var w = _player.weapon
+    if w == null:
+        return
+    for mesh_node in [w.glock_mesh, w.arms_mesh]:
+        if mesh_node == null or mesh_node.mesh == null:
+            continue
+        var orig: Array = []
+        var flat: Array = []
+        for i in range(mesh_node.mesh.get_surface_count()):
+            var m: Material = mesh_node.get_surface_override_material(i)
+            if m == null:
+                m = mesh_node.mesh.surface_get_material(i)
+            orig.append(m)
+            var std := StandardMaterial3D.new()
+            if m is ShaderMaterial:
+                std.albedo_color = m.get_shader_parameter("base_color")
+                std.metallic = float(m.get_shader_parameter("metallic"))
+                std.roughness = float(m.get_shader_parameter("roughness"))
+                var em: Variant = m.get_shader_parameter("emission_color")
+                var ee: Variant = m.get_shader_parameter("emission_energy")
+                if em != null and ee != null and float(ee) > 0.0:
+                    std.emission_enabled = true
+                    std.emission = em
+                    std.emission_energy_multiplier = float(ee)
+            flat.append(std)
+        _bench_vm_orig_mats[mesh_node] = orig
+        _bench_vm_flat_mats[mesh_node] = flat
 
 
 ## Deja SIEMPRE todos los subsistemas en estado baseline y apaga sólo la
@@ -202,6 +251,18 @@ func _bench_apply_variant(variant_id: String) -> void:
     for light in _bench_viewmodel_lights:
         light.visible = vm_lights_on
     _player.weapon.visible = variant_id != "viewmodel_off"
+    # Instrumentos de aislamiento del viewmodel.
+    var w = _player.weapon
+    var flat := variant_id == "vm_std_mat"
+    for mesh_node in _bench_vm_orig_mats:
+        var src: Array = _bench_vm_flat_mats[mesh_node] if flat else _bench_vm_orig_mats[mesh_node]
+        for i in range(src.size()):
+            mesh_node.set_surface_override_material(i, src[i])
+    if w.glock_mesh != null:
+        w.glock_mesh.visible = variant_id != "vm_gun_off" and variant_id != "vm_meshes_off"
+    if w.arms_mesh != null:
+        w.arms_mesh.visible = variant_id != "vm_arms_off" and variant_id != "vm_meshes_off"
+    w.set_process(variant_id != "vm_static")
 
 
 ## Guarda una captura del estado exacto de la variante, a la misma resolución
