@@ -72,6 +72,23 @@ var player_velocity := Vector3.ZERO
 
 var muzzle_world_pos := Vector3.ZERO
 
+var model_root: Node3D
+var skeleton: Skeleton3D
+var glock_mesh: MeshInstance3D
+var bone_slide := -1
+var bone_trigger := -1
+var bone_magazine := -1
+var bone_barrel := -1
+var rest_slide := Transform3D.IDENTITY
+var rest_trigger := Transform3D.IDENTITY
+var rest_magazine := Transform3D.IDENTITY
+var slide_axis := Vector3(0, 1, 0)
+var magazine_axis := Vector3(0, 0, -1)
+var model_units_per_meter := 0.241
+var mag_visual_drop := 0.0
+var reload_pose_blend := 0.0
+var trigger_visual := 0.0
+
 
 func _ready() -> void:
     pose_root = Node3D.new()
@@ -84,6 +101,7 @@ func _ready() -> void:
 
     _build_materials()
     _build_model()
+    _setup_bones()
     _emit_ammo()
 
 
@@ -149,6 +167,7 @@ func _process(delta: float) -> void:
     _update_recoil(delta)
     _update_reload(delta)
     _update_pose(delta)
+    _apply_bone_poses()
 
     muzzle_timer = maxf(0.0, muzzle_timer - delta)
     shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
@@ -163,6 +182,8 @@ func _process(delta: float) -> void:
 
 
 func _update_trigger(delta: float) -> void:
+    trigger_visual += ((1.0 if trigger_held else 0.0) - trigger_visual) * (1.0 - exp(-18.0 * delta))
+
     if trigger_held and trigger_ready and _can_fire():
         _fire()
         return
@@ -294,6 +315,16 @@ func _update_reload(delta: float) -> void:
         slide_vel = -4.2
         GameAudio.play_2d("slide", -3.0)
 
+    var drop_t := 0.0
+    if reload_elapsed < seat_start - 0.22:
+        drop_t = _smooth(out_t)
+    elif reload_elapsed < seat_start:
+        drop_t = 1.0
+    else:
+        drop_t = 1.0 - _smooth(in_t)
+    mag_visual_drop = drop_t * 0.20
+    reload_pose_blend = sin(clampf(reload_elapsed / maxf(reload_total, 0.001), 0.0, 1.0) * PI)
+
     if reload_elapsed >= reload_total:
         _finish_reload()
 
@@ -315,6 +346,8 @@ func _finish_reload() -> void:
     if mag_group != null:
         mag_group.position = Vector3(0.0, mag_base_y, mag_base_z)
         mag_group.rotation.x = deg_to_rad(-15.0)
+    mag_visual_drop = 0.0
+    reload_pose_blend = 0.0
     _emit_ammo()
 
 
@@ -353,6 +386,9 @@ func _update_pose(delta: float) -> void:
     rot.y += sway.x * 0.5 + sin(idle_phase * 0.73 + 1.0) * 0.0020 * (1.0 - aim_blend * 0.6)
     rot.z += -_last_local_move.x * 0.012 - sin(bob_phase) * 0.012 * sprint_blend
 
+    pos.y -= reload_pose_blend * 0.07
+    pos.z += reload_pose_blend * 0.03
+    rot.x += reload_pose_blend * 0.32
     pose_root.position = pos
     pose_root.rotation = rot
 
@@ -391,7 +427,7 @@ func _spawn_shell() -> void:
     get_tree().current_scene.add_child(shell)
     shell.global_transform = ejection_port.global_transform
     var basis := ejection_port.global_transform.basis
-    var local_vel := Vector3(1.5 + randf() * 1.1, 1.7 + randf() * 0.9, 0.9 + randf() * 0.5)
+    var local_vel := Vector3(1.5 + randf() * 1.1, -1.0 - randf() * 0.6, 1.7 + randf() * 0.9)
     shell.linear_velocity = basis * local_vel + player_velocity * 0.8
     shell.angular_velocity = Vector3(randf_range(-16.0, 16.0), randf_range(-16.0, 16.0), randf_range(-16.0, 16.0))
 
@@ -455,74 +491,64 @@ func _build_materials() -> void:
 
 
 func _build_model() -> void:
+    var packed := load("res://assets/models/glock_rigged.glb") as PackedScene
+    # El GLB viene de FBX2glTF con escala interna de armature (~48.3).
+    # Lo normalizamos para que el arma mida ~18.6 cm reales.
+    const LOCAL_LENGTH := 0.045424
+    const DESIRED_LENGTH := 0.186
+    const ARMATURE_SCALE := 48.2968
+    var visual_scale := DESIRED_LENGTH / LOCAL_LENGTH
+    var root_scale := visual_scale / ARMATURE_SCALE
+    model_units_per_meter = 1.0 / visual_scale
+    if packed != null:
+        model_root = packed.instantiate()
+        model_root.name = "GlockModel"
+        # Modelo local: +X derecha, +Y cañón, +Z arriba.
+        # Godot arma local: +X derecha, -Z cañón (adelante), +Y arriba.
+        var target_basis := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+        model_root.transform.basis = target_basis.scaled(Vector3(root_scale, root_scale, root_scale))
+        model_root.position = Vector3(0.0, 0.0, 0.0)
+        recoil_node.add_child(model_root)
+
+        skeleton = model_root.find_child("Skeleton3D", true, false) as Skeleton3D
+        glock_mesh = model_root.find_child("Glock19", true, false) as MeshInstance3D
+        var bullet_mesh := model_root.find_child("Glock19_001", true, false) as MeshInstance3D
+        if bullet_mesh != null:
+            bullet_mesh.visible = false
+        _apply_model_materials()
+    else:
+        push_error("No se pudo cargar el modelo Glock riggeado")
+
     slide = Node3D.new()
-    slide.name = "Slide"
+    slide.name = "SlideMarker"
     recoil_node.add_child(slide)
-
-    _box(slide, "SlideBody", Vector3(0.028, 0.032, 0.175), Vector3(0, 0.002, -0.02), slide_mat)
-    for i in range(6):
-        _box(slide, "RearSerration", Vector3(0.0285, 0.024, 0.0016), Vector3(0, 0.004, 0.052 - i * 0.0068), dark_mat)
-    for i in range(5):
-        _box(slide, "FrontSerration", Vector3(0.0282, 0.019, 0.0016), Vector3(0, 0.004, -0.078 - i * 0.0072), dark_mat)
-    _box(slide, "EjectionPort", Vector3(0.0135, 0.0085, 0.031), Vector3(0.0143, 0.015, -0.012), dark_mat)
-    _box(slide, "RearSight", Vector3(0.0155, 0.0062, 0.0075), Vector3(0, 0.021, 0.062), dark_mat)
-    _box(slide, "RearSightLeft", Vector3(0.004, 0.0065, 0.0075), Vector3(-0.0062, 0.021, 0.062), dark_mat)
-    _box(slide, "RearSightRight", Vector3(0.004, 0.0065, 0.0075), Vector3(0.0062, 0.021, 0.062), dark_mat)
-    _box(slide, "FrontSight", Vector3(0.005, 0.0086, 0.006), Vector3(0, 0.022, -0.095), dark_mat)
-    _box(slide, "FrontSightDot", Vector3(0.0031, 0.0028, 0.002), Vector3(0, 0.0271, -0.0945), sight_mat)
-
     barrel_group = Node3D.new()
-    barrel_group.name = "BarrelGroup"
+    barrel_group.name = "BarrelMarker"
     recoil_node.add_child(barrel_group)
-    _cylinder(barrel_group, "Barrel", 0.055, 0.0125, Vector3(0, 0.001, -0.112), steel_mat, Vector3(90, 0, 0))
-    _cylinder(barrel_group, "Muzzle", 0.008, 0.0138, Vector3(0, 0.001, -0.142), dark_mat, Vector3(90, 0, 0))
-
-    var frame := Node3D.new()
-    frame.name = "Frame"
-    recoil_node.add_child(frame)
-    _box(frame, "FrameBody", Vector3(0.0295, 0.033, 0.128), Vector3(0, -0.029, -0.03), frame_mat)
-    _box(frame, "DustCover", Vector3(0.0285, 0.019, 0.075), Vector3(0, -0.033, -0.077), frame_mat)
-    for i in range(4):
-        _box(frame, "RailTooth", Vector3(0.0288, 0.0026, 0.004), Vector3(0, -0.0425, -0.102 - i * 0.0075), frame_mat)
-
-    var grip := Node3D.new()
-    grip.name = "Grip"
-    frame.add_child(grip)
-    grip.position = Vector3(0, -0.064, 0.016)
-    grip.rotation.x = deg_to_rad(15.0)
-    _box(grip, "GripBody", Vector3(0.0295, 0.105, 0.039), Vector3(0, -0.045, 0), frame_mat)
-    _box(grip, "Beavertail", Vector3(0.0295, 0.012, 0.028), Vector3(0, 0.006, 0.004), frame_mat)
-    _box(grip, "Backstrap", Vector3(0.026, 0.09, 0.008), Vector3(0, -0.045, -0.018), frame_mat)
-    for i in range(3):
-        _box(grip, "FingerGroove", Vector3(0.0298, 0.007, 0.036), Vector3(0, -0.012 - i * 0.027, 0.004), frame_mat)
-
     mag_group = Node3D.new()
-    mag_group.name = "MagGroup"
-    frame.add_child(mag_group)
-    mag_group.position = Vector3(0.0, mag_base_y, mag_base_z)
-    mag_group.rotation.x = deg_to_rad(-15.0)
-    _box(mag_group, "Magazine", Vector3(0.021, 0.102, 0.031), Vector3(0, -0.045, -0.002), steel_mat)
-    _box(mag_group, "MagBase", Vector3(0.033, 0.006, 0.038), Vector3(0, -0.098, -0.003), dark_mat)
+    mag_group.name = "MagMarker"
+    recoil_node.add_child(mag_group)
+    trigger_mesh = MeshInstance3D.new()
+    trigger_mesh.name = "TriggerDummy"
+    recoil_node.add_child(trigger_mesh)
 
-    trigger_mesh = _box(frame, "Trigger", Vector3(0.006, 0.014, 0.0045), Vector3(0, -0.045, 0.038), dark_mat)
-    _box(frame, "SlideStopLever", Vector3(0.003, 0.006, 0.022), Vector3(-0.016, -0.017, 0.0), steel_mat)
-    _box(frame, "TakedownLever", Vector3(0.0028, 0.009, 0.006), Vector3(-0.016, -0.029, 0.02), steel_mat)
-    _box(frame, "MagRelease", Vector3(0.0025, 0.007, 0.007), Vector3(-0.0165, -0.041, 0.028), steel_mat)
-
-    var right_hand := _capsule(frame, "RightHand", 0.098, 0.028, Vector3(0, -0.089, 0.024), hand_mat)
-    right_hand.rotation.x = deg_to_rad(17.0)
-    var left_hand := _capsule(frame, "LeftHand", 0.07, 0.026, Vector3(-0.002, -0.056, -0.004), hand_mat)
-    left_hand.rotation.x = deg_to_rad(-68.0)
-    left_hand.rotation.z = deg_to_rad(-6.0)
-
+    var marker_parent: Node3D = skeleton if skeleton != null else (model_root if model_root != null else recoil_node)
     muzzle = Node3D.new()
     muzzle.name = "Muzzle"
-    recoil_node.add_child(muzzle)
-    muzzle.position = Vector3(0, 0.002, -0.152)
+    marker_parent.add_child(muzzle)
+    muzzle.position = Vector3(0.0, 0.0235, 0.0145)
+    _build_flash()
 
+    ejection_port = Node3D.new()
+    ejection_port.name = "EjectionPort"
+    marker_parent.add_child(ejection_port)
+    ejection_port.position = Vector3(0.0036, 0.010, 0.016)
+
+
+func _build_flash() -> void:
     muzzle_flash = MeshInstance3D.new()
     var flash_quad := QuadMesh.new()
-    flash_quad.size = Vector2(0.085, 0.085)
+    flash_quad.size = Vector2(0.075, 0.075)
     flash_quad.material = flash_mat
     muzzle_flash.mesh = flash_quad
     muzzle_flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -531,7 +557,7 @@ func _build_model() -> void:
 
     muzzle_flash_2 = MeshInstance3D.new()
     var core_quad := QuadMesh.new()
-    core_quad.size = Vector2(0.042, 0.042)
+    core_quad.size = Vector2(0.036, 0.036)
     core_quad.material = flash_mat
     muzzle_flash_2.mesh = core_quad
     muzzle_flash_2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -545,10 +571,58 @@ func _build_model() -> void:
     muzzle_light.shadow_enabled = false
     muzzle.add_child(muzzle_light)
 
-    ejection_port = Node3D.new()
-    ejection_port.name = "EjectionPort"
-    slide.add_child(ejection_port)
-    ejection_port.position = Vector3(0.0143, 0.015, -0.012)
+
+func _apply_model_materials() -> void:
+    if glock_mesh == null or glock_mesh.mesh == null:
+        return
+    var mats: Array[Material] = [
+        frame_mat, dark_mat, slide_mat,
+        steel_mat, steel_mat, dark_mat,
+        brass_mat, brass_mat, brass_mat,
+    ]
+    var count := mini(glock_mesh.mesh.get_surface_count(), mats.size())
+    for i in range(count):
+        glock_mesh.set_surface_override_material(i, mats[i])
+    glock_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _setup_bones() -> void:
+    if skeleton == null:
+        return
+    bone_slide = skeleton.find_bone("Slide")
+    bone_trigger = skeleton.find_bone("Trigger")
+    bone_magazine = skeleton.find_bone("Magazine")
+    bone_barrel = skeleton.find_bone("Barrel")
+
+    if bone_slide >= 0:
+        rest_slide = skeleton.get_bone_rest(bone_slide)
+    if bone_trigger >= 0:
+        rest_trigger = skeleton.get_bone_rest(bone_trigger)
+    if bone_magazine >= 0:
+        rest_magazine = skeleton.get_bone_rest(bone_magazine)
+
+    var root_idx := skeleton.find_bone("Root")
+    if root_idx >= 0:
+        var root_rest := skeleton.get_bone_global_rest(root_idx)
+        var inverse_root := root_rest.basis.inverse()
+        # Modelo local: +Y = frente del cañón, +Z = arriba.
+        slide_axis = (inverse_root * Vector3(0, -1, 0)).normalized()
+        magazine_axis = (inverse_root * Vector3(0, 0, -1)).normalized()
+
+
+func _apply_bone_poses() -> void:
+    if skeleton == null:
+        return
+    if bone_slide >= 0:
+        var slide_units := slide_pos * model_units_per_meter
+        skeleton.set_bone_pose_position(bone_slide, rest_slide.origin + slide_axis * slide_units)
+    if bone_magazine >= 0:
+        var mag_units := mag_visual_drop * model_units_per_meter
+        skeleton.set_bone_pose_position(bone_magazine, rest_magazine.origin + magazine_axis * mag_units)
+    if bone_trigger >= 0:
+        var angle := -0.30 * trigger_visual
+        var trigger_basis := rest_trigger.basis.rotated(Vector3(1, 0, 0), angle)
+        skeleton.set_bone_pose_rotation(bone_trigger, trigger_basis)
 
 
 func _box(parent: Node3D, mesh_name: String, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:

@@ -4,9 +4,9 @@ Prototipo de FPS realista con cámara corporal, balística y físicas de otro ni
 hecho con **Godot 4.7.2** y **Jolt Physics**. Este repositorio es el único
 proyecto activo: aquí vive todo el juego y aquí deben contribuir humanos e IAs.
 
-> Estado: vertical slice jugable. El arma todavía usa geometría procedural y hay
-> bugs visuales conocidos; la hoja de ruta de abajo está pensada para que
-> cualquier IA o persona pueda continuar sin contexto previo.
+> Estado: vertical slice jugable con **Glock 19 riggeado** (huesos de corredera,
+> gatillo, cargador, cañón y retén), balística real y audio CC0. La hoja de ruta
+> de abajo está pensada para que cualquier IA o persona continúe sin contexto.
 
 ## Requisitos
 
@@ -34,6 +34,10 @@ godot4 --headless --path . -- --autotest
 # Capturar un frame
 godot4 --path . --rendering-driver vulkan -- --capture
 # Guarda /tmp/godot_frame.png
+
+# Previsualizar el arma aislada (útil para ajustar escala/materiales/huesos)
+godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulkan
+# Guarda /tmp/weapon_preview.png
 ```
 
 ## Controles
@@ -59,6 +63,7 @@ godot4 --path . --rendering-driver vulkan -- --capture
 | `scripts/GameAudio.gd` | Autoload: audio real CC0 con `AudioStreamPlayer2D/3D`. |
 | `scripts/World.gd` | Rango, materiales PBR procedurales, props y luces. |
 | `scripts/HUD.gd` | HUD bodycam, crosshair, ammo, reloj, hitmarker y post-proceso. |
+| `scripts/WeaponPreview.gd` | Escena aislada para inspeccionar el arma. |
 | `shaders/bodycam.gdshader` | Distorsión, chroma, grano, viñeta y blur. |
 
 ## Física y disparos
@@ -71,11 +76,13 @@ godot4 --path . --rendering-driver vulkan -- --capture
 - Casquillos `RigidBody3D` con rebote, rodadura y sonido.
 - Los blancos son `RigidBody3D` con `PinJoint3D`; Jolt los balancea.
 
-## Audio real
+## Assets
 
-Los sonidos **no son sintetizados**: son grabaciones reales CC0 de Freesound,
-recortadas y normalizadas con ffmpeg. Créditos completos en
-[`CREDITS_AUDIO.md`](CREDITS_AUDIO.md).
+- **Arma:** `assets/models/glock_rigged.glb`, Rigged Glock MIT de
+  `Hhk187/Zomopocalypse`. Créditos en [`CREDITS_MODELS.md`](CREDITS_MODELS.md).
+- **Audio real:** grabaciones CC0 de Freesound, recortadas con ffmpeg.
+  Créditos completos en [`CREDITS_AUDIO.md`](CREDITS_AUDIO.md).
+- **Texturas:** procedurales generadas para el prototipo.
 
 Incluye 6 variantes reales de disparo, corredera, cargador fuera/dentro,
 impactos de metal/hormigón/madera, rebote, casquillo y pasos.
@@ -85,17 +92,19 @@ impactos de metal/hormigón/madera, rebote, casquillo y pasos.
 Cualquier IA o persona puede tomar un punto y abrir un PR. Mantener el rumbo:
 **fotorrealismo jugable sin bajar rendimiento**.
 
-- [ ] Integrar un **Glock high-poly con licencias compatibles** (hay un CC0
-      high-poly y varios GLB MIT con animaciones; ver `docs` cuando se agregue).
-- [ ] Separar piezas del arma para animar corredera, cargador y manos de verdad.
-- [ ] Animaciones de recarga visibles y sincronizadas con el audio.
-- [ ] Fogonazo con textura + partículas + luz parpadeante más realista.
-- [ ] Arreglar las **líneas negras/artefactos** del render (SSAO/sombras).
-- [ ] Corregir el movimiento de la mano/arma al girar la cámara.
-- [ ] Hacer visible la expulsión de casquillos en primera persona.
-- [ ] Optimizar Forward+ sin bajar calidad (sombras, luces, escalado, LODs).
-- [ ] Que las balas atraviesen más materiales de forma creíble.
-- [ ] Limitar/mezclar audio para que no sature al disparar rápido.
+- [x] Integrar un Glock realista con licencia compatible.
+- [x] Huesos separados para corredera, gatillo, cargador y cañón.
+- [x] Limitador de audio en el bus Master.
+- [x] SSAO/SSIL desactivados para matar artefactos de líneas negras.
+- [ ] Ajustar a ojo la dirección/recorrido de los huesos en `Glock.gd`
+      (`slide_axis`, `magazine_axis`) con la escena `WeaponPreview`.
+- [ ] Añadir manos/brazos en primera persona con animaciones reales.
+- [ ] Recarga con animación esquelética completa y sincronizada al audio.
+- [ ] Fogonazo con geometría/partículas volumétricas más creíble.
+- [ ] Seguir puliendo sombras y luces para cero artefactos.
+- [ ] Hacer casquillos más visibles en primera persona (escala/trayectoria).
+- [ ] Penetración y rebotes con más materiales reales.
+- [ ] Optimizar Forward+ sin bajar calidad (LODs, escalado, sombras).
 - [ ] Migrar a un entorno urbano con assets reales.
 
 ## Convenciones para IAs

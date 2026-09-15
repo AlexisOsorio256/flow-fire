@@ -46,9 +46,7 @@ func _setup_environment() -> void:
     env.adjustment_enabled = true
     env.adjustment_contrast = 1.08
     env.adjustment_saturation = 0.94
-    env.ssao_enabled = true
-    env.ssao_radius = 0.65
-    env.ssao_intensity = 1.45
+    env.ssao_enabled = false
     env.ssil_enabled = false
     env.glow_enabled = true
     env.glow_intensity = 0.55

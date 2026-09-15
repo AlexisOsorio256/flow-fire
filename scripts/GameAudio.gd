@@ -23,7 +23,17 @@ const SOUNDS := {
 }
 
 
-func play_shot(volume_db: float = -1.5) -> void:
+func _ready() -> void:
+    var master := AudioServer.get_bus_index("Master")
+    if master >= 0:
+        var limiter := AudioEffectHardLimiter.new()
+        limiter.ceiling_db = -0.6
+        limiter.pre_gain_db = 0.0
+        limiter.release = 0.12
+        AudioServer.add_bus_effect(master, limiter)
+
+
+func play_shot(volume_db: float = -3.0) -> void:
     var p := AudioStreamPlayer.new()
     p.stream = SHOT_STREAMS[randi() % SHOT_STREAMS.size()]
     p.volume_db = volume_db + randf_range(-1.2, 1.2)

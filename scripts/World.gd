@@ -135,8 +135,11 @@ func _build_lights() -> void:
     sun.light_energy = 1.15
     sun.light_color = Color(1.0, 0.96, 0.9)
     sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 70.0
-    sun.shadow_bias = 0.04
+    sun.directional_shadow_max_distance = 55.0
+    sun.shadow_bias = 0.08
+    sun.shadow_normal_bias = 1.0
+    sun.shadow_blur = 1.5
+    sun.directional_shadow_blend_splits = true
     add_child(sun)
 
     for z in [-4.0, -12.0, -20.0, -28.0]:
