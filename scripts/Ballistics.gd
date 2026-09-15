@@ -144,7 +144,7 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             b.vel = reflected * speed * randf_range(0.42, 0.62)
             b.pos = point + reflected * 0.012
             b.ricochets += 1
-            GameAudio.play_3d("ricochet", point, -1.0, randf_range(0.9, 1.1))
+            GameAudio.play_3d("ricochet", point, 0.0, randf_range(0.9, 1.1))
             return
 
     b.active = false

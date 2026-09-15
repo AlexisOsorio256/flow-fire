@@ -22,4 +22,4 @@ func _on_body_entered(_body: Node) -> void:
     var speed := linear_velocity.length()
     if speed > 0.65:
         last_ping = life
-        GameAudio.play_3d("shell_drop", global_position, -11.0, randf_range(0.92, 1.12))
+        GameAudio.play_3d("shell_drop", global_position, 0.0, randf_range(0.92, 1.12))

@@ -184,7 +184,7 @@ func _physics_process(delta: float) -> void:
         step_accum += current_speed * delta
         if step_accum > 1.45:
             step_accum -= 1.45
-            GameAudio.play_2d("footstep", -14.0, randf_range(0.92, 1.08))
+            GameAudio.play_2d("footstep", 0.0, randf_range(0.92, 1.08))
     else:
         step_accum = 0.0
 

@@ -33,7 +33,7 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
         _:
             sound_name = "impact_concrete"
     if not (is_exit and surface == "paper"):
-        GameAudio.play_3d(sound_name, point, volume, randf_range(0.92, 1.08))
+        GameAudio.play_3d(sound_name, point, volume, randf_range(0.92, 1.08))  # volume = ajuste sobre el nivel base
 
 
 func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
