@@ -9,3 +9,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Capturas y vídeos de diagnóstico (se regeneran con --timeline / --probe)
+captures/

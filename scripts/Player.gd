@@ -264,16 +264,27 @@ func _process(delta: float) -> void:
 
 
 func _update_camera_recoil(delta: float) -> void:
+    # Resortes estables (Springs): un hitch de frame no debe volcar la cámara.
     var k := 105.0
     var c := 11.4
-    recoil_pitch_vel += (-k * recoil_pitch - c * recoil_pitch_vel) * delta
-    recoil_yaw_vel += (-k * recoil_yaw - c * recoil_yaw_vel) * delta
-    recoil_roll_vel += (-k * recoil_roll - c * recoil_roll_vel) * delta
-    recoil_kick_vel += (-k * recoil_kick - c * recoil_kick_vel) * delta
-    recoil_pitch += recoil_pitch_vel * delta
-    recoil_yaw += recoil_yaw_vel * delta
-    recoil_roll += recoil_roll_vel * delta
-    recoil_kick += recoil_kick_vel * delta
+    var pitch := Springs.scalar(recoil_pitch, recoil_pitch_vel, k, c, delta)
+    recoil_pitch = pitch.x
+    recoil_pitch_vel = pitch.y
+    var yaw_pair := Springs.scalar(recoil_yaw, recoil_yaw_vel, k, c, delta)
+    recoil_yaw = yaw_pair.x
+    recoil_yaw_vel = yaw_pair.y
+    var roll := Springs.scalar(recoil_roll, recoil_roll_vel, k, c, delta)
+    recoil_roll = roll.x
+    recoil_roll_vel = roll.y
+    var kick := Springs.scalar(recoil_kick, recoil_kick_vel, k, c, delta)
+    recoil_kick = kick.x
+    recoil_kick_vel = kick.y
+
+    # Clamps: la cámara nunca debe quedarse mirando a otro sitio.
+    recoil_pitch = clampf(recoil_pitch, -0.30, 0.30)
+    recoil_yaw = clampf(recoil_yaw, -0.25, 0.25)
+    recoil_roll = clampf(recoil_roll, -0.25, 0.25)
+    recoil_kick = clampf(recoil_kick, -0.05, 0.12)
 
 
 func _on_shot_fired() -> void:

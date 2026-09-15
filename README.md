@@ -1,233 +1,153 @@
 # FlowFire Bodycam — Godot 4 + Jolt
 
-> **Proyecto hiperespecializado.** No es un sandbox de features. Es un FPS
-> pequeño, técnicamente denso, obsesionado con cuatro cosas:
+> FPS chico y especializado. Cuatro cosas y nada más: **armas**, **balística**,
+> **físicas Jolt** y **calidad visual/sonora**, siempre con **optimización** como
+> requisito. Un cambio que no haga que disparar se sienta más real o que corra
+> mejor no entra.
 >
-> 1. **Armas** que se sientan reales.
-> 2. **Balística y físicas** reales.
-> 3. **Calidad visual/sonora** que sume al realismo.
-> 4. **Optimización** para que todo eso corra fluido.
->
-> Si eres una IA o persona que entra al repo: tu trabajo es hacer que **disparar
-> se sienta más real** y que **corra igual o mejor**. Si un cambio no mejora
-> armas, balística, físicas, calidad u optimización, no entra.
-
-**English brief for AI collaborators:** FlowFire Bodycam is a small,
-hyper-specialized Godot 4 + Jolt FPS prototype. The scope is intentionally
-narrow: weapon handling, real projectile ballistics (drag, gravity,
-penetration, ricochet), bodycam camera physics, CC0 real audio, visual quality
-and performance. Do not add unrelated features. Keep the automated tests
-passing and preserve the physics-first architecture.
+> El proyecto lo mantienen IAs: se mantiene **pequeño** a propósito. Menos
+> archivos, menos sistemas, menos superficie donde romper algo.
 
 ---
 
-## 0. Contexto rápido para una IA que llega nueva
+## 0. Reglas para una IA que llega nueva
 
-Lee esto antes de tocar código:
-
-- **Motor:** Godot **4.7.2 stable**, renderer de desarrollo **Forward+** (Vulkan).
-- **Objetivo comercial:** **Android**. El perfil móvil final todavía no está cerrado; Forward+ a 1080p es la referencia visual/de desarrollo, no una excusa para ignorar el rendimiento real en teléfono.
-- **Física:** **Jolt Physics** (`project.godot` → `3d/physics_engine="Jolt Physics"`).
-- **Escena principal:** `scenes/Main.tscn` → `scripts/Main.gd`.
-- **Autoloads:** `GameAudio`, `ImpactFX`, `Ballistics`.
-- **Unidades:** SI estrictas (metros, segundos, kg, m/s, julios, newtons).
-- **Arma base:** Glock 19 riggeada, 9x19, ~372 m/s, 8 g.
-- **Antes de tocar:** corre los tests de la sección 6.
-- **Después de tocar:** vuelve a correr los 4 tests automáticos + una captura.
-- **Prohibido:** assets sin licencia, features fuera de alcance, refactors
-  enormes que no aporten al realismo/rendimiento, físicas manuales donde Jolt
-  ya resuelve, romper las señales públicas.
-
----
-
-## 1. Misión y filosofía
-
-FlowFire Bodycam busca la **profundidad** en un vertical slice chico:
-
-- Una sola arma bien hecha vale más que diez armas a medias.
-- Una bala que vuela, atraviesa, rebota y deja orificio vale más que mil
-  partículas genéricas.
-- Una cámara corporal con peso, inercia y respiración vale más que un HUD
-  recargado.
-- 60 FPS estables con buena nitidez valen más que 200 efectos apilados.
-
-**Regla de oro:** cada PR debe poder responder *“¿en qué hace que disparar se
-sienta más real o que corra mejor?”*.
+1. **Alcance cerrado.** Solo armas, balística, físicas, calidad y rendimiento.
+   Si tu idea no entra en eso, no se hace (abre un RFC si crees que sí).
+2. **Nada de suposiciones: mide.** Orientación del arma, niveles de audio,
+   recorrido de huesos, FPS: se miden con las herramientas de la sección 4 y se
+   corrige con esa medida.
+3. **Antes de tocar:** corre los tests de la sección 4. **Después de tocar:**
+   vuelve a correrlos y deja una captura o timeline.
+4. **Física primero:** Jolt y nodos nativos antes que ecuaciones a mano
+   (la balística de proyectiles es la única excepción, y es intencional).
+5. **SI siempre:** metros, segundos, kg, m/s, julios, newtons.
+6. **Clamps y estabilidad:** todo lo que reciba input del jugador o del ratón
+   necesita límites.
+7. **Rendimiento:** si agregas luces, partículas o efectos, mide FPS antes y
+   después. Si baja más de 10%, se justifica o se revierte.
+8. **Assets:** licencia compatible + crédito en `CREDITS_*.md`. Nunca
+   NonCommercial.
+9. **No rompas** las señales públicas ni el contrato de los tests.
+10. **Cambios chicos**, medibles y reversibles. Un tema por commit, en español.
+11. **Android manda:** una captura bonita en Forward+ de escritorio no prueba
+    nada sobre el objetivo real.
 
 ---
 
-## 2. Pilares del juego (lo que SÍ hacemos)
+## 1. Alcance
 
-### 2.1 Armas
-- Modelo 3D realista de Glock con licencia compatible.
-- Huesos separados: `Slide`, `Trigger`, `Magazine`, `Barrel`, `SlideCatch`.
-- Manejo: retroceso, recuperación, gatillo, corredera, recarga, ADS, sprint.
-- Sway físico, breathing, inercia y clamps para que nunca se salga de cámara.
-- Mira centrada de verdad (`--aimtest`).
+### Lo que hacemos
 
-### 2.2 Balística real
-- Proyectiles reales a ~372 m/s, con **gravedad** y **arrastre**.
-- Raycast por subpasos para evitar túneles.
-- **Penetración**: entrada + salida + continuación con pérdida de energía.
-- Materiales: papel, madera y pladur penetrables; metal/hormigón rebotan.
-- **Rebotes** con pérdida de energía y sonido.
-- **Orificios visibles** de entrada y salida, unidos al objeto impactado.
-- Daño por zona: cabeza ×3.1, torso ×1, pierna ×0.65.
+- **Armas:** una Glock 19 riggeada, con corredera, gatillo, cargador y cañón
+  animados por huesos; recarga táctica y vacía; ADS, sprint, sway, breathing y
+  retroceso.
+- **Balística real:** proyectiles a ~372 m/s con gravedad y arrastre, raycast por
+  subpasos, penetración entrada/salida, rebotes, orificios y daño por zona.
+- **Físicas Jolt:** blancos colgantes, casquillos, colisiones del jugador.
+- **Calidad:** cámara corporal con bob/lean/breathing, post-proceso bodycam,
+  audio CC0 real con mix por buses, materiales PBR.
+- **Optimización:** 1920x1080 de referencia en desarrollo y perfil Android real
+  como objetivo de producción.
 
-### 2.3 Físicas Jolt
-- Blancos colgantes `RigidBody3D` + `PinJoint3D`.
-- Casquillos `RigidBody3D` con rebote, rodadura y sonido.
-- Colisiones del jugador contra props y mundo.
-- Movimiento `CharacterBody3D` con peso e inercia.
+### Lo que NO hacemos (por ahora)
 
-### 2.4 Cámara corporal (Bodycam)
-- Cámara corporal con bob, lean, breathing, sprint FOV y peso al arrancar/parar.
-- Post-proceso bodycam: distorsión de lente, chroma, viñeta, grano y blur.
-- Mira ADS calculada con transformaciones reales del modelo.
-- La altura/posición final de la cámara debe juzgarse visualmente; no asumir que un número “realista” se siente como bodycam sin captura.
-
-### 2.5 Audio real
-- Sonidos **reales CC0**, no sintetizados.
-- 6 variantes de disparo, corredera, cargador, impactos, rebote, casquillo, pasos.
-- Audio 3D posicional para impactos y casquillos.
-- Limitador en bus Master para que no reviente al disparar rápido.
-
-### 2.6 Calidad visual
-- Materiales PBR para hormigón, madera y metal; pladur simple de prototipo.
-- Texturas de superficies 3D con mipmaps; normal maps marcados explícitamente para importación correcta.
-- Sombras direccionales + luces de interior.
-- 1920x1080 nativo en el perfil visual de desarrollo, MSAA 2x, sin FXAA.
-- Fogonazo, humo, chispas, polvo y luces de impacto.
-
-### 2.7 Optimización
-- SSAO/SSIL apagados (además quitaban artefactos).
-- Sombra direccional 2048 y distancia acotada.
-- Sin reescalado dinámico en el perfil visual de referencia (`scaling_3d` en 1.0).
-- Partículas y orificios con límites.
-- Meta de desarrollo: **60 FPS en Intel HD 520 a 1080p**.
-- Meta de producción: medir en **Android real** y mantener un perfil Mobile que conserve el look sin asumir que Forward+ de escritorio representa el teléfono.
-- Si un cambio baja más de 10% el FPS, debe justificarse o revertirse.
+Multijugador · mundo abierto · vehículos · loot, inventario o crafting · gore ·
+arsenal de 20 armas · campaña o cinemáticas · features que no aporten a arma,
+balística, física, calidad u optimización · assets de licencia dudosa.
 
 ---
 
-## 3. No-objetivos (lo que NO hacemos por ahora)
-
-Para mantener la hiperespecialización:
-
-- ❌ Multijugador.
-- ❌ Mundo abierto / mapas enormes.
-- ❌ Vehículos, loot, inventario, crafting.
-- ❌ Gore o sangre explícita.
-- ❌ 20 armas distintas.
-- ❌ Cinemáticas y campaña.
-- ❌ Features que no aporten a arma, balística, física, calidad u optimización.
-- ❌ Assets con licencia dudosa.
-
-Si quieres romper un no-objetivo, primero abre un issue/RFC explicando por qué
-mejora el núcleo. Si no convence, no entra.
-
----
-
-## 3.5. Godot AI MCP (herramienta oficial del repo)
-
-El proyecto trae el addon **Godot AI v4.1.0** en `addons/godot_ai/`, habilitado
-en `project.godot`. Al abrir el editor normal (GUI), el plugin arranca solo un
-servidor MCP local y se conecta a él:
-
-- HTTP: `http://127.0.0.1:8000/mcp`
-- WebSocket: `ws://127.0.0.1:9500`
-- Namespace de herramientas: `mcp__godot-ai__<tool>`
-
-DeepSeek Harness queda configurado automáticamente en
-`~/.dsh/cordis.patch.yml` como `mcp-godot-ai` con `godot-ai attach`. Reinicia
-DeepSeek Harness después de abrir Godot para que cargue las herramientas MCP.
-
-Requisitos: `uv` / `uvx` (ya instalado en el entorno) y Godot 4.7+.
-
-**Para IAs con shell:** además del MCP, el editor expone el servidor HTTP en
-`127.0.0.1:8000`; se puede consultar con cualquier cliente MCP. El plugin
-funciona en localhost y usa autenticación interna.
-
-## 4. Estado actual (vertical slice jugable)
+## 2. Estado actual
 
 ### Funcionando
+
 - [x] Glock 19 riggeada integrada y acreditada.
+- [x] Alineación del arma **medida en runtime** sobre la malla (orientación,
+      escala real de 186 mm y verificación en el arranque).
+- [x] Boca, mira y puerto de expulsión medidos sobre la geometría, en el frame
+      del arma (no dentro del modelo rotado).
 - [x] Corredera, gatillo, cargador y cañón animados por huesos.
-- [x] Recarga táctica conserva cartuchos; recarga vacía alimenta la recámara tras liberar corredera.
+- [x] Recarga táctica conserva cartuchos; recarga vacía alimenta la recámara.
 - [x] Balística con gravedad, arrastre y subpasos.
 - [x] Penetración entrada/salida en papel, madera y pladur.
 - [x] Orificios visibles que siguen a blancos móviles.
 - [x] Rebotes en metal/hormigón.
-- [x] Blancos colgantes con Jolt y daño por zona.
-- [x] Casquillos con física.
-- [x] Cámara bodycam con bob/breathing/ADS.
-- [x] Audio real CC0 + limitador.
-- [x] HUD bodycam + post-proceso.
-- [x] Tests `--autotest`, `--aimtest`, `--pentest`, `--reloadtest` y captura `--capture`.
-- [x] Previsualizador de arma aislado.
+- [x] Blancos colgantes con Jolt y daño por zona (cabeza ×3.1, torso ×1, pierna ×0.65).
+- [x] Casquillos con física, que salen por el puerto derecho.
+- [x] Cámara bodycam con bob/breathing/ADS y post-proceso.
+- [x] Audio CC0 real normalizado por familia (`tools/process_audio.sh`) y mix por
+      buses (arma / mundo) con compresor por bus y techo en Master.
+- [x] HUD bodycam.
+- [x] Tests `--autotest`, `--aimtest`, `--pentest`, `--reloadtest`, captura
+      `--capture`, timeline `--timeline` y previsualizador de arma.
 
-### Pendiente (hoja de ruta priorizada)
-**A. Armas y animación**
-- [ ] Manos/brazos en primera persona con animación real y licencia comercial clara.
+### Pendiente (priorizado)
+
+**A. Armas**
+- [ ] Manos/brazos en primera persona con animación real y licencia comercial.
 - [ ] Recarga esquelética completa sincronizada al audio.
-- [ ] Fogonazo más realista (geometría + partículas + luz dinámica) sin convertir cada disparo en una explosión.
+- [ ] Fogonazo más realista (geometría + partículas + luz) sin convertirlo en
+      una explosión por disparo.
 - [ ] Casquillos más visibles en primera persona.
 - [ ] Viewmodel en capa/subviewport para que no se oculte con geometría.
 
 **B. Balística**
-- [ ] Validar la salida de penetración contra geometría real; hoy el grosor se aproxima mediante metadata + ángulo.
-- [ ] Penetración en cristal, chapas finas y más grosores.
-- [ ] Astillas/desprendimiento por material.
-- [ ] Rebotes con ángulo, sonido y chispas dependientes de superficie.
-- [ ] Balística de distancia con caída más evidente a larga distancia.
+- [ ] Validar penetración contra geometría real (hoy el grosor se aproxima).
+- [ ] Penetración en cristal y chapas finas; astillas por material.
+- [ ] Rebotes con ángulo, sonido y chispas según superficie.
 
 **C. Física**
 - [ ] Reacciones de blancos más ricas (caída, giro, golpes).
 - [ ] Casquillos que rueden y se asienten de forma más creíble.
-- [ ] Colisiones del arma/brazos contra paredes cercanas.
 
-**D. Calidad visual**
-- [ ] Sustituir gradualmente texturas procedurales por PBR CC0 de buena fuente, preferentemente 1K/2K; 4K sólo donde una captura demuestre que aporta.
+**D. Calidad**
+- [ ] Sustituir texturas procedurales por PBR CC0 1K/2K donde una captura lo
+      justifique.
 - [ ] Iluminación interior más cinematográfica sin perder FPS.
-- [ ] Mejor post-proceso bodycam sin ensuciar la imagen.
-- [ ] Entorno urbano/industrial chico y creíble (solo cuando el núcleo esté sólido).
 
 **E. Optimización / Android**
-- [ ] Perfil Android real con renderer **Mobile**, resolución/calidad escalable y medición en teléfono representativo.
-- [ ] Migrar input duro de teclado/mouse a acciones antes de integrar controles táctiles.
-- [ ] LODs y distancias de sombra.
-- [ ] Oclusión/culling de props y luces.
-- [ ] Pooling de partículas, audio temporal y orificios si el profiler demuestra churn relevante.
-- [ ] Medir el coste del shader bodycam: el blur hace varias lecturas extra de pantalla cuando hay movimiento.
+- [ ] Perfil Android real (renderer Mobile, resolución escalable, medición en
+      teléfono).
+- [ ] Input por acciones antes de controles táctiles.
+- [ ] LODs, distancias de sombra y culling de props/luces.
+- [ ] Medir el coste del shader bodycam (el blur hace lecturas extra).
 
 ---
 
-## 5. Arquitectura
+## 3. Arquitectura
 
 | Archivo | Responsabilidad |
 |---|---|
-| `scripts/Main.gd` | Arranque, entorno, tests `--autotest`, `--aimtest`, `--pentest`, `--reloadtest`, `--capture`. |
+| `scenes/Main.tscn` → `scripts/Main.gd` | Arranque, entorno, tests y herramientas de medida. |
 | `scripts/Player.gd` | `CharacterBody3D`, cámara corporal, bob, breathing, sprint, recoil. |
-| `scripts/Glock.gd` | Arma, huesos, corredera, gatillo, recarga, fogonazo, expulsión. |
+| `scripts/Glock.gd` | Arma: mide la base de la malla, alinea el modelo, coloca boca/mira/puerto, huesos, corredera, gatillo, recarga, fogonazo, expulsión. |
 | `scripts/Ballistics.gd` | Autoload: proyectiles, penetración, rebotes, daño. |
 | `scripts/Target.gd` | Blancos `RigidBody3D` colgantes con daño por zona. |
 | `scripts/ImpactFX.gd` | Autoload: orificios, partículas, luces e impactos. |
-| `scripts/GameAudio.gd` | Autoload: audio real CC0 + limitador. |
+| `scripts/GameAudio.gd` | Autoload: buses `Weapons`/`World`, niveles, voces limitadas y sonidos CC0. |
 | `scripts/World.gd` | Rango, materiales, props, luces y paneles penetrables. |
 | `scripts/HUD.gd` | HUD bodycam + post-proceso. |
 | `scripts/WeaponPreview.gd` | Escena aislada para inspeccionar el arma. |
 | `shaders/bodycam.gdshader` | Distorsión, chroma, grano, viñeta y blur. |
+| `tools/process_audio.sh` | Normaliza los WAV por familia (ataque, cola, pico). |
+| `tools/make_timeline_media.sh` | Convierte los frames de `--timeline` en contacto + vídeo. |
+
+**Autoloads:** `GameAudio`, `ImpactFX`, `Ballistics`.
+**Escena principal:** `scenes/Main.tscn`.
+**Física:** Jolt (`3d/physics_engine="Jolt Physics"`), 60 ticks/s, gravedad 9.8.
 
 ### Señales públicas que NO se deben romper
+
 - `ammo_changed(mag, chamber, reserve, reloading)`
 - `shot_fired`
 - `target_hit(zone)`
 
 ---
 
-## 6. Tests y verificación
+## 4. Verificación
 
-Ejecutar siempre en este orden después de un cambio:
+Obligatorio después de cada cambio:
 
 ```bash
 # 1) Compila/importa y no rompe scripts
@@ -235,11 +155,13 @@ godot4 --headless --path . --editor --quit
 
 # 2) Disparo, balística y Jolt
 godot4 --headless --path . -- --autotest
-# Esperado: targets > 0, first_health < 100 y munición consistente tras un disparo.
+# Esperado: targets > 0, first_health < 100 y munición consistente.
 
 # 3) Mira centrada
 godot4 --headless --path . -- --aimtest
-# Esperado: delta_px < 0.5
+# Esperado: passed=true, aim_blend > 0.99 y offset_mm <= 14. Medido: ~9 mm por
+# debajo del centro, porque el arma se enmarca algo baja a propósito
+# (ADS_SIGHT_DROP) para no tapar el punto de mira.
 
 # 4) Penetración y orificios
 godot4 --headless --path . -- --pentest
@@ -248,86 +170,73 @@ godot4 --headless --path . -- --pentest
 # 5) Recarga vacía y conservación de munición
 godot4 --headless --path . -- --reloadtest
 # Esperado: passed=true, mag=16, chamber=1, reserve=0, total=17.
-
-# 6) Captura visual
-godot4 --path . --rendering-driver vulkan -- --capture
-# Guarda /tmp/godot_frame.png
-
-# 7) Previsualización del arma
-godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulkan
-# Guarda /tmp/weapon_preview.png
 ```
 
-**Definition of Done de un PR:**
-1. Los 4 tests automáticos pasan.
-2. No baja más de 10% el FPS en la escena principal.
-3. No rompe señales públicas.
-4. No mete assets sin licencia y créditos.
-5. El código nuevo está comentado en español o inglés claro.
-6. Explica en el PR qué mejora de realismo/optimización aporta.
-
----
-
-## 7. Convenciones para IAs y humanos
-
-1. **Física primero:** usa Jolt y nodos nativos antes que ecuaciones a mano,
-   excepto para balística de proyectiles (ahí el control fino es intencional).
-2. **SI siempre:** nada de “unidades raras”. Metros, kg, m/s, J, N.
-3. **Nada de magia:** si usas un número raro, comenta de dónde sale.
-4. **Clamps y estabilidad:** cualquier sistema que reciba input del mouse o del
-   jugador debe tener límites; no queremos otra vez el arma saliéndose.
-5. **Rendimiento:** si agregas luces, partículas o efectos de pantalla, mide FPS antes/después.
-6. **Assets:** licencia compatible + créditos en `CREDITS_*.md`. Para monetización, no usar arte con cláusula NonCommercial.
-7. **No toques** `project.godot` para bajar calidad sin justificarlo ni medirlo.
-8. **Commits:** mensajes claros en español, un tema por commit.
-9. **Sin refactors masivos:** cambios chicos, medibles y reversibles.
-10. **El núcleo manda:** si tu feature no mejora armas, balística, física,
-    calidad u optimización, probablemente esté fuera de alcance.
-11. **Android manda al final:** una captura bonita en Forward+ de escritorio no prueba que el cambio sea viable en el mercado objetivo.
-
----
-
-## 8. Requisitos y ejecución
-
-- Godot **4.7.2 stable**.
-- Jolt viene integrado en Godot 4.4+; el proyecto ya lo activa.
+**Herramientas de medida** (no son tests: sirven para no suponer):
 
 ```bash
-# Editor
-godot4 --editor --path .
+# Medida del arma: largo/escala, caja real en frame de arma, boca/mira/puerto,
+# recorrido de corredera y cargador, y pose viva.
+godot4 --path . --rendering-driver vulkan -- --geometrydebug
+# Esperado: GLOCK_MEDIDA largo_m=0.186, GUNBOX size=(0.0296, 0.1286, 0.186),
+# TRAVEL Slide en +Z (atrás) y Magazine en -Y (abajo), sin ERROR ni WARNING.
 
-# Jugar perfil de desarrollo
-godot4 --path . --rendering-driver vulkan
+# Timeline: secuencia guionizada (quieto, caminando, apuntar, disparos, recarga)
+# con un frame cada 0.1 s y sus métricas (mira, boca, caja del arma, cámara).
+godot4 --path . --rendering-driver vulkan -- --timeline
+bash tools/make_timeline_media.sh
+# Salida: captures/timeline/frame_*.png, captures/timeline_contacto.png y .mp4
+
+# Capturas de estados sueltos, con y sin arma para comparar.
+godot4 --path . --rendering-driver vulkan -- --probe
+# Salida: /tmp/probe_{hip,ads,shot,reload}_{with,without}.png
+
+# Rendimiento (desactiva vsync y mide 8 s). En headless el viewport es 64x64 y
+# la cifra no vale.
+godot4 --path . --rendering-driver vulkan -- --fpsbench
+
+# Captura visual y previsualización aislada del arma
+godot4 --path . --rendering-driver vulkan -- --capture   # /tmp/godot_frame.png
+godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulkan
 ```
 
-### Controles actuales de desarrollo
-- `WASD`: mover
-- `Mouse`: mirar
-- `Click izquierdo`: capturar mouse / disparar (semiautomática)
-- `Click derecho`: apuntar
-- `R`: recargar
-- `F`: disparo alternativo
-- `Esc`: liberar mouse
+`captures/` está en `.gitignore`: es material de revisión, no parte del repo.
 
-Estos controles aún son de escritorio. Antes de Android deben pasar por acciones de input y controles táctiles, no duplicarse como otro sistema de gameplay.
+**Definition of Done**
+1. Los 4 tests pasan.
+2. No baja más de 10% el FPS de la escena principal.
+3. No rompe señales públicas.
+4. No mete assets sin licencia ni créditos.
+5. Código comentado en español o inglés claro.
+6. El commit explica qué mejora de realismo o rendimiento aporta.
 
 ---
 
-## 9. Assets y licencias
+## 5. Ejecución y controles
 
-- **Arma:** `assets/models/glock_rigged.glb`, Rigged Glock de
-  `Hhk187/Zomopocalypse`. Ver [`CREDITS_MODELS.md`](CREDITS_MODELS.md) para licencia y atribución.
-- **Audio real:** CC0 de Freesound, recortado con ffmpeg.
-  Ver [`CREDITS_AUDIO.md`](CREDITS_AUDIO.md).
-- **Texturas actuales:** prototipo; superficies 3D configuradas con mipmaps y normal-map import correcto.
-- **Godot AI MCP:** MIT (`addons/godot_ai/`), versión 4.1.0.
+Requisitos: **Godot 4.7.2 stable**, `ffmpeg` e ImageMagick para las herramientas.
+
+```bash
+godot4 --editor --path .                       # editor
+godot4 --path . --rendering-driver vulkan      # jugar perfil de desarrollo
+```
+
+- `WASD`: mover · `Mouse`: mirar · `Click izq`: capturar mouse / disparar ·
+  `Click der`: apuntar · `R`: recargar · `F`: disparo alternativo · `Esc`: liberar mouse.
+
+Estos controles son de escritorio: antes de Android deben pasar por acciones de
+input y controles táctiles, no duplicarse como otro sistema de gameplay.
+
+---
+
+## 6. Assets y licencias
+
+- **Arma:** `assets/models/glock_rigged.glb`, Rigged Glock de `Hhk187/Zomopocalypse`
+  (ver [`CREDITS_MODELS.md`](CREDITS_MODELS.md)).
+- **Audio:** CC0 de Freesound, normalizado con `tools/process_audio.sh`
+  (ver [`CREDITS_AUDIO.md`](CREDITS_AUDIO.md)).
+- **Texturas:** PBR CC0 1K/2K con mipmaps y normal maps
+  (ver [`CREDITS_TEXTURES.md`](CREDITS_TEXTURES.md)).
 - **Código:** MIT. Ver [`LICENSE`](LICENSE).
 
-Nunca agregues un asset sin licencia compatible y su crédito correspondiente.
-
----
-
-## 10. Resumen de una línea
-
-**FlowFire Bodycam es un FPS chico e hiperespecializado: pocas cosas, pero
-armas, balística, físicas, calidad y optimización de otro nivel.**
+Nunca agregues un asset sin licencia compatible y su crédito en el mismo commit.
