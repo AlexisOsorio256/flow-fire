@@ -23,26 +23,6 @@
 - **No trae esqueleto ni animaciones a propósito**: la mecánica de FlowFire (recorrido de corredera, gatillo, recámara, cargador, expulsión) es la autoridad y mueve las piezas como nodos rígidos.
 - La metadata de licencia se conserva dentro del GLB; no se ha eliminado al copiarlo al repositorio.
 
-## FPS Arms — DJMaesen
-
-- Archivo: `assets/models/fps_arms.glb` (10.3 MB, md5 `0546fa73ffcf15031d874f6697c794cd`).
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/fps-arms-08ec4403a47645d8ad80633abf13d39d
-- Autor: **DJMaesen** (bumstrum) — https://sketchfab.com/bumstrum
-- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en `asset.extras`.
-- Atribución a incluir: *"fps arms" by DJMaesen, licensed under CC-BY 4.0, via Sketchfab*.
-- 7 028 triángulos, 1 malla skinned, 47 huesos, **sin animaciones**.
-- **No integrado.** Evaluado como recambio de brazos y descartado por ahora: su topología de dedos no casa con la del rig actual (ver nota de retarget).
-
-## FREE [FPS Arms] GameReady - RIGGED — BAMEN
-
-- Archivo: `assets/models/fps_arms_gameready.glb` (14.2 MB, md5 `1fee98d63752a4a77a20a4b381d3943d`).
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f
-- Autor: **BAMEN** — https://sketchfab.com/bamenwo05
-- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en `asset.extras`.
-- Atribución a incluir: *"FREE [FPS Arms] GameReady - RIGGED" by BAMEN, licensed under CC-BY 4.0, via Sketchfab*.
-- 13 728 triángulos (2 mallas: `FPS Arm` 2 816 y `FPS Hand` 10 912), 52 huesos, 2 materiales PBR.
-- **No integrado.** Es un rig claramente mejor que el actual (13.7k tris frente a 2.4k, cinco cadenas de dedos independientes por mano frente a tres), pero choca con el mismo muro topológico que `fps_arms.glb`: ver la nota de retarget.
-
 ## 9mm Luger Ammo (Free) — Ziperi
 
 - Archivo: `assets/models/9mm_luger.glb` (8.4 MB).
@@ -55,41 +35,40 @@
 
 ---
 
-## Nota: por qué no se retargetean las animaciones al rig de brazos nuevo
+## Nota: estado de la busqueda de brazos realistas
 
-Las animaciones actuales (`Grip`, `Idle`, `Shoot`, `Reload`) son del rig viejo y
-funcionan. Retargetearlas a `fps_arms.glb` **no es viable sin inventar
-movimiento**, y el motivo es topológico, no de nombres:
+Los dos rigs de brazos que se probaron (`fps_arms.glb` de DJMaesen y
+`fps_arms_gameready.glb` de BAMEN) **se han borrado del repositorio**: no se
+integraron y pesaban 62 MB entre GLB y texturas. Ninguno servia por el mismo
+motivo topologico: el rig viejo mete corazon, anular y menique en una sola
+cadena (`DoubleFingers`), asi que de las cinco cadenas independientes que traen
+los dos candidatos solo se puede alimentar una y las otras dos se quedarian
+extendidas agarrando. Y ninguno de los dos traia animaciones propias.
 
-| | rig viejo (J-Toastie) | rig nuevo (DJMaesen) |
-|---|---|---|
-| huesos | 41 | 47 |
-| cadenas de dedos por mano | 3 (`DoubleFingers`, `Index`, `Thumb`) | 5 (`thumb`, `point`, `middle`, `ring`, `pink`) |
+**Candidato encontrado y verificado** (pendiente de descarga e integracion):
 
-`DoubleFingers` es **una sola cadena para corazón, anular y meñique**. Al
-retargetear sólo hay origen para una de las tres, así que las otras dos se
-quedarían en su pose de reposo: **extendidas**, mientras el resto de la mano
-agarra. En una empuñadura de pistola eso es justo lo que no puede pasar, porque
-anular y meñique son los que cierran contra el frente del armazón. No es un
-problema de escala ni de offsets que se arregle con más cuidado: falta el
-movimiento de origen.
+- **FPS pistol animations** — Cransh
+- Fuente: https://sketchfab.com/3d-models/fps-pistol-animations-0d7a343dcb6f401197a73c91aee93f6d
+- Licencia: **CC-BY** (uso comercial permitido con atribucion), verificada por la
+  API de Sketchfab, no por la ficha de la web.
+- **Descargable: si.** 32 670 triangulos y 16 607 vertices: unas cinco veces el
+  rig actual completo (6 837), o sea que no es low-poly.
+- 5 animaciones propias, y es de **pistola**, no de rifle, que es lo que encaja
+  con la mecanica de FlowFire.
+- Requiere cuenta gratuita de Sketchfab para descargar; no se puede bajar por
+  linea de comandos.
 
-Comprobado dos veces con dos assets distintos, y los dos fallan igual:
+Se comprobo tambien `Ayush-Mohanty/FPS-Arms-3D` (GitHub, repositorio MIT con
+animaciones idle/shoot/reload y listo para Godot). **Descartado por dos motivos
+concretos**: el modelo que trae dentro es un **AK-74M** de Cransh con licencia
+**CC-BY-4.0** propia -- el MIT del repositorio cubre su codigo, no el asset de
+terceros, que es justo el error que advierte este mismo archivo -- y sus
+animaciones son de rifle, no de pistola.
 
-| | viejo (J-Toastie) | `fps_arms.glb` (DJMaesen) | `fps_arms_gameready.glb` (BAMEN) |
-|---|---|---|---|
-| huesos | 41 | 47 | 52 |
-| cadenas de dedos por mano | 3 | 5 | 5 |
-
-Los dos candidatos tienen cinco cadenas independientes y **ninguno trae
-animaciones propias**, así que no hay fuente alternativa de movimiento. Con el
-rig viejo como origen sólo se pueden alimentar tres de esas cinco cadenas.
-
-Se conserva el rig viejo para brazos y animación, y el arma de alta fidelidad se
-integra como piezas rígidas sobre esa misma mano. Sustituir los brazos exigiría
-transferir pesos de la malla nueva al esqueleto viejo (pintado de pesos, no
-retargeting de animación), que es otro trabajo y no se ha hecho.
-
+Mientras no haya brazos nuevos, `fps_rig.glb` **no se puede borrar**: es la unica
+fuente de brazos y de las cuatro animaciones que funcionan (`Grip`, `Idle`,
+`Shoot`, `Reload`). Su malla de arma ya esta sustituida por la OWK 19; lo que
+queda de el son los brazos y la animacion.
 ---
 
 No documentar assets que ya no existan en el repo. Antes de sustituir o añadir un
