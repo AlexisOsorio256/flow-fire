@@ -6,6 +6,9 @@ const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
 
 var decals: Array[MeshInstance3D] = []
+# Interruptor de laboratorio para aislar el coste de FX (--fpsbench
+# --fpsstress). No cambia ninguna regla ni el comportamiento por defecto.
+var spawning_enabled := true
 
 
 func _ready() -> void:
@@ -13,6 +16,8 @@ func _ready() -> void:
 
 
 func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool = false) -> void:
+    if not spawning_enabled:
+        return
     _spawn_decal(point, normal, collider, surface, is_exit)
     _spawn_particles(point, normal, surface, is_exit)
     _spawn_light(point, surface)
@@ -37,6 +42,8 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
 
 
 func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
+    if not spawning_enabled:
+        return
     var pm := ParticleProcessMaterial.new()
     pm.direction = direction.normalized()
     pm.spread = 24.0

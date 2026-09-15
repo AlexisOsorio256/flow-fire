@@ -163,8 +163,13 @@ godot4 --path . --rendering-driver vulkan -- --probe
 # Disparo y recarga en cámara lenta (corredera, casquillo, capas de retroceso)
 godot4 --path . --rendering-driver vulkan -- --slowmo
 
-# Rendimiento real de la escena (no usar headless para juzgar GPU)
+# Rendimiento real de la escena (no usar headless para juzgar GPU).
+# Fija 1920x1080, vsync OFF y mide cada variante A/B con la misma cámara y
+# duración. Opciones: --fpsvariant=id1,id2 --fpsreps=N --fpsduration=S
+# --fpscapture guarda una captura 1080p por variante.
+# --fpsstress aísla el coste de partículas/impact FX con impactos periódicos.
 godot4 --path . --rendering-driver vulkan -- --fpsbench
+godot4 --path . --rendering-driver vulkan -- --fpsbench --fpsvariant=glow_off,stage_omnis_off --fpsreps=3 --fpsduration=5
 
 # Captura del mix final
 godot4 --path . --rendering-driver vulkan -- --audiocapture
