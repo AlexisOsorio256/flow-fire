@@ -1671,7 +1671,7 @@ func _install_arms() -> void:
     # Inclinacion del conjunto: sin ella el arma apunta hacia ARRIBA en vez de
     # quedar baja, que es la postura de lista. Se gira sobre el eje X del frame
     # del arma (el transversal), que es el que baja la boca.
-    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(-38.0))
+    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(-46.0))
     var fijo := inclinacion * fix
     holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fijo.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
@@ -1723,12 +1723,36 @@ func _install_arms() -> void:
             # (-Y). Sin esto se veia demasiado adelantado y alto. Son los dos
             # unicos grados de libertad que se tocan a mano; el resto de la
             # colocacion sale de medir la caja.
-            var RETRASO := 0.060
+            # El problema de encuadre no era la posicion del arma sino que se veia
+            # DEMASIADO brazo: la masa de los hombros y las bocas de las mangas
+            # entraban en cuadro. Retrasando el conjunto esa masa queda detras de
+            # la camara y solo se ven antebrazos, manos y arma.
+            var RETRASO := 0.105
             var BAJADA := 0.050
             var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y) - BAJADA, -centro.z + RETRASO)
             holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
-            print("ARMS_CAJA tam=", cb.size.snapped(Vector3(0.001, 0.001, 0.001)),
-                " centro_antes=", centro.snapped(Vector3(0.001, 0.001, 0.001)))
+            # Y con esos MISMOS vertices se vuelve a medir la mira y la boca del
+            # arma visible. Hasta ahora los marcadores eran los de la OWK, que en
+            # este modo esta oculta: `aimtest` comprobaba la mira de un arma que
+            # no se dibuja, asi que podia pasar o fallar sin relacion con lo que
+            # ve el jugador. Con esto el marcador vuelve a estar sobre el arma
+            # que se ve, y `aimtest` recupera su sentido.
+            for m in mallas:
+                if m == brazos:
+                    continue
+                var mi3 := m as MeshInstance3D
+                var xf3: Transform3D = (gun_frame as Node3D).global_transform.affine_inverse() * mi3.global_transform
+                for si3 in range(mi3.mesh.get_surface_count()):
+                    for v3 in mi3.mesh.surface_get_arrays(si3)[Mesh.ARRAY_VERTEX]:
+                        cv.append(xf3 * v3)
+            var cb2 := _bounds(cv)
+            gun_box = cb2
+            sight_marker.position = _band_centroid(cv, cb2, 0.80, 1.0, 0.90, 1.0)
+            muzzle.position = _band_centroid(cv, cb2, 0.0, 0.04, 0.0, 1.0)
+            _compute_ads_offset()
+            print("ARMS_MARCADORES_AUTOR mira=", sight_marker.position.snapped(Vector3(0.001, 0.001, 0.001)),
+                " boca=", muzzle.position.snapped(Vector3(0.001, 0.001, 0.001)),
+                " ads_offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)))
 
     if arms_mesh != null:
         arms_mesh.visible = false
