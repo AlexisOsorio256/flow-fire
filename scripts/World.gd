@@ -1,13 +1,17 @@
 extends Node3D
 
-const CONCRETE_ALBEDO: Texture2D = preload("res://assets/textures/concrete_albedo.png")
-const CONCRETE_NORMAL: Texture2D = preload("res://assets/textures/concrete_normal.png")
-const CONCRETE_ROUGHNESS: Texture2D = preload("res://assets/textures/concrete_roughness.png")
-const WOOD_ALBEDO: Texture2D = preload("res://assets/textures/wood_albedo.png")
-const WOOD_NORMAL: Texture2D = preload("res://assets/textures/wood_normal.png")
-const WOOD_ROUGHNESS: Texture2D = preload("res://assets/textures/wood_roughness.png")
-const METAL_ALBEDO: Texture2D = preload("res://assets/textures/metal_albedo.png")
-const METAL_ROUGHNESS: Texture2D = preload("res://assets/textures/metal_roughness.png")
+const FLOOR_ALBEDO: Texture2D = preload("res://assets/textures/real/concrete_brushed_concrete_diff.jpg")
+const FLOOR_NORMAL: Texture2D = preload("res://assets/textures/real/concrete_brushed_concrete_nor_gl.jpg")
+const FLOOR_ROUGHNESS: Texture2D = preload("res://assets/textures/real/concrete_brushed_concrete_rough.jpg")
+const CONCRETE_ALBEDO: Texture2D = preload("res://assets/textures/real/concrete_concrete_diff.jpg")
+const CONCRETE_NORMAL: Texture2D = preload("res://assets/textures/real/concrete_concrete_nor_gl.jpg")
+const CONCRETE_ROUGHNESS: Texture2D = preload("res://assets/textures/real/concrete_concrete_rough.jpg")
+const WOOD_ALBEDO: Texture2D = preload("res://assets/textures/real/wood_oak_wood_planks_diff.jpg")
+const WOOD_NORMAL: Texture2D = preload("res://assets/textures/real/wood_oak_wood_planks_nor_gl.jpg")
+const WOOD_ROUGHNESS: Texture2D = preload("res://assets/textures/real/wood_oak_wood_planks_rough.jpg")
+const METAL_ALBEDO: Texture2D = preload("res://assets/textures/real/metal_metal_plate_diff.jpg")
+const METAL_NORMAL: Texture2D = preload("res://assets/textures/real/metal_metal_plate_nor_gl.jpg")
+const METAL_ROUGHNESS: Texture2D = preload("res://assets/textures/real/metal_metal_plate_rough.jpg")
 
 var concrete_mat: StandardMaterial3D
 var wall_mat: StandardMaterial3D
@@ -30,12 +34,13 @@ func build() -> void:
 
 func _materials() -> void:
     concrete_mat = StandardMaterial3D.new()
-    concrete_mat.albedo_texture = CONCRETE_ALBEDO
-    concrete_mat.roughness_texture = CONCRETE_ROUGHNESS
+    concrete_mat.albedo_texture = FLOOR_ALBEDO
+    concrete_mat.roughness_texture = FLOOR_ROUGHNESS
     concrete_mat.normal_enabled = true
-    concrete_mat.normal_texture = CONCRETE_NORMAL
-    concrete_mat.normal_scale = 0.8
+    concrete_mat.normal_texture = FLOOR_NORMAL
+    concrete_mat.normal_scale = 0.9
     concrete_mat.uv1_scale = Vector3(6, 8, 6)
+    concrete_mat.albedo_color = Color(0.85, 0.85, 0.85)
     concrete_mat.roughness = 0.92
 
     wall_mat = StandardMaterial3D.new()
@@ -63,8 +68,11 @@ func _materials() -> void:
     metal_mat = StandardMaterial3D.new()
     metal_mat.albedo_texture = METAL_ALBEDO
     metal_mat.roughness_texture = METAL_ROUGHNESS
+    metal_mat.normal_enabled = true
+    metal_mat.normal_texture = METAL_NORMAL
+    metal_mat.normal_scale = 0.8
     metal_mat.metallic = 0.9
-    metal_mat.roughness = 0.32
+    metal_mat.roughness = 0.38
     metal_mat.uv1_scale = Vector3(2, 2, 2)
 
     pillar_mat = StandardMaterial3D.new()
