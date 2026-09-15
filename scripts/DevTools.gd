@@ -207,9 +207,18 @@ func _bench_apply_variant(variant_id: String) -> void:
 ## Guarda una captura del estado exacto de la variante, a la misma resolución
 ## y cámara que el benchmark, para poder revisar que la optimización no cambió
 ## la imagen más de lo aceptable.
+##
+## La escena se congela antes de capturar: sin eso las capturas del benchmark NO
+## son comparables entre sí. Medido con el banco anterior: base contra fx_off
+## (que cuesta 0.08 ms y no cambia nada visible) daba 6.3/255 de diferencia
+## media y 36.6% de píxeles por encima de 4/255, todo ello balanceo del arma y
+## respiración de la cámara entre una variante y la siguiente.
 func _bench_capture_frame(variant_id: String) -> void:
     var dir := ProjectSettings.globalize_path("res://captures/fpsbench")
     DirAccess.make_dir_recursive_absolute(dir)
+    var weapon_visible: bool = _player.weapon.visible
+    await _freeze_scene("hip")
+    _player.weapon.visible = weapon_visible
     var path := "%s/%s.png" % [dir, variant_id]
     await _capture_view(path)
     print("FPSBENCH_CAPTURE ", path)
@@ -341,6 +350,343 @@ func _bench_print_summary(variants: Array, runs: Dictionary) -> void:
                 " vs_base_fps=", snappedf(gain_fps, 0.01),
                 " pct=", snappedf(gain_pct, 0.1),
                 " frame_save_ms=", snappedf(save_ms, 0.01))
+
+
+## ---------------------------------------------------------------------------
+## Banco visual A/B determinista.
+##
+## Para decidir si un cambio de renderer degrada la imagen no basta con mirar
+## dos capturas del juego: tienen que ser LA MISMA imagen salvo por lo que se
+## compara. En FlowFire eso no ocurre por defecto, porque hay cuatro fuentes de
+## variación entre dos corridas cualesquiera:
+##
+##  1. el balanceo/retroceso del arma y la respiración de la cámara avanzan con
+##     el reloj, así que la pose y el encuadre cambian de una captura a otra;
+##  2. la animación del autor mueve los brazos y el cargador por su cuenta;
+##  3. el fogonazo enciende una luz con energía aleatoria, que alumbra la escena
+##     entera de forma distinta cada vez;
+##  4. el grano del bodycam usa el reloj del sistema como semilla.
+##
+## Aquí las cuatro se clavan: time_scale 0, fases y resortes a cero, animación
+## posicionada en un tiempo exacto, energía del fogonazo fija y semilla del
+## grano constante. Dos corridas del mismo estado —en el mismo renderer o en
+## otro— dan la misma imagen, así que cualquier diferencia que quede es del
+## cambio que se está evaluando.
+##
+## Uso: godot4 --path . --rendering-driver vulkan -- --visualab
+##      --visualout=captures/visual/fp  --visualonly=hip,ads
+## ---------------------------------------------------------------------------
+const VISUAL_STATES := ["env", "hip", "ads", "shot", "casing", "reload", "slide_back"]
+
+# Estado de referencia: quieto, mirando al frente, sin retroceso ni respiración.
+const VISUAL_YAW := 0.0
+const VISUAL_PITCH := 0.0
+const VISUAL_EYE_Y := 1.62
+const VISUAL_FOV_HIP := 82.0
+const VISUAL_FOV_ADS := 60.0
+const VISUAL_GRAIN_TIME := 12.0        # semilla fija del grano del bodycam
+const VISUAL_FLASH_ENERGY := 8.0       # energía fija del fogonazo
+const VISUAL_LOADOUT := {"mag": 17, "chamber": 1, "reserve": 68}
+
+var _visual_pin := {}
+var _visual_pin_active := false
+
+
+func run_visualab() -> void:
+    DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+    _bench_lock_viewport()
+    var out_dir := _visual_out_dir()
+    DirAccess.make_dir_recursive_absolute(out_dir)
+    var wanted := _visual_filter()
+    print("VISUALAB dir=", out_dir, " viewport=", get_viewport().get_visible_rect().size,
+        " gpu=", RenderingServer.get_video_adapter_name(),
+        " metodo=", RenderingServer.get_current_rendering_method(),
+        " driver=", RenderingServer.get_current_rendering_driver_name(),
+        " estados=", wanted)
+    await get_tree().create_timer(1.2).timeout
+    # El HUD se coloca una vez y se apaga: su _process reescribe el reloj y los
+    # FPS cada segundo y esos textos sí cambian entre corridas.
+    _hud.set_process(false)
+    _hud.fps_label.visible = false
+    _hud.clock_label.visible = false
+    # Prioridad alta: este nodo procesa DESPUÉS del arma y del HUD, así que sus
+    # fijaciones son la última escritura antes de dibujar. El arma reescribe la
+    # energía del fogonazo con randf en cada _process, de modo que fijarla desde
+    # fuera de ese orden no servía de nada (medido: quedaba un 17.7% de píxeles
+    # distintos entre dos corridas idénticas, todo él sobre el arma).
+    set_process_priority(100)
+    set_process(true)
+    for state in wanted:
+        await _freeze_scene(state)
+        var path := "%s/%s.png" % [out_dir, state]
+        await _capture_view(path)
+        print("VISUALAB_CAPTURE ", state, " -> ", path)
+    set_process(false)
+    _visual_pin_active = false
+    Engine.time_scale = 1.0
+    _hud.set_process(true)
+    _hud.fps_label.visible = true
+    _hud.clock_label.visible = true
+    _player.weapon.set_process(true)
+    _player.set_process(true)
+    print("VISUALAB_DONE")
+    get_tree().quit()
+
+
+## Última escritura de cada frame mientras dura una captura: vuelve a clavar lo
+## que el propio juego randomiza por frame.
+func _process(_delta: float) -> void:
+    if not _visual_pin_active:
+        return
+    var w = _player.weapon
+    if w.muzzle_light != null:
+        w.muzzle_light.light_energy = float(_visual_pin["flash_energy"])
+    _hud.post_mat.set_shader_parameter("time", float(_visual_pin["post_time"]))
+    _hud.post_mat.set_shader_parameter("aim_amount", float(_visual_pin["aim_amount"]))
+    _hud.post_mat.set_shader_parameter("exposure_pulse", float(_visual_pin["shot_pulse"]))
+
+
+func _visual_out_dir() -> String:
+    for arg in OS.get_cmdline_user_args():
+        if arg.begins_with("--visualout="):
+            return ProjectSettings.globalize_path("res://" + arg.split("=", true, 1)[1])
+    return ProjectSettings.globalize_path("res://captures/visual")
+
+
+func _visual_filter() -> Array:
+    for arg in OS.get_cmdline_user_args():
+        if arg.begins_with("--visualonly="):
+            var result: Array = []
+            for raw in arg.split("=", true, 1)[1].split(","):
+                var id := raw.strip_edges()
+                if VISUAL_STATES.has(id):
+                    result.append(id)
+                else:
+                    push_error("Estado visual desconocido: " + id)
+            return result
+    return VISUAL_STATES.duplicate()
+
+
+## Congela la escena en un estado reproducible y deja todo listo para capturar.
+func _freeze_scene(state: String) -> void:
+    _visual_pin_active = false
+    Engine.time_scale = 0.0
+    _player.set_process(false)
+    _visual_reset_player()
+    _visual_reset_weapon()
+    _visual_clear_shells()
+    await get_tree().process_frame
+    _visual_apply_state(state)
+    # Dos frames: el primero asienta la pose de huesos, el segundo la dibuja.
+    await get_tree().process_frame
+    await get_tree().process_frame
+    _visual_pin_post(state)
+
+
+## Deja cámara y jugador en el mismo sitio y con la misma orientación en todas
+## las capturas: sin esto el encuadre cambia entre corridas por la respiración.
+func _visual_reset_player() -> void:
+    var p = _player
+    p.global_position = Vector3(0.0, 0.05, 0.0)
+    p.velocity = Vector3.ZERO
+    p.prev_velocity = Vector3.ZERO
+    p.current_speed = 0.0
+    p.current_move_norm = 0.0
+    p.bob_phase = 0.0
+    p.step_accum = 0.0
+    p.breath_phase = 0.0
+    p.bob_x = 0.0
+    p.bob_y = 0.0
+    p.bob_roll = 0.0
+    p.body_lag = Vector3.ZERO
+    p.lean = 0.0
+    p.cam_y = VISUAL_EYE_Y
+    p.cam_y_vel = 0.0
+    p.yaw = VISUAL_YAW
+    p.yaw_target = VISUAL_YAW
+    p.pitch = VISUAL_PITCH
+    p.pitch_target = VISUAL_PITCH
+    p.yaw_vel = 0.0
+    p.pitch_vel = 0.0
+    p.look_delta = Vector2.ZERO
+    p.sprinting = false
+    p.crouching = false
+    p.recoil_pitch = 0.0
+    p.recoil_pitch_vel = 0.0
+    p.recoil_yaw = 0.0
+    p.recoil_yaw_vel = 0.0
+    p.recoil_roll = 0.0
+    p.recoil_roll_vel = 0.0
+    p.recoil_kick = 0.0
+    p.recoil_kick_vel = 0.0
+    p.camera.position = Vector3(0.0, VISUAL_EYE_Y, 0.0)
+    p.camera.rotation = Vector3.ZERO
+    p.camera.fov = VISUAL_FOV_HIP
+
+
+func _visual_reset_weapon() -> void:
+    var w = _player.weapon
+    w.player_speed = 0.0
+    w.player_velocity = Vector3.ZERO
+    w.look_delta = Vector2.ZERO
+    w._last_local_move = Vector2.ZERO
+    w.sway = Vector2.ZERO
+    w.bob_phase = 0.0
+    w.idle_phase = 0.0
+    w.sprinting = false
+    w.sprint_blend = 0.0
+    w.aim = false
+    w.aim_blend = 0.0
+    w.trigger_held = false
+    w.trigger_ready = true
+    w.trigger_latched = false
+    w.trigger_visual = 0.0
+    w.recoil_pos = Vector3.ZERO
+    w.recoil_vel = Vector3.ZERO
+    w.recoil_rot = Vector3.ZERO
+    w.recoil_rot_vel = Vector3.ZERO
+    w.arm_recoil_pos = Vector3.ZERO
+    w.arm_recoil_vel = Vector3.ZERO
+    w.arm_recoil_rot = Vector3.ZERO
+    w.arm_recoil_rot_vel = Vector3.ZERO
+    w.muzzle_timer = 0.0
+    w.shot_pulse = 0.0
+    w.reloading = false
+    w.reload_elapsed = 0.0
+    w.reload_total = 0.0
+    w.reload_empty = false
+    w.reload_pose_blend = 0.0
+    w.reload_mag_seated = true
+    w.reload_anim_cut = true
+    w.mag_sound_out = true
+    w.slide_pos = 0.0
+    w.slide_vel = 0.0
+    w.slide_locked = false
+    w.slide_open = false
+    w.slide_extracted = true   # el casquillo lo coloca el estado, nunca el azar
+    w.mag = int(VISUAL_LOADOUT["mag"])
+    w.chamber = int(VISUAL_LOADOUT["chamber"])
+    w.reserve = int(VISUAL_LOADOUT["reserve"])
+    w.visible = true
+    w._emit_ammo()
+
+
+func _visual_apply_state(state: String) -> void:
+    var w = _player.weapon
+    _visual_park_animation("Idle", 0.0)
+    match state:
+        "env":
+            w.visible = false
+        "hip":
+            pass
+        "ads":
+            w.aim_blend = 1.0
+            _player.camera.fov = VISUAL_FOV_ADS
+        "shot":
+            # Instante del fogonazo: la corredera acaba de arrancar y aún no ha
+            # abierto el puerto. Es el frame que ve el jugador al disparar.
+            w.aim_blend = 1.0
+            _player.camera.fov = VISUAL_FOV_ADS
+            w.muzzle_timer = 0.04
+            w.shot_pulse = 1.0
+            w.slide_pos = 0.010
+            w.trigger_visual = 1.0
+            w.muzzle_flash.rotation.z = 0.0
+            w.muzzle_flash.scale = Vector3.ONE
+            w.muzzle_flash_2.rotation.z = 0.0
+            w.muzzle_flash_2.scale = Vector3.ONE * 0.92
+            _visual_park_animation("Shoot", 0.05)
+        "casing":
+            # Vaina en vuelo, puerto ya abierto: es el frame en el que el
+            # casquillo se ve salir.
+            w.aim_blend = 1.0
+            _player.camera.fov = VISUAL_FOV_ADS
+            w.slide_pos = GLOCK_SCRIPT.SLIDE_EJECT_AT + 0.006
+            w.trigger_visual = 1.0
+            _visual_place_shell()
+            _visual_park_animation("Shoot", 0.12)
+        "reload":
+            # Recarga táctica a media maniobra: cargador fuera y arma levantada.
+            w.reloading = true
+            w.reload_elapsed = 0.85
+            w.reload_empty = false
+            w.mag = 5
+            w.chamber = 1
+            w.reserve = 51
+            w._emit_ammo()
+            _visual_park_animation("Reload", 0.85)
+        "slide_back":
+            # Corredera retenida atrás: enseña el puerto, el cañón y la recámara
+            # sin el resto de la maniobra. Es la vista que delata la geometría.
+            w.aim_blend = 1.0
+            _player.camera.fov = VISUAL_FOV_ADS
+            w.slide_locked = true
+            w.mag = 0
+            w.chamber = 0
+            w.reserve = 51
+            w._emit_ammo()
+        _:
+            push_error("Estado visual sin implementar: " + state)
+
+
+## Coloca la animación del autor en un tiempo exacto y la deja ahí. Con
+## time_scale 0 no avanza, así que la pose de brazos es la misma en cada corrida.
+func _visual_park_animation(anim_name: String, t: float) -> void:
+    var w = _player.weapon
+    if w.animation_player == null:
+        return
+    var resolved: String = w._resolve_animation(anim_name)
+    if resolved == "":
+        return
+    w.animation_player.play(resolved)
+    w.animation_player.seek(t, true)
+
+
+## Vaina en una posición de vuelo fija. La trayectoria real dura milisegundos y
+## arranca con randf; para comparar renderers hace falta que las dos capturas
+## tengan la vaina exactamente en el mismo punto, con el mismo giro.
+func _visual_place_shell() -> void:
+    var w = _player.weapon
+    w._spawn_shell()
+    var shells := get_tree().get_nodes_in_group("shells")
+    if shells.is_empty():
+        return
+    var shell = shells[shells.size() - 1]
+    if shell is RigidBody3D:
+        shell.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+        shell.freeze = true
+        shell.linear_velocity = Vector3.ZERO
+        shell.angular_velocity = Vector3.ZERO
+    var port: Transform3D = w.ejection_port.global_transform
+    var offset := Vector3(0.055, 0.042, 0.018)
+    var spin := Basis(Vector3(0.35, 0.9, 0.25).normalized(), 1.15)
+    shell.global_transform = Transform3D(port.basis * spin, port * offset)
+
+
+func _visual_clear_shells() -> void:
+    for shell in get_tree().get_nodes_in_group("shells"):
+        shell.queue_free()
+
+
+## Clava los parámetros del post que dependen del reloj o de randf, para que el
+## bodycam pinte el mismo grano y la misma exposición en todas las capturas.
+## No se aplica aquí: se guarda y lo reaplica _process en cada frame, después de
+## que el arma haya vuelto a randomizar lo suyo.
+func _visual_pin_post(state: String) -> void:
+    var w = _player.weapon
+    var t := VISUAL_GRAIN_TIME
+    if state == "shot":
+        t += 0.02
+    elif state == "casing":
+        t += 0.04
+    _visual_pin = {
+        "flash_energy": VISUAL_FLASH_ENERGY if w.muzzle_timer > 0.0 else 0.0,
+        "post_time": t,
+        "aim_amount": w.aim_blend,
+        "shot_pulse": w.shot_pulse,
+    }
+    _visual_pin_active = true
+    _process(0.0)
 
 
 ## Espera a que la pose del arma se asiente (la transición hip<->ADS tarda ~0.5 s

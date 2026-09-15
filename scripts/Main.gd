@@ -40,6 +40,8 @@ func _run_dev_tools() -> void:
     tools.setup(self, player, hud)
     if args.has("--fpsbench"):
         tools.run_fpsbench()
+    if args.has("--visualab"):
+        tools.run_visualab()
     if args.has("--probe"):
         tools.run_probe()
     if args.has("--geometrydebug"):
