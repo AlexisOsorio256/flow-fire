@@ -402,6 +402,7 @@ func run_visualab() -> void:
         " gpu=", RenderingServer.get_video_adapter_name(),
         " metodo=", RenderingServer.get_current_rendering_method(),
         " driver=", RenderingServer.get_current_rendering_driver_name(),
+        " setting=", ProjectSettings.get_setting("rendering/renderer/rendering_method", "<sin definir>"),
         " estados=", wanted)
     await get_tree().create_timer(1.2).timeout
     # El HUD se coloca una vez y se apaga: su _process reescribe el reloj y los

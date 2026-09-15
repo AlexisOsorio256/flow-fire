@@ -93,7 +93,14 @@ No ampliar el juego para “aprovechar” que una tarea terminó pronto.
 
 - **Motor:** Godot 4.7.2 stable.
 - **Física:** Jolt, 60 ticks/s, unidades SI.
-- **Perfil de desarrollo actual:** Forward+ a 1920×1080.
+- **Perfil de desarrollo actual:** **Mobile** a 1920×1080, tanto en PC como en Android.
+  Se adoptó tras comparar siete escenas congeladas (entorno, hip, ADS, disparo,
+  casquillo, recarga y corredera atrás) contra Forward+: la imagen es
+  indistinguible a ojo —0.00% de píxeles por encima de 8/255 en entorno, hip,
+  ADS, recarga y corredera atrás, y 0.16% con el casquillo— y cuesta 40.3 ms por
+  frame contra 60.4 ms. El glow, que en Forward+ costaba 12.7 ms, en Mobile
+  cuesta 0.25 ms dando el mismo halo. No se eligió por prestigio: se eligió por
+  calidad visual por frame.
 - **Destino de producción:** PC + Android; el perfil móvil final todavía debe medirse en dispositivo real.
 - **Objetivo de rendimiento:** 60 FPS como meta de diseño. Una medición muy por debajo de eso es un problema a investigar, no un nuevo estándar de aceptación.
 - **Autoloads actuales:** `GameAudio`, `ImpactFX`, `Ballistics`.
@@ -149,30 +156,45 @@ Los cuatro tests deben devolver **exit code 0**. Si una regresión produce exit 
 
 ### Herramientas de medida
 
+**No pases `--rendering-driver` a secas.** Godot elige el renderer por defecto a
+partir del driver de la línea de comandos: si se pasa `--rendering-driver vulkan`
+sin `--rendering-method`, fuerza `forward_plus` y **se salta el ajuste del
+proyecto**. Comprobado: `godot4 --path . --quit` arranca en Forward Mobile, y
+`godot4 --path . --rendering-driver vulkan --quit` arranca en Forward+. Para
+forzar un renderer, pasar los dos flags.
+
 ```bash
 # Geometría, encuadre, exposición real del arma, ciclo de corredera y recarga
-godot4 --path . --rendering-driver vulkan -- --geometrydebug
+godot4 --path . -- --geometrydebug
 
 # Secuencia visual reproducible
-godot4 --path . --rendering-driver vulkan -- --timeline
+godot4 --path . -- --timeline
 bash tools/make_timeline_media.sh
 
 # Estados hip / ADS / disparo / recarga
-godot4 --path . --rendering-driver vulkan -- --probe
+godot4 --path . -- --probe
+
+# Comparación visual A/B determinista entre renderers o entre cambios.
+# Congela la escena (time_scale 0, fases y resortes a cero, animación del autor
+# en un tiempo exacto, fogonazo y grano del bodycam fijados), así que dos
+# corridas dan la MISMA imagen y cualquier diferencia es del cambio evaluado.
+# Estados: env, hip, ads, shot, casing, reload, slide_back.
+godot4 --path . -- --visualab --visualout=captures/visual/fp   # renderer del proyecto
+godot4 --path . -- --visualab --visualout=captures/visual/mob --rendering-method=mobile
 
 # Disparo y recarga en cámara lenta (corredera, casquillo, capas de retroceso)
-godot4 --path . --rendering-driver vulkan -- --slowmo
+godot4 --path . -- --slowmo
 
 # Rendimiento real de la escena (no usar headless para juzgar GPU).
 # Fija 1920x1080, vsync OFF y mide cada variante A/B con la misma cámara y
 # duración. Opciones: --fpsvariant=id1,id2 --fpsreps=N --fpsduration=S
 # --fpscapture guarda una captura 1080p por variante.
 # --fpsstress aísla el coste de partículas/impact FX con impactos periódicos.
-godot4 --path . --rendering-driver vulkan -- --fpsbench
-godot4 --path . --rendering-driver vulkan -- --fpsbench --fpsvariant=glow_off,stage_omnis_off --fpsreps=3 --fpsduration=5
+godot4 --path . -- --fpsbench
+godot4 --path . -- --fpsbench --fpsvariant=glow_off,stage_omnis_off --fpsreps=3 --fpsduration=5
 
 # Captura del mix final
-godot4 --path . --rendering-driver vulkan -- --audiocapture
+godot4 --path . -- --audiocapture
 ```
 
 Para optimización, medir siempre **la misma escena, resolución, cámara y duración**. Hacer cambios de una variable cada vez cuando sea posible. No declarar una mejora por una sola corrida ruidosa: repetir y comparar.
