@@ -1734,7 +1734,7 @@ func _install_arms() -> void:
             # entraban en cuadro. Retrasando el conjunto esa masa queda detras de
             # la camara y solo se ven antebrazos, manos y arma.
             var RETRASO := 0.105
-            var BAJADA := 0.165
+            var BAJADA := 0.230
             var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y) - BAJADA, -centro.z + RETRASO)
             holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
             # La mira se mide en el espacio del RIG, no en el frame del arma. En
