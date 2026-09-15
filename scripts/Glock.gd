@@ -1608,12 +1608,26 @@ func _install_arms() -> void:
     arms_skeleton.force_update_transform()
     var head_rest: Transform3D = arms_skeleton.get_bone_global_rest(cam_bone)
     var head_world: Transform3D = arms_skeleton.global_transform * head_rest
-    holder.global_transform = camera.global_transform * head_world.affine_inverse() * holder.global_transform
-    # El anclaje por el hueso de camara deja el rig girado 180 grados: medido,
-    # las manos y el arma caian DETRAS de la camara (Hand_L a z=+0.219 y Rif a
-    # z=+0.366, cuando el avance del juego es -Z). Se gira sobre el eje Y
-    # tomando como pivote la propia camara, asi que el anclaje no se pierde.
-    holder.global_transform = camera.global_transform * Transform3D(Basis(Vector3.UP, PI), camera.global_position - Basis(Vector3.UP, PI) * camera.global_position) * head_world.affine_inverse() * holder.global_transform
+    # Alineacion por POSICION, no por la base del hueso. Anclar tambien la
+    # orientacion con la base del hueso metia una rotacion arbitraria (la base
+    # de un hueso de Blender apunta a lo largo del hueso, no segun los ejes del
+    # mundo): medido, los brazos quedaban con la profundidad en el eje vertical
+    # -- 0.678 m de alto y 0.323 de fondo, justo al reves.
+    #
+    # Ahora el montaje se deja alineado con los ejes del mundo y se traslada
+    # para que el hueso de camara del autor caiga sobre la camara del juego.
+    # Los ejes locales de la malla (anchura, grosor, largo) coinciden asi con
+    # los del mundo, que es lo que se espera de un rig FPS.
+    # Medido con el montaje alineado al mundo: la malla sale con X=0.664
+    # (anchura, correcta), Y=0.678 (que es el LARGO del brazo, no la altura) y
+    # Z=0.323 (el grosor). Es decir, el rig trae Y y Z intercambiados respecto a
+    # los ejes del mundo. Se corrige girando 90 grados sobre X, que lleva el
+    # largo al eje Z y deja la anchura en X.
+    var fix := Basis(Vector3.RIGHT, PI * 0.5)
+    holder.global_transform = Transform3D(fix, Vector3.ZERO)
+    arms_skeleton.force_update_transform()
+    var head_cero: Vector3 = (arms_skeleton.global_transform * head_rest).origin
+    holder.global_transform = Transform3D(fix, camera.global_position - head_cero)
 
     if arms_mesh != null:
         arms_mesh.visible = false
