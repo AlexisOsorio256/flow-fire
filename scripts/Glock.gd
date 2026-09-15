@@ -1327,6 +1327,7 @@ const PISTOL_PATH := "res://assets/models/owk19_pistol.glb"
 const PISTOL_PARTS := ["Slide", "Frame", "SlideLock", "Barrel", "Sight", "Magazine", "Shell", "Bullet", "Trigger"]
 
 var pistol_root: Node3D
+var pistol_holder: Node3D
 var pistol_parts := {}
 var pistol_rest := {}          # transform de reposo de cada pieza, en espacio del modelo
 var pistol_scale := 1.0        # metros de arma por unidad del modelo
@@ -1355,6 +1356,7 @@ func _build_high_fidelity_pistol() -> bool:
     holder.name = "PistolOWK19"
     gun_frame.add_child(holder)
     holder.add_child(inst)
+    pistol_holder = holder
 
     for part_name in PISTOL_PARTS:
         var node := inst.find_child(part_name, true, false) as Node3D
@@ -1600,13 +1602,28 @@ func _install_arms() -> void:
         if verts > mayor:
             mayor = verts
             brazos = m
+    # DOS MODOS, para poder decidir viendo imagenes en vez de describiendolas:
+    #
+    #   --newarms            brazos del autor + pistola del autor (paquete
+    #                        coherente: el mismo rig trae arma, manos y
+    #                        animaciones, asi que encajan por construccion)
+    #   --newarms --owk      brazos del autor + OWK 19 (mezcla: la pose de mano
+    #                        esta horneada para la empuñadura del autor)
+    var usar_owk := OS.get_cmdline_user_args().has("--owk")
     var ocultas := 0
     for m in mallas:
-        if m != brazos:
+        if m != brazos and usar_owk:
             (m as MeshInstance3D).visible = false
             ocultas += 1
+    if usar_owk and pistol_holder != null:
+        pistol_holder.visible = true
+    elif not usar_owk and pistol_holder != null:
+        # Paquete coherente: se oculta la OWK y se deja la pistola del autor.
+        pistol_holder.visible = false
+        if glock_mesh != null:
+            glock_mesh.visible = false
     print("ARMS_MALLAS total=", mallas.size(), " brazos=", (brazos.name if brazos != null else "?"),
-        " vertices_brazos=", mayor, " ocultas=", ocultas)
+        " vertices_brazos=", mayor, " pistol_autor_oculta=", ocultas, " modo=", ("owk" if usar_owk else "paquete_autor"))
 
     # Anclaje por el hueso del ARMA (`Rif_059`), no por el de camara: el arma es
     # el punto cuya posicion fija la mecanica de FlowFire, y las manos vienen a
