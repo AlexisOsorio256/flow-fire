@@ -59,6 +59,7 @@ var reload_elapsed := 0.0
 var reload_total := 0.0
 var reload_empty := false
 var reload_slide_released := false
+var reload_mag_seated := false
 var mag_inserted_sound := false
 var mag_base_y := -0.135
 var mag_base_z := 0.022
@@ -153,6 +154,7 @@ func start_reload() -> bool:
     reload_empty = chamber <= 0 and slide_locked
     reload_total = 2.36 if reload_empty else 1.72
     reload_slide_released = false
+    reload_mag_seated = false
     mag_inserted_sound = false
     aim = false
     trigger_held = false
@@ -308,6 +310,9 @@ func _update_reload(delta: float) -> void:
             mag_group.position = Vector3(0.0, mag_base_y - 0.14 * (1.0 - _smooth(in_t)), mag_base_z)
         mag_group.rotation.x = deg_to_rad(-15.0 + 12.0 * _smooth(in_t))
 
+    if reload_elapsed >= seat_start and not reload_mag_seated:
+        _seat_reload_mag()
+
     if reload_elapsed > seat_start and not mag_inserted_sound:
         mag_inserted_sound = true
         GameAudio.play_2d("magin", -3.0, randf_range(0.95, 1.05))
@@ -333,20 +338,23 @@ func _update_reload(delta: float) -> void:
         _finish_reload()
 
 
+func _seat_reload_mag() -> void:
+    if reload_mag_seated:
+        return
+    # El reserve es un conteo de cartuchos: el cargador retirado vuelve al pool.
+    var pool := reserve + mag
+    var loaded := mini(MAG_SIZE, pool)
+    reserve = pool - loaded
+    mag = loaded
+    reload_mag_seated = true
+    _emit_ammo()
+
+
 func _finish_reload() -> void:
-    var available := mini(MAG_SIZE, reserve)
+    if not reload_mag_seated:
+        _seat_reload_mag()
     reloading = false
     mag_inserted_sound = false
-    if available <= 0:
-        return
-    reserve -= available
-    if reload_empty:
-        mag = available
-        chamber = 0
-        slide_locked = false
-    else:
-        mag = available
-        chamber = 1
     if mag_group != null:
         mag_group.position = Vector3(0.0, mag_base_y, mag_base_z)
         mag_group.rotation.x = deg_to_rad(-15.0)
@@ -666,7 +674,7 @@ func _apply_bone_poses() -> void:
     if bone_trigger >= 0:
         var angle := -0.30 * trigger_visual
         var trigger_basis := rest_trigger.basis.rotated(Vector3(1, 0, 0), angle)
-        skeleton.set_bone_pose_rotation(bone_trigger, trigger_basis)
+        skeleton.set_bone_pose_rotation(bone_trigger, trigger_basis.get_rotation_quaternion())
 
 
 func _box(parent: Node3D, mesh_name: String, size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
