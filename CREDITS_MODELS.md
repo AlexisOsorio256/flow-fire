@@ -33,6 +33,16 @@
 - 7 028 triángulos, 1 malla skinned, 47 huesos, **sin animaciones**.
 - **No integrado.** Evaluado como recambio de brazos y descartado por ahora: su topología de dedos no casa con la del rig actual (ver nota de retarget).
 
+## FREE [FPS Arms] GameReady - RIGGED — BAMEN
+
+- Archivo: `assets/models/fps_arms_gameready.glb` (14.2 MB, md5 `1fee98d63752a4a77a20a4b381d3943d`).
+- Fuente: Sketchfab — https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f
+- Autor: **BAMEN** — https://sketchfab.com/bamenwo05
+- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en `asset.extras`.
+- Atribución a incluir: *"FREE [FPS Arms] GameReady - RIGGED" by BAMEN, licensed under CC-BY 4.0, via Sketchfab*.
+- 13 728 triángulos (2 mallas: `FPS Arm` 2 816 y `FPS Hand` 10 912), 52 huesos, 2 materiales PBR.
+- **No integrado.** Es un rig claramente mejor que el actual (13.7k tris frente a 2.4k, cinco cadenas de dedos independientes por mano frente a tres), pero choca con el mismo muro topológico que `fps_arms.glb`: ver la nota de retarget.
+
 ## 9mm Luger Ammo (Free) — Ziperi
 
 - Archivo: `assets/models/9mm_luger.glb` (8.4 MB).
@@ -64,9 +74,21 @@ anular y meñique son los que cierran contra el frente del armazón. No es un
 problema de escala ni de offsets que se arregle con más cuidado: falta el
 movimiento de origen.
 
-El rig nuevo tampoco trae animaciones propias, así que no hay fuente alternativa.
+Comprobado dos veces con dos assets distintos, y los dos fallan igual:
+
+| | viejo (J-Toastie) | `fps_arms.glb` (DJMaesen) | `fps_arms_gameready.glb` (BAMEN) |
+|---|---|---|---|
+| huesos | 41 | 47 | 52 |
+| cadenas de dedos por mano | 3 | 5 | 5 |
+
+Los dos candidatos tienen cinco cadenas independientes y **ninguno trae
+animaciones propias**, así que no hay fuente alternativa de movimiento. Con el
+rig viejo como origen sólo se pueden alimentar tres de esas cinco cadenas.
+
 Se conserva el rig viejo para brazos y animación, y el arma de alta fidelidad se
-integra como piezas rígidas sobre esa misma mano.
+integra como piezas rígidas sobre esa misma mano. Sustituir los brazos exigiría
+transferir pesos de la malla nueva al esqueleto viejo (pintado de pesos, no
+retargeting de animación), que es otro trabajo y no se ha hecho.
 
 ---
 

@@ -1433,12 +1433,88 @@ func _build_high_fidelity_pistol() -> bool:
         if pistol_parts.has(hidden):
             (pistol_parts[hidden] as Node3D).visible = false
 
+    _apply_pistol_materials(inst)
+    _calibrate_viewmodel_lights()
     pistol_ok = true
     print("PISTOL_OWK19 piezas=", pistol_parts.size(), " escala=", snappedf(pistol_scale, 0.00001),
         " largo_modelo=", snappedf(box.size[ax_len], 0.0001),
         " caja=", box.size.snapped(Vector3(0.001,0.001,0.001)), " ejes=", [ax_len, ax_h, ax_w],
         " cierre_x=", snappedf(c_lock[ax_w] - c_frame[ax_w], 0.0001))
     return true
+
+
+## Traduce los materiales PBR del asset al tratamiento del arma.
+##
+## El GLB importa TODO con metallic = 1.0 y el mapa metallic-roughness dando la
+## variacion. En un interior sin reflejos un metal no tiene termino difuso: solo
+## puede devolver especular de las dos luces del viewmodel, y por eso el arma
+## salia BLANCA y casi recortada en ADS. Es exactamente el mismo problema que ya
+## esta documentado en GunMaterials para el arma vieja, y se arregla igual: el
+## metal baja a un valor creible para que haya difusa.
+##
+## NO se toca ninguna textura. El albedo, el normal y la rugosidad se conservan
+## enteros: son justamente lo que aporta el asset. Lo unico que se corrige es la
+## respuesta del material a la luz que hay en esta escena.
+func _apply_pistol_materials(root: Node3D) -> void:
+    # Polimero del armazon y cuerpo del cargador: dielectrico, casi sin especular.
+    # Corredera, cañon y cierre: acero nitrurado, semimetalico pero no espejo.
+    var tuning := {
+        "GlockFrame": {"metallic": 0.08},
+        "GlockMag": {"metallic": 0.18},
+        "GlockSlide": {"metallic": 0.34},
+        "Bullet": {"metallic": 0.55},
+    }
+    var seen := {}
+    var stack: Array = [root]
+    while not stack.is_empty():
+        var node = stack.pop_back()
+        if node is MeshInstance3D and node.mesh != null:
+            for si in range(node.mesh.get_surface_count()):
+                var m: Material = node.get_surface_override_material(si)
+                if m == null:
+                    m = node.mesh.surface_get_material(si)
+                if not (m is StandardMaterial3D):
+                    continue
+                var sm := m as StandardMaterial3D
+                var key := sm.resource_name
+                if tuning.has(key) and not seen.has(key):
+                    seen[key] = true
+                    var t: Dictionary = tuning[key]
+                    sm.metallic = float(t["metallic"])
+                    # OJO: en Godot la rugosidad final es `roughness` MULTIPLICADO por el
+                    # canal de la textura, no un minimo. Poner 0.32 para "subir el
+                    # suelo" en realidad BAJABA la rugosidad, dejaba el arma mas pulida
+                    # y peor: salia mas quemada. Se deja en 1.0 para que la textura
+                    # mande tal cual y el unico cambio sea el metallic.
+                    sm.roughness = 1.0
+                    sm.metallic_specular = 0.35
+                # El asset viene doubleSided en las 4 familias. Es geometria
+                # cerrada: dibujar tambien las caras de atras duplica el trabajo
+                # de fragmento y ensucia el sombreado.
+                sm.cull_mode = BaseMaterial3D.CULL_BACK
+        for child in node.get_children():
+            stack.append(child)
+    print("PISTOL_MATERIALES tocados=", seen.keys())
+
+
+## Recalibra las dos luces del viewmodel para el arma nueva.
+##
+## Las luces se ajustaron en su dia para el arma vieja, cuyo albedo es casi
+## negro (~0.05 lineal): con esa albedo hacian falta 2.9 de energia para que el
+## arma se leyera. El asset nuevo trae albedo PBR de verdad (~0.12 tipico y
+## hasta 0.5 en las zonas claras), asi que la misma luz lo quema: medido, 4-10%
+## de los pixeles del arma recortados a blanco, contra 0.1-1.2% del arma vieja,
+## y en pantalla se veia una mancha blanca en ADS.
+##
+## El problema no era el material del asset, era la luz que heredaba. Se baja
+## solo cuando el arma nueva esta activa, para que la vieja siga comparable.
+func _calibrate_viewmodel_lights() -> void:
+    if viewmodel_light != null:
+        viewmodel_light.light_energy = 0.85
+    for child in pose_root.get_children():
+        if child is OmniLight3D and child != viewmodel_light:
+            (child as OmniLight3D).light_energy = 0.30
+    print("PISTOL_LUCES key=", viewmodel_light.light_energy if viewmodel_light != null else -1.0)
 
 
 ## Vértices de una pieza expresados en el espacio de `reference` (el nodo que se
