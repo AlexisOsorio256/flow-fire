@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://qnd0v0w3v37w"
-path="res://.godot/imported/owk19_pistol_3.png-3bc8bbd29e702f6ab418df9a24943774.ctex"
+path.s3tc="res://.godot/imported/owk19_pistol_3.png-3bc8bbd29e702f6ab418df9a24943774.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "ad9ff2c6389e8d2c1d9695495da93ff3"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/owk19_pistol_3.png"
-dest_files=["res://.godot/imported/owk19_pistol_3.png-3bc8bbd29e702f6ab418df9a24943774.ctex"]
+dest_files=["res://.godot/imported/owk19_pistol_3.png-3bc8bbd29e702f6ab418df9a24943774.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0
