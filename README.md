@@ -25,14 +25,15 @@ passing and preserve the physics-first architecture.
 
 Lee esto antes de tocar código:
 
-- **Motor:** Godot **4.7.2 stable**, renderer **Forward+** (Vulkan).
+- **Motor:** Godot **4.7.2 stable**, renderer de desarrollo **Forward+** (Vulkan).
+- **Objetivo comercial:** **Android**. El perfil móvil final todavía no está cerrado; Forward+ a 1080p es la referencia visual/de desarrollo, no una excusa para ignorar el rendimiento real en teléfono.
 - **Física:** **Jolt Physics** (`project.godot` → `3d/physics_engine="Jolt Physics"`).
 - **Escena principal:** `scenes/Main.tscn` → `scripts/Main.gd`.
 - **Autoloads:** `GameAudio`, `ImpactFX`, `Ballistics`.
 - **Unidades:** SI estrictas (metros, segundos, kg, m/s, julios, newtons).
 - **Arma base:** Glock 19 riggeada, 9x19, ~372 m/s, 8 g.
 - **Antes de tocar:** corre los tests de la sección 6.
-- **Después de tocar:** vuelve a correr los 3 tests + una captura.
+- **Después de tocar:** vuelve a correr los 4 tests automáticos + una captura.
 - **Prohibido:** assets sin licencia, features fuera de alcance, refactors
   enormes que no aporten al realismo/rendimiento, físicas manuales donde Jolt
   ya resuelve, romper las señales públicas.
@@ -80,10 +81,10 @@ sienta más real o que corra mejor?”*.
 - Movimiento `CharacterBody3D` con peso e inercia.
 
 ### 2.4 Cámara corporal (Bodycam)
-- Cámara a la altura del pecho, no de los ojos.
-- Bob, lean, breathing, sprint FOV y peso al arrancar/parar.
+- Cámara corporal con bob, lean, breathing, sprint FOV y peso al arrancar/parar.
 - Post-proceso bodycam: distorsión de lente, chroma, viñeta, grano y blur.
 - Mira ADS calculada con transformaciones reales del modelo.
+- La altura/posición final de la cámara debe juzgarse visualmente; no asumir que un número “realista” se siente como bodycam sin captura.
 
 ### 2.5 Audio real
 - Sonidos **reales CC0**, no sintetizados.
@@ -92,18 +93,20 @@ sienta más real o que corra mejor?”*.
 - Limitador en bus Master para que no reviente al disparar rápido.
 
 ### 2.6 Calidad visual
-- Materiales PBR procedurales: hormigón, madera, metal, pladur.
+- Materiales PBR para hormigón, madera y metal; pladur simple de prototipo.
+- Texturas de superficies 3D con mipmaps; normal maps marcados explícitamente para importación correcta.
 - Sombras direccionales + luces de interior.
-- 1920x1080 nativo, MSAA 2x, anisotrópico 2x, sin FXAA.
+- 1920x1080 nativo en el perfil visual de desarrollo, MSAA 2x, sin FXAA.
 - Fogonazo, humo, chispas, polvo y luces de impacto.
 
 ### 2.7 Optimización
 - SSAO/SSIL apagados (además quitaban artefactos).
 - Sombra direccional 2048 y distancia acotada.
-- Sin reescalado dinámico (`scaling_3d` en 1.0) para no ver borroso.
-- Partículas y decales con límites.
-- Meta: **60 FPS en Intel HD 520 a 1080p**; si un cambio baja más de 10% el
-  FPS, debe justificarse o revertirse.
+- Sin reescalado dinámico en el perfil visual de referencia (`scaling_3d` en 1.0).
+- Partículas y orificios con límites.
+- Meta de desarrollo: **60 FPS en Intel HD 520 a 1080p**.
+- Meta de producción: medir en **Android real** y mantener un perfil Mobile que conserve el look sin asumir que Forward+ de escritorio representa el teléfono.
+- Si un cambio baja más de 10% el FPS, debe justificarse o revertirse.
 
 ---
 
@@ -128,8 +131,9 @@ mejora el núcleo. Si no convence, no entra.
 ## 4. Estado actual (vertical slice jugable)
 
 ### Funcionando
-- [x] Glock 19 riggeada MIT integrada.
+- [x] Glock 19 riggeada integrada y acreditada.
 - [x] Corredera, gatillo, cargador y cañón animados por huesos.
+- [x] Recarga táctica conserva cartuchos; recarga vacía alimenta la recámara tras liberar corredera.
 - [x] Balística con gravedad, arrastre y subpasos.
 - [x] Penetración entrada/salida en papel, madera y pladur.
 - [x] Orificios visibles que siguen a blancos móviles.
@@ -139,18 +143,19 @@ mejora el núcleo. Si no convence, no entra.
 - [x] Cámara bodycam con bob/breathing/ADS.
 - [x] Audio real CC0 + limitador.
 - [x] HUD bodycam + post-proceso.
-- [x] Tests `--autotest`, `--aimtest`, `--pentest`, `--capture`.
+- [x] Tests `--autotest`, `--aimtest`, `--pentest`, `--reloadtest` y captura `--capture`.
 - [x] Previsualizador de arma aislado.
 
 ### Pendiente (hoja de ruta priorizada)
 **A. Armas y animación**
-- [ ] Manos/brazos en primera persona con animación real.
+- [ ] Manos/brazos en primera persona con animación real y licencia comercial clara.
 - [ ] Recarga esquelética completa sincronizada al audio.
-- [ ] Fogonazo más realista (geometría + partículas + luz dinámica).
+- [ ] Fogonazo más realista (geometría + partículas + luz dinámica) sin convertir cada disparo en una explosión.
 - [ ] Casquillos más visibles en primera persona.
 - [ ] Viewmodel en capa/subviewport para que no se oculte con geometría.
 
 **B. Balística**
+- [ ] Validar la salida de penetración contra geometría real; hoy el grosor se aproxima mediante metadata + ángulo.
 - [ ] Penetración en cristal, chapas finas y más grosores.
 - [ ] Astillas/desprendimiento por material.
 - [ ] Rebotes con ángulo, sonido y chispas dependientes de superficie.
@@ -162,16 +167,18 @@ mejora el núcleo. Si no convence, no entra.
 - [ ] Colisiones del arma/brazos contra paredes cercanas.
 
 **D. Calidad visual**
-- [ ] Texturas PBR en mayor resolución.
+- [ ] Sustituir gradualmente texturas procedurales por PBR CC0 de buena fuente, preferentemente 1K/2K; 4K sólo donde una captura demuestre que aporta.
 - [ ] Iluminación interior más cinematográfica sin perder FPS.
 - [ ] Mejor post-proceso bodycam sin ensuciar la imagen.
-- [ ] Entorno urbano chico y creíble (solo cuando el núcleo esté sólido).
+- [ ] Entorno urbano/industrial chico y creíble (solo cuando el núcleo esté sólido).
 
-**E. Optimización**
+**E. Optimización / Android**
+- [ ] Perfil Android real con renderer **Mobile**, resolución/calidad escalable y medición en teléfono representativo.
+- [ ] Migrar input duro de teclado/mouse a acciones antes de integrar controles táctiles.
 - [ ] LODs y distancias de sombra.
 - [ ] Oclusión/culling de props y luces.
-- [ ] Pooling de partículas y decales.
-- [ ] Perfilado en GPU integrada y modo rendimiento/calidad.
+- [ ] Pooling de partículas, audio temporal y orificios si el profiler demuestra churn relevante.
+- [ ] Medir el coste del shader bodycam: el blur hace varias lecturas extra de pantalla cuando hay movimiento.
 
 ---
 
@@ -179,7 +186,7 @@ mejora el núcleo. Si no convence, no entra.
 
 | Archivo | Responsabilidad |
 |---|---|
-| `scripts/Main.gd` | Arranque, entorno, tests `--autotest`, `--aimtest`, `--pentest`, `--capture`. |
+| `scripts/Main.gd` | Arranque, entorno, tests `--autotest`, `--aimtest`, `--pentest`, `--reloadtest`, `--capture`. |
 | `scripts/Player.gd` | `CharacterBody3D`, cámara corporal, bob, breathing, sprint, recoil. |
 | `scripts/Glock.gd` | Arma, huesos, corredera, gatillo, recarga, fogonazo, expulsión. |
 | `scripts/Ballistics.gd` | Autoload: proyectiles, penetración, rebotes, daño. |
@@ -206,9 +213,9 @@ Ejecutar siempre en este orden después de un cambio:
 # 1) Compila/importa y no rompe scripts
 godot4 --headless --path . --editor --quit
 
-# 2) Disparo, balística, recarga, Jolt
+# 2) Disparo, balística y Jolt
 godot4 --headless --path . -- --autotest
-# Esperado: shotFired, reloadWorked y target health ≈ 55.5
+# Esperado: targets > 0, first_health < 100 y munición consistente tras un disparo.
 
 # 3) Mira centrada
 godot4 --headless --path . -- --aimtest
@@ -216,13 +223,17 @@ godot4 --headless --path . -- --aimtest
 
 # 4) Penetración y orificios
 godot4 --headless --path . -- --pentest
-# Esperado: decals_after > decals_before, health ≈ 55.5
+# Esperado: decals_after > decals_before y el blanco recibe daño.
 
-# 5) Captura visual
+# 5) Recarga vacía y conservación de munición
+godot4 --headless --path . -- --reloadtest
+# Esperado: passed=true, mag=16, chamber=1, reserve=0, total=17.
+
+# 6) Captura visual
 godot4 --path . --rendering-driver vulkan -- --capture
 # Guarda /tmp/godot_frame.png
 
-# 6) Previsualización del arma
+# 7) Previsualización del arma
 godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulkan
 # Guarda /tmp/weapon_preview.png
 ```
@@ -245,30 +256,31 @@ godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulka
 3. **Nada de magia:** si usas un número raro, comenta de dónde sale.
 4. **Clamps y estabilidad:** cualquier sistema que reciba input del mouse o del
    jugador debe tener límites; no queremos otra vez el arma saliéndose.
-5. **Rendimiento:** si agregas luces, partículas o decales, mide FPS antes/después.
-6. **Assets:** licencia compatible + créditos en `CREDITS_*.md`.
-7. **No toques** `project.godot` para bajar calidad sin justificarlo.
+5. **Rendimiento:** si agregas luces, partículas o efectos de pantalla, mide FPS antes/después.
+6. **Assets:** licencia compatible + créditos en `CREDITS_*.md`. Para monetización, no usar arte con cláusula NonCommercial.
+7. **No toques** `project.godot` para bajar calidad sin justificarlo ni medirlo.
 8. **Commits:** mensajes claros en español, un tema por commit.
 9. **Sin refactors masivos:** cambios chicos, medibles y reversibles.
 10. **El núcleo manda:** si tu feature no mejora armas, balística, física,
     calidad u optimización, probablemente esté fuera de alcance.
+11. **Android manda al final:** una captura bonita en Forward+ de escritorio no prueba que el cambio sea viable en el mercado objetivo.
 
 ---
 
 ## 8. Requisitos y ejecución
 
-- Godot **4.7.2 stable** (Forward+/Vulkan; también compila en Compatibility).
+- Godot **4.7.2 stable**.
 - Jolt viene integrado en Godot 4.4+; el proyecto ya lo activa.
 
 ```bash
 # Editor
 godot4 --editor --path .
 
-# Jugar
+# Jugar perfil de desarrollo
 godot4 --path . --rendering-driver vulkan
 ```
 
-### Controles
+### Controles actuales de desarrollo
 - `WASD`: mover
 - `Mouse`: mirar
 - `Click izquierdo`: capturar mouse / disparar (semiautomática)
@@ -277,15 +289,17 @@ godot4 --path . --rendering-driver vulkan
 - `F`: disparo alternativo
 - `Esc`: liberar mouse
 
+Estos controles aún son de escritorio. Antes de Android deben pasar por acciones de input y controles táctiles, no duplicarse como otro sistema de gameplay.
+
 ---
 
 ## 9. Assets y licencias
 
-- **Arma:** `assets/models/glock_rigged.glb`, Rigged Glock MIT de
-  `Hhk187/Zomopocalypse`. Ver [`CREDITS_MODELS.md`](CREDITS_MODELS.md).
+- **Arma:** `assets/models/glock_rigged.glb`, Rigged Glock de
+  `Hhk187/Zomopocalypse`. Ver [`CREDITS_MODELS.md`](CREDITS_MODELS.md) para licencia y atribución.
 - **Audio real:** CC0 de Freesound, recortado con ffmpeg.
   Ver [`CREDITS_AUDIO.md`](CREDITS_AUDIO.md).
-- **Texturas:** generadas proceduralmente para el prototipo.
+- **Texturas actuales:** prototipo; superficies 3D configuradas con mipmaps y normal-map import correcto.
 - **Código:** MIT. Ver [`LICENSE`](LICENSE).
 
 Nunca agregues un asset sin licencia compatible y su crédito correspondiente.
