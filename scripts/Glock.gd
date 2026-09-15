@@ -1633,7 +1633,13 @@ func _install_arms() -> void:
     #    salian por ARRIBA en vez de por abajo.
     var fix := Basis(Vector3.BACK, PI) * Basis(Vector3.RIGHT, PI * 0.5)
     var rif_rest: Transform3D = arms_skeleton.get_bone_global_rest(rif_bone)
-    holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fix, Vector3.ZERO)
+    # ESCALA: las manos del rig estan modeladas alrededor de la pistola del autor
+    # (`xd_frame`), que mide 42 x 180 x 206 mm; la OWK 19 mide 34 x 130 x 186, o
+    # sea 1.38x mas baja. Por eso el guante envolvia la pistola entera. Se escala
+    # el conjunto de brazos a la pistola REAL en vez de agrandar el arma, que ya
+    # esta verificada contra las cotas de una Glock 19 (33 x 127 x 186 reales).
+    var escala_manos := 130.0 / 180.0
+    holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fix.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
     arms_skeleton.force_update_transform()
     # Se alinea el punto de agarre del rig (media de las dos manos) con la
@@ -1658,7 +1664,6 @@ func _install_arms() -> void:
     var agarre: Vector3 = mano_l.lerp(mano_r, 0.5)
     var empunadura: Vector3 = (gun_frame as Node3D).global_transform * pistol_grip_local
     holder.global_transform.origin += empunadura - agarre
-    print("ARMS_AGARRE empunadura_owk=", pistol_grip_local.snapped(Vector3(0.001,0.001,0.001)))
 
     if arms_mesh != null:
         arms_mesh.visible = false
