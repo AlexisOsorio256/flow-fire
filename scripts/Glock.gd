@@ -1677,7 +1677,7 @@ func _install_arms() -> void:
     # cuadro por abajo: son la masa grande de las esquinas. Alargar los brazos en
     # Z aleja esa masa por detras de la camara mientras las manos y el arma, que
     # estan en el origen del montaje, se quedan donde estan.
-    var estirar := Basis.from_scale(Vector3(1.0, 1.0, 1.95))
+    var estirar := Basis.from_scale(Vector3(1.0, 1.0, 1.30))
     var fijo := estirar * inclinacion * fix
     holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fijo.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
@@ -1733,7 +1733,7 @@ func _install_arms() -> void:
             # DEMASIADO brazo: la masa de los hombros y las bocas de las mangas
             # entraban en cuadro. Retrasando el conjunto esa masa queda detras de
             # la camara y solo se ven antebrazos, manos y arma.
-            var RETRASO := 0.105
+            var RETRASO := 0.030
             var BAJADA := 0.230
             var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y) - BAJADA, -centro.z + RETRASO)
             holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
