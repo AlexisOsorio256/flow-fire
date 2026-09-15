@@ -82,6 +82,12 @@ func _setup_environment() -> void:
     env.glow_intensity = 0.55
     env.glow_bloom = 0.08
     env.glow_hdr_threshold = 0.82
+    # Los niveles 3 y 4 del glow aportaban una cola de blur muy suave: medido
+    # sobre capturas idénticas, su ausencia sólo cambiaba ~1% de bloques 8x8
+    # por encima de 4/255, pero costaban ~2.4 ms/frame en la GPU objetivo.
+    # Se conserva el nivel 2, que es el que da el halo visible de la lente.
+    env.set("glow_levels/3", 0.0)
+    env.set("glow_levels/4", 0.0)
     env.fog_enabled = true
     env.fog_light_color = Color(0.08, 0.09, 0.11)
     env.fog_density = 0.008
