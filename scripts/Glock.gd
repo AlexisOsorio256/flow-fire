@@ -184,7 +184,7 @@ func _process(delta: float) -> void:
     if muzzle_flash_2 != null:
         muzzle_flash_2.visible = flash_visible
     if muzzle_light != null:
-        muzzle_light.light_energy = 8.0 if flash_visible else 0.0
+        muzzle_light.light_energy = randf_range(5.5, 10.5) if flash_visible else 0.0
 
 
 func _update_trigger(delta: float) -> void:
@@ -434,6 +434,8 @@ func _spawn_shell() -> void:
     cylinder.material = brass_mat
     var shell_mesh := MeshInstance3D.new()
     shell_mesh.mesh = cylinder
+    # Un poco más grande que el real para que se vea en primera persona.
+    shell_mesh.scale = Vector3(1.35, 1.0, 1.35)
     shell.add_child(shell_mesh)
 
     var shape := CylinderShape3D.new()
@@ -451,9 +453,9 @@ func _spawn_shell() -> void:
     get_tree().current_scene.add_child(shell)
     shell.global_transform = ejection_port.global_transform
     var basis := ejection_port.global_transform.basis
-    var local_vel := Vector3(-1.5 - randf() * 1.1, 1.5 + randf() * 0.7, -1.0 - randf() * 0.6)
+    var local_vel := Vector3(-2.2 - randf() * 1.2, 1.9 + randf() * 0.9, -1.3 - randf() * 0.7)
     shell.linear_velocity = basis * local_vel + player_velocity * 0.8
-    shell.angular_velocity = Vector3(randf_range(-16.0, 16.0), randf_range(-16.0, 16.0), randf_range(-16.0, 16.0))
+    shell.angular_velocity = Vector3(randf_range(-26.0, 26.0), randf_range(-26.0, 26.0), randf_range(-26.0, 26.0))
 
 
 func _emit_ammo() -> void:
@@ -486,9 +488,12 @@ func _build_materials() -> void:
     dark_mat.roughness = 0.72
 
     brass_mat = StandardMaterial3D.new()
-    brass_mat.albedo_color = Color(0.72, 0.51, 0.14)
+    brass_mat.albedo_color = Color(0.78, 0.55, 0.16)
     brass_mat.metallic = 1.0
-    brass_mat.roughness = 0.32
+    brass_mat.roughness = 0.28
+    brass_mat.emission_enabled = true
+    brass_mat.emission = Color(0.25, 0.08, 0.01)
+    brass_mat.emission_energy_multiplier = 0.5
 
     hand_mat = StandardMaterial3D.new()
     hand_mat.albedo_color = Color(0.16, 0.115, 0.088)

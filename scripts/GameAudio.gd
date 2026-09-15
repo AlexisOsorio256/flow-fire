@@ -41,6 +41,17 @@ func play_shot(volume_db: float = -3.0) -> void:
     add_child(p)
     p.finished.connect(p.queue_free)
     p.play()
+    # Capa mecánica real de la corredera, un toque después del disparo.
+    var mech := AudioStreamPlayer.new()
+    mech.stream = SOUNDS["slide"]
+    mech.volume_db = randf_range(-16.0, -12.5)
+    mech.pitch_scale = randf_range(0.98, 1.06)
+    add_child(mech)
+    mech.finished.connect(mech.queue_free)
+    get_tree().create_timer(0.045).timeout.connect(func() -> void:
+        if is_instance_valid(mech):
+            mech.play()
+    )
 
 
 func play_2d(sound_name: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
