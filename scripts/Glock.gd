@@ -1623,6 +1623,22 @@ func _install_arms() -> void:
     # Z=0.323 (el grosor). Es decir, el rig trae Y y Z intercambiados respecto a
     # los ejes del mundo. Se corrige girando 90 grados sobre X, que lleva el
     # largo al eje Z y deja la anchura en X.
+    # AVISO medido: `Head_Cam_014` NO es el ojo. Anclarlo a la camara del juego
+    # deja el ojo donde el autor puso un visor de previsualizacion, a la MISMA
+    # altura que los hombros. Distancias relativas a la camara con ese anclaje:
+    #
+    #   Hand_L 0.340 m   Hand_R 0.300 m   Rif 0.380 m   UpArm_L 0.195 m
+    #
+    # Las manos y el arma estan a distancias correctas -- o sea que la ESCALA del
+    # rig esta bien --, pero UpArm_L cae a altura y=0.000, la de la camara, y a
+    # 5 cm por delante, cuando un hombro real esta ~15 cm por debajo y ~20 por
+    # detras. Por eso los brazos envuelven la camara y llenan la pantalla: no es
+    # que sean grandes, es que la camara esta metida entre los hombros.
+    #
+    # El anclaje correcto es el hueso del ARMA (`Rif_059`): colgar de el la
+    # OWK 19 y rehacer los offsets de pose a partir de ahi. El arma es el punto
+    # cuya posicion fija la mecanica de FlowFire, y las manos vienen a ella por
+    # la animacion, no al reves. Queda pendiente.
     var fix := Basis(Vector3.RIGHT, PI * 0.5)
     holder.global_transform = Transform3D(fix, Vector3.ZERO)
     arms_skeleton.force_update_transform()
