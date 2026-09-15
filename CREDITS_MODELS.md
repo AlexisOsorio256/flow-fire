@@ -1,11 +1,20 @@
 # Créditos de modelos 3D
 
-- `assets/models/glock_rigged.glb`: **Rigged Glock** de **Hhk187/Zomopocalypse**
-  - Repositorio fuente: https://github.com/Hhk187/Zomopocalypse
-  - Archivo fuente: `Assets/Models/Weapons/FPS pack.undefined-glb/Rigged Glock.glb`
-  - Licencia del repositorio fuente: **MIT**.
-  - Atribución solicitada por el proyecto fuente para redistribuciones/derivados: **“Zomopocalypse by Hhk187”**.
-  - Incluye huesos `Slide`, `Trigger`, `Magazine`, `Barrel`, `SlideCatch`.
+- `assets/models/fps_rig.glb`: **Fps Rig** de **J-Toastie** — el Glock *y* los
+  brazos en un mismo esqueleto, con las animaciones `Grip`, `Idle`, `Shoot` y
+  `Reload`.
+  - Fuente original: Poly Pizza — https://poly.pizza/m/uxko5LkGia
+  - Licencia: **Creative Commons Attribution 3.0 (CC-BY 3.0)**; uso comercial
+    permitido manteniendo la atribución.
+  - Atribución a incluir: *"Fps Rig" by J-Toastie, licensed under CC-BY 3.0,
+    via Poly Pizza*.
+  - Se descargó del pack "FPS pack" del repositorio `Hhk187/Zomopocalypse`
+    (MIT), que declara la licencia del pack en el archivo
+    `FPS pack by J-Toastie [CC-BY] via Poly Pizza.txt`.
+  - Huesos del arma: `Root`, `Slide`, `Trigger`, `Magazine`, `Barrel`,
+    `SlideCatch`. Huesos de brazos: `UpperArm`, `LowerArm`, `Hand` y dedos.
+  - La malla viene con ~15° de balanceo y el origen descentrado: el juego lo
+    mide en runtime (`_measure_mesh`) en vez de asumir una orientación.
 
 - `assets/models/fps_arms.glb`: **Fps Rig** de **J-Toastie** (brazos y manos en
   primera persona, riggeados, 24 huesos con dedos; sin animaciones, la pose se

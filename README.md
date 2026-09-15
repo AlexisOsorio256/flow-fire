@@ -63,6 +63,14 @@ balística, física, calidad u optimización · assets de licencia dudosa.
 ### Funcionando
 
 - [x] Glock 19 riggeada integrada y acreditada.
+- [x] Materiales del arma por primitiva con detalle procedural (`shaders/gun.gdshader`):
+      el GLB no trae ninguna textura, así que el grano del polímero, el rayado de
+      la corredera y el desgaste se generan en el shader (sin assets externos).
+- [x] Brazos y manos en primera persona (`assets/models/fps_rig.glb`, "Fps Rig"
+      de J-Toastie, CC-BY 3.0): el paquete trae el arma y los brazos en el mismo
+      esqueleto con animaciones `Grip`/`Idle`/`Shoot`/`Reload`, así que la pose
+      de agarre es la del autor (nada de IK propio deformando el skin).
+- [x] Sin mira en pantalla: se apunta con las miras reales del arma.
 - [x] Alineación del arma **medida en runtime** sobre la malla (orientación,
       escala real de 186 mm y verificación en el arranque).
 - [x] Boca, mira y puerto de expulsión medidos sobre la geometría, en el frame
@@ -85,7 +93,9 @@ balística, física, calidad u optimización · assets de licencia dudosa.
 ### Pendiente (priorizado)
 
 **A. Armas**
-- [ ] Manos/brazos en primera persona con animación real y licencia comercial.
+- [ ] Animación esquelética real de brazos (el asset trae el rig pero no
+      animaciones: hoy la pose es IK + el movimiento del arma; falta idle,
+      disparo, recarga y sprint animados).
 - [ ] Recarga esquelética completa sincronizada al audio.
 - [ ] Fogonazo más realista (geometría + partículas + luz) sin convertirlo en
       una explosión por disparo.

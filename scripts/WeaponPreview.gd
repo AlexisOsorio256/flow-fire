@@ -11,10 +11,10 @@ const GLOCK_SCRIPT := preload("res://scripts/Glock.gd")
 
 # Ángulo -> posición de cámara (el arma se mira desde el origen).
 const VIEWS := {
-    "lado": Vector3(0.30, 0.06, 0.02),
-    "tres_cuartos": Vector3(0.24, 0.10, -0.22),
-    "trasera": Vector3(0.16, 0.08, -0.30),
-    "detalle_corredera": Vector3(0.16, 0.11, -0.10),
+    "lado": Vector3(0.85, 0.10, 0.10),
+    "tres_cuartos": Vector3(0.62, 0.30, -0.75),
+    "trasera": Vector3(0.40, 0.34, -1.00),
+    "detalle_corredera": Vector3(0.34, 0.26, -0.36),
 }
 
 var camera: Camera3D
@@ -92,4 +92,4 @@ func _print_measurements() -> void:
         var mat := mesh.get_surface_override_material(i)
         names.append("%s=%s" % [mesh.mesh.surface_get_name(i), "shader" if mat is ShaderMaterial else str(mat)])
     print("PREVIEW materiales: ", ", ".join(names))
-    print("PREVIEW largo_m=", snappedf((gun.mesh_to_weapon as Transform3D).basis.get_scale().x * 0.045424, 0.0001))
+    print("PREVIEW largo_m=", snappedf(gun.measured_length_m, 0.0001), " alineacion_ok=", gun.alignment_ok)

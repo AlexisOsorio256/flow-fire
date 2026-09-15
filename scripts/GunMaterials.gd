@@ -52,6 +52,16 @@ static func build() -> Dictionary:
         "BulletTip": _make(Color(0.45, 0.19, 0.08), 0.75, 0.35, {
             "detail_scale": 260.0, "wear": 0.2,
         }),
+        # Brazos del mismo rig (manga, piel y guante).
+        "Shirt": _make(Color(0.19, 0.20, 0.22), 0.0, 0.86, {
+            "detail_scale": 90.0, "detail_albedo": 0.06, "wear": 0.12,
+        }),
+        "Skin": _make(Color(0.42, 0.29, 0.22), 0.0, 0.62, {
+            "detail_scale": 260.0, "detail_albedo": 0.05, "wear": 0.1,
+        }),
+        "Glove": _make(Color(0.075, 0.078, 0.085), 0.05, 0.55, {
+            "detail_scale": 230.0, "detail_albedo": 0.10, "wear": 0.12,
+        }),
     }
 
 

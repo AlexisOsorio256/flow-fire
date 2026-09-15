@@ -3,12 +3,16 @@ extends Node3D
 signal shot_fired
 signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 
+## Rig completo del pack "Fps Rig" (J-Toastie, CC-BY 3.0): el Glock y los
+## brazos comparten esqueleto y trae las animaciones Grip/Idle/Shoot/Reload.
+## La pose de agarre es la del autor: nada de IK propio deformando el skin.
+const MODEL_PATH := "res://assets/models/fps_rig.glb"
 const MAG_SIZE := 17
 const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
-const ARMS_SCRIPT := preload("res://scripts/Arms.gd")
-const ADS_SIGHT_DISTANCE := 0.55  # Ojo -> mira trasera con el brazo extendido.
+const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
 const ADS_SIGHT_DROP := 0.008  # La mira queda algo bajo el centro para no taparlo.
 const HIP_POS := Vector3(0.0, -0.05, 0.0)  # Pose de lista: el arma va baja.
+const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
 
 var camera: Camera3D
 var pose_root: Node3D
@@ -70,6 +74,8 @@ var arms: Node3D
 var gun_frame: Node3D
 var skeleton: Skeleton3D
 var glock_mesh: MeshInstance3D
+var arms_mesh: MeshInstance3D
+var animation_player: AnimationPlayer
 var bone_slide := -1
 var bone_trigger := -1
 var bone_magazine := -1
@@ -79,6 +85,7 @@ var rest_magazine := Transform3D.IDENTITY
 var slide_axis := Vector3(0, 1, 0)
 var magazine_axis := Vector3(0, 0, -1)
 var model_units_per_meter := 0.241
+var bone_units_per_meter := 0.241  # calibrado en runtime
 var mag_visual_drop := 0.0
 var reload_pose_blend := 0.0
 var trigger_visual := 0.0
@@ -91,6 +98,7 @@ var mesh_to_weapon := Transform3D.IDENTITY
 var gun_box := AABB()  # caja real de la malla en frame de arma
 var measured_length_m := 0.0  # largo medido de la malla (m)
 var alignment_ok := false     # la verificación de alineación pasó
+var measured_marks := {}       # centroides de corredera/mira/cargador en frame de arma
 
 
 func _ready() -> void:
@@ -105,7 +113,6 @@ func _ready() -> void:
     _build_materials()
     _build_viewmodel_light()
     _build_model()
-    _build_arms()
     _setup_bones()
     _emit_ammo()
 
@@ -122,18 +129,6 @@ func _build_viewmodel_light() -> void:
     viewmodel_light.shadow_enabled = false
     viewmodel_light.position = Vector3(0.22, 0.30, 0.12)
     add_child(viewmodel_light)
-
-
-## Brazos en primera persona, colgados de la raíz de pose para que acompañen
-## al arma sin heredar su retroceso.
-func _build_arms() -> void:
-    if not gun_box.has_volume():
-        push_warning("Sin caja medida del arma: no se colocan los brazos")
-        return
-    arms = ARMS_SCRIPT.new()
-    arms.name = "Arms"
-    pose_root.add_child(arms)
-    arms.setup(self)
 
 
 func setup(cam: Camera3D) -> void:
@@ -190,6 +185,9 @@ func start_reload() -> bool:
     aim = false
     trigger_held = false
     GameAudio.play_2d("magout", 0.0, randf_range(0.95, 1.05))
+    # La animación del autor dura 2.04 s: se escala a la recarga del juego para
+    # que las manos vayan sincronizadas con la lógica y el audio.
+    _play_animation("Reload", 2.04 / maxf(reload_total, 0.001))
     _emit_ammo()
     return true
 
@@ -263,6 +261,7 @@ func _fire() -> void:
     muzzle_flash_2.scale = Vector3.ONE * randf_range(0.7, 1.2)
 
     GameAudio.play_shot()
+    _play_animation("Shoot", 1.4)
 
     var origin := muzzle.global_position
     var cam_fwd := -camera.global_transform.basis.z.normalized()
@@ -445,12 +444,12 @@ func _update_pose(delta: float) -> void:
     rot.y = clampf(rot.y, -0.35, 0.35)
     rot.z = clampf(rot.z, -0.25, 0.25)
 
-    # Recarga: el arma sube un poco hacia la cámara y se ladea para que se vea el
-    # cargador salir y entrar. Antes caía hacia abajo y se iba de pantalla.
-    pos.y += reload_pose_blend * 0.05
-    pos.z += reload_pose_blend * 0.05
-    rot.x += reload_pose_blend * 0.22
-    rot.z -= reload_pose_blend * 0.16
+    # Recarga: el arma sube y se ladea hacia la cámara para que la animación se
+    # vea de verdad (con el arma baja no se alcanzaba a ver el cargador).
+    pos.y += reload_pose_blend * 0.14
+    pos.z += reload_pose_blend * 0.03
+    rot.x += reload_pose_blend * 0.26
+    rot.z -= reload_pose_blend * 0.22
     pose_root.position = pos
     pose_root.rotation = rot
 
@@ -532,7 +531,7 @@ func _build_materials() -> void:
 
 
 func _build_model() -> void:
-    var packed := load("res://assets/models/glock_rigged.glb") as PackedScene
+    var packed := load(MODEL_PATH) as PackedScene
     if packed == null:
         push_error("No se pudo cargar el modelo Glock riggeado")
         return
@@ -543,10 +542,13 @@ func _build_model() -> void:
 
     skeleton = model_root.find_child("Skeleton3D", true, false) as Skeleton3D
     glock_mesh = model_root.find_child("Glock19", true, false) as MeshInstance3D
+    arms_mesh = model_root.find_child("ArmModel", true, false) as MeshInstance3D
     var bullet_mesh := model_root.find_child("Glock19_001", true, false) as MeshInstance3D
     if bullet_mesh != null:
         bullet_mesh.visible = false
     _apply_model_materials()
+    _apply_arms_materials()
+    _setup_animations()
 
     # El GLB no viene alineado con los ejes de Godot: el nodo Armature trae su
     # propia rotación y los bind poses otra distinta. En vez de suponer cuál es
@@ -570,61 +572,186 @@ func _build_model() -> void:
 ## empuñadura abajo) y el más corto la anchura. Los signos salen de la propia
 ## geometría, porque la empuñadura está en la mitad trasera y cuelga hacia abajo.
 func _measure_mesh() -> Dictionary:
-    var verts := PackedVector3Array()
-    if glock_mesh != null and glock_mesh.mesh != null:
-        for surface in range(glock_mesh.mesh.get_surface_count()):
-            var arrays := glock_mesh.mesh.surface_get_arrays(surface)
-            if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
-                continue
-            verts.append_array(arrays[Mesh.ARRAY_VERTEX])
-    var measure := {"ok": false, "verts": verts, "frame": Basis.IDENTITY, "length": 1.0, "aabb": AABB()}
-    if verts.is_empty():
+    var result := {"ok": false, "verts": PackedVector3Array(), "frame": Basis.IDENTITY, "length": 0.0, "aabb": AABB()}
+    var bind_verts := _bind_vertices()
+    if bind_verts.is_empty() or skeleton == null or glock_mesh == null or glock_mesh.skin == null:
         push_error("La malla del Glock no tiene vértices: imposible medir su base")
-        return measure
+        return result
 
-    var mn := verts[0]
-    var mx := verts[0]
+    var bind_in_model := _bind_in_model()
+    var verts := PackedVector3Array()
+    verts.resize(bind_verts.size())
+    for i in range(bind_verts.size()):
+        verts[i] = bind_in_model * bind_verts[i]
+
+    var box := _bounds(verts)
+    var size := box.size
+
+    # 1) Eje del cañón: la dimensión mayor de la malla (con signo por decidir).
+    var axis_len := 0
+    for i in range(1, 3):
+        if size[i] > size[axis_len]:
+            axis_len = i
+    var axis := Vector3.ZERO
+    axis[axis_len] = 1.0
+    var helper := Vector3.UP if absf(axis.dot(Vector3.UP)) < 0.9 else Vector3.RIGHT
+    var x0 := helper.cross(axis).normalized()
+    var y0 := axis.cross(x0).normalized()
+    var base0 := Basis(x0, y0, axis)
+
+    # 2) Balanceo: se busca el ángulo que MINIMIZA el área de la sección
+    # perpendicular al cañón. La sección del arma es muy alargada (alto contra
+    # ancho), así que el mínimo cae en la orientación alineada. Este rig venía
+    # con ~15 grados de balanceo y por eso la caja salía de 59 mm de ancho.
+    var best_angle := 0.0
+    var best_area := INF
+    var best_lo := Vector2.ZERO
+    var best_hi := Vector2.ZERO
+    for step in range(0, 90):
+        var angle := deg_to_rad(float(step))
+        var probe := base0 * Basis(Vector3.BACK, angle)
+        var inv := probe.inverse()
+        var lo := Vector2(INF, INF)
+        var hi := Vector2(-INF, -INF)
+        for v in verts:
+            var local := inv * v
+            lo.x = minf(lo.x, local.x)
+            lo.y = minf(lo.y, local.y)
+            hi.x = maxf(hi.x, local.x)
+            hi.y = maxf(hi.y, local.y)
+        var area := (hi.x - lo.x) * (hi.y - lo.y)
+        if area < best_area:
+            best_area = area
+            best_angle = angle
+            best_lo = lo
+            best_hi = hi
+    var frame := base0 * Basis(Vector3.BACK, best_angle)
+    # El mínimo de área tiene ambigüedad de 90 grados: el eje VERTICAL es el
+    # largo de la sección (el arma es mucho más alta que ancha).
+    if (best_hi.x - best_lo.x) > (best_hi.y - best_lo.y):
+        frame = frame * Basis(Vector3.BACK, PI * 0.5)
+
+    # 3) Signos por física del arma: la mira va ENCIMA de la corredera y la
+    # empuñadura DETRÁS. Nada de suposiciones.
+    var to_frame := frame.inverse()
+    var slide_mid := to_frame * _centroid(_surface_vertices("Slide"))
+    var sight_mid := to_frame * _centroid(_surface_vertices("White"))
+    var magazine_mid := to_frame * _centroid(_surface_vertices("Magazine"))
+    var up := frame.y
+    var forward := frame.z
+    if (sight_mid - slide_mid).y < 0.0:
+        up = -up
+    if (magazine_mid - slide_mid).z > 0.0:
+        forward = -forward
+    var right := up.cross(-forward).normalized()
+    var gun_frame := Basis(right, up, -forward)
+
+    var final_inv := gun_frame.inverse()
+    var f_lo := Vector3(INF, INF, INF)
+    var f_hi := Vector3(-INF, -INF, -INF)
     for v in verts:
-        mn = mn.min(v)
-        mx = mx.max(v)
-    var size := mx - mn
+        var local := final_inv * v
+        f_lo = f_lo.min(local)
+        f_hi = f_hi.max(local)
+    result["ok"] = true
+    result["verts"] = verts
+    result["frame"] = gun_frame
+    result["frame_box"] = AABB(f_lo, f_hi - f_lo)
+    # El largo del arma es la dimensión mayor de la caja, sin depender del giro.
+    result["length"] = maxf(size.x, maxf(size.y, size.z))
+    result["aabb"] = box
+    return result
 
-    var axes := [0, 1, 2]
-    axes.sort_custom(func(a, b): return size[a] > size[b])
-    var axis_len: int = axes[0]
-    var axis_up: int = axes[1]
 
-    # Rango vertical de cada mitad a lo largo del cañón.
-    var mid := mn[axis_len] + size[axis_len] * 0.5
-    var front_lo := INF
-    var front_hi := -INF
-    var rear_lo := INF
-    var rear_hi := -INF
-    for v in verts:
-        if v[axis_len] <= mid:
-            front_lo = minf(front_lo, v[axis_up])
-            front_hi = maxf(front_hi, v[axis_up])
-        else:
-            rear_lo = minf(rear_lo, v[axis_up])
-            rear_hi = maxf(rear_hi, v[axis_up])
+## Bind -> modelo usando el skin de los BRAZOS (su convención es la del autor).
+func _arms_bind_in_model() -> Transform3D:
+    if arms_mesh == null or arms_mesh.skin == null:
+        return Transform3D.IDENTITY
+    for i in range(arms_mesh.skin.get_bind_count()):
+        var bind_name := arms_mesh.skin.get_bind_name(i)
+        if bind_name == "":
+            continue
+        var bone := skeleton.find_bone(bind_name)
+        if bone < 0:
+            continue
+        return _local_chain(skeleton, model_root) * skeleton.get_bone_global_rest(bone) * arms_mesh.skin.get_bind_pose(i)
+    return Transform3D.IDENTITY
 
-    # La mitad con más altura es la trasera (empuñadura + cargador).
-    var back_sign := 1.0 if (rear_hi - rear_lo) > (front_hi - front_lo) else -1.0
-    # La empuñadura sobresale por debajo de la línea del cañón: la trasera baja
-    # mucho más de lo que sube, así que "arriba" es el lado contrario.
-    var up_sign := 1.0 if (front_lo - rear_lo) > (rear_hi - front_hi) else -1.0
 
-    var forward := Vector3.ZERO
-    forward[axis_len] = -back_sign
-    var up := Vector3.ZERO
-    up[axis_up] = up_sign
-    var right := up.cross(-forward)
+## Caja envolvente de `box` expresada en otro sistema (sus 8 esquinas).
+func _box_in_frame(box: AABB, transform: Transform3D) -> AABB:
+    var result := AABB()
+    var first := true
+    var mn := box.position
+    var mx := box.position + box.size
+    for xi in [0.0, 1.0]:
+        for yi in [0.0, 1.0]:
+            for zi in [0.0, 1.0]:
+                var corner := Vector3(lerpf(mn.x, mx.x, xi), lerpf(mn.y, mx.y, yi), lerpf(mn.z, mx.z, zi))
+                var p := transform * corner
+                if first:
+                    result = AABB(p, Vector3.ZERO)
+                    first = false
+                else:
+                    result = result.expand(p)
+    return result
 
-    measure["frame"] = Basis(right, up, -forward)
-    measure["length"] = size[axis_len]
-    measure["aabb"] = AABB(mn, size)
-    measure["ok"] = true
-    return measure
+
+## Centroide de una lista de puntos.
+func _centroid(points: PackedVector3Array) -> Vector3:
+    var sum := Vector3.ZERO
+    for p in points:
+        sum += p
+    return sum / float(maxi(points.size(), 1))
+
+
+## Vértices de una primitiva concreta del arma, en espacio de modelo.
+func _surface_vertices(surface_name: String) -> PackedVector3Array:
+    var out := PackedVector3Array()
+    if glock_mesh == null or glock_mesh.mesh == null or skeleton == null or glock_mesh.skin == null:
+        return out
+    var bind_in_model := _bind_in_model()
+    for i in range(glock_mesh.mesh.get_surface_count()):
+        if glock_mesh.mesh.surface_get_name(i) != surface_name:
+            continue
+        var arrays := glock_mesh.mesh.surface_get_arrays(i)
+        if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
+            continue
+        for v in arrays[Mesh.ARRAY_VERTEX]:
+            out.append(bind_in_model * v)
+    return out
+
+
+## Vértices de la malla del arma en su espacio de bind.
+func _bind_vertices() -> PackedVector3Array:
+    var verts := PackedVector3Array()
+    if glock_mesh == null or glock_mesh.mesh == null:
+        return verts
+    for surface in range(glock_mesh.mesh.get_surface_count()):
+        var arrays := glock_mesh.mesh.surface_get_arrays(surface)
+        if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
+            continue
+        verts.append_array(arrays[Mesh.ARRAY_VERTEX])
+    return verts
+
+
+## Cadena del hueso raíz del arma: bind -> espacio del modelo.
+func _bind_in_model() -> Transform3D:
+    var root_bone := skeleton.find_bone("Root")
+    if root_bone < 0:
+        push_error("El rig no tiene hueso Root: no se puede medir el arma")
+        return Transform3D.IDENTITY
+    var root_name := skeleton.get_bone_name(root_bone)
+    var bind_index := -1
+    for i in range(glock_mesh.skin.get_bind_count()):
+        if glock_mesh.skin.get_bind_name(i) == root_name:
+            bind_index = i
+            break
+    if bind_index < 0:
+        push_error("Ningún bind del arma se llama %s" % root_name)
+        return Transform3D.IDENTITY
+    bind_in_skeleton = skeleton.get_bone_global_rest(root_bone) * glock_mesh.skin.get_bind_pose(bind_index)
+    return _local_chain(skeleton, model_root) * bind_in_skeleton
 
 
 ## Corrige model_root para que la malla quede en el frame del arma:
@@ -635,40 +762,135 @@ func _align_model_with_mesh(measure: Dictionary) -> void:
     if model_root == null or skeleton == null or glock_mesh == null or glock_mesh.skin == null:
         push_error("No se pudo medir la base del arma: falta esqueleto o skin")
         return
-    # El nodo de malla cuelga del Skeleton3D con transform identidad; los bind
-    # poses llevan del espacio de bind al del esqueleto.
-    bind_in_skeleton = skeleton.get_bone_global_rest(0) * glock_mesh.skin.get_bind_pose(0)
-    var bind_in_model: Transform3D = _local_chain(skeleton, model_root) * bind_in_skeleton
-
-    var length_bind: float = maxf(measure["length"], 0.000001)
-    var total_scale: float = GUN_LENGTH / length_bind
+    var bind_in_model := _bind_in_model()
     gun_frame_bind = measure["frame"]
 
-    # model_root * (bind -> modelo) * frame_bind = escala uniforme (sin rotación).
-    model_root.basis = Basis.IDENTITY.scaled(Vector3.ONE * total_scale) * (bind_in_model.basis * gun_frame_bind).inverse()
-    model_root.position = Vector3.ZERO
+    # Cotas reales de una Glock 19 (m): ancho, alto, largo. El bind de este rig
+    # es anisótropo (una conversión FBX), así que la escala se aplica por eje
+    # llevando la caja medida en el frame del arma a estas cotas: así se corrige
+    # la deformación y el arma mide lo que mide una Glock de verdad.
+    var target := Vector3(0.0296, 0.1286, GUN_LENGTH)
+    var frame_box: AABB = measure["frame_box"]
+    var axis_scale := Vector3(
+        target.x / maxf(frame_box.size.x, 0.000001),
+        target.y / maxf(frame_box.size.y, 0.000001),
+        target.z / maxf(frame_box.size.z, 0.000001)
+    )
+    model_root.basis = Basis.IDENTITY.scaled(axis_scale) * gun_frame_bind.inverse()
+    # Centrado: el origen del rig nuevo no cae en el centro del arma (quedaba
+    # 15 cm a la derecha). Se centra lateral y longitudinalmente y se deja la
+    # parte alta de la corredera 3.5 cm sobre el origen, como referencia de la
+    # línea de miras.
+    var centred := _box_in_frame(_bounds(measure["verts"]), model_root.basis)
+    var box_centre := centred.position + centred.size * 0.5
+    model_root.position = Vector3(
+        -box_centre.x,
+        GUN_TOP_OVER_ORIGIN - (centred.position.y + centred.size.y),
+        -box_centre.z
+    )
     mesh_to_weapon = model_root.transform * bind_in_model
-    model_units_per_meter = 1.0 / total_scale
-    measured_length_m = length_bind * total_scale
+    # Los centroides medidos vienen en espacio de modelo: a frame de arma se
+    # pasan con la transformación del modelo.
+    measured_marks = {
+        "slide": model_root.transform * _centroid(_surface_vertices("Slide")),
+        "sight": model_root.transform * _centroid(_surface_vertices("White")),
+        "magazine": model_root.transform * _centroid(_surface_vertices("Magazine")),
+    }
+    model_units_per_meter = 1.0 / maxf(axis_scale.z, 0.000001)
+    measured_length_m = GUN_LENGTH
+    print("GLOCK_MEDIDA largo_m=", snappedf(measured_length_m, 0.0001),
+        " escala_ejes=", axis_scale.snapped(Vector3(0.0001, 0.0001, 0.0001)))
     _verify_alignment()
-    print("GLOCK_MEDIDA largo_bind=", snappedf(length_bind, 0.000001),
-        " escala=", snappedf(total_scale, 0.001),
-        " frame_bind=", gun_frame_bind.orthonormalized().get_euler().snapped(Vector3(0.001, 0.001, 0.001)),
-        " largo_m=", snappedf(length_bind * total_scale, 0.0001))
+
+
+func _apply_arms_materials() -> void:
+    if arms_mesh == null or arms_mesh.mesh == null:
+        return
+    var materials := GunMaterials.build()
+    for i in range(arms_mesh.mesh.get_surface_count()):
+        var surface_name: String = arms_mesh.mesh.surface_get_name(i)
+        if materials.has(surface_name):
+            arms_mesh.set_surface_override_material(i, materials[surface_name])
+    arms_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Animaciones del pack: la pose de agarre y el idle son del autor (nada de IK
+## deformando el skin). Este AnimationPlayer se procesa ANTES que el script, así
+## que las poses del arma que escribe el juego siguen ganando.
+func _setup_animations() -> void:
+    animation_player = model_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+    if animation_player == null:
+        push_warning("El rig no trae AnimationPlayer: los brazos quedarán en bind")
+        return
+    animation_player.process_priority = -10
+    print("GLOCK animaciones=", animation_player.get_animation_list())
+    var idle := _resolve_animation("Idle")
+    var grip := _resolve_animation("Grip")
+    if idle != "":
+        animation_player.play(idle)
+    elif grip != "":
+        animation_player.play(grip)
+
+
+## Reproduce una animación del rig una vez y vuelve al idle.
+func _play_animation(anim_name: String, speed: float = 1.0) -> void:
+    if animation_player == null:
+        return
+    var resolved := _resolve_animation(anim_name)
+    if resolved == "":
+        return
+    animation_player.play(resolved, -1.0, speed)
+    var idle := _resolve_animation("Idle")
+    if idle == "":
+        idle = _resolve_animation("Grip")
+    if idle != "":
+        animation_player.queue(idle)
+
+
+## El glTF importa las animaciones con prefijo ("Armature|Shoot"): se buscan por
+## sufijo para no depender de cómo las nombre el exportador.
+func _resolve_animation(short_name: String) -> String:
+    if animation_player == null:
+        return ""
+    if animation_player.has_animation(short_name):
+        return short_name
+    for candidate in animation_player.get_animation_list():
+        if candidate.ends_with("|" + short_name) or candidate.ends_with(short_name):
+            return candidate
+    return ""
 
 
 ## Comprobación en runtime de que la corrección quedó bien: la malla tiene que
 ## quedar en el frame del arma (base uniforme, sin rotación) y con la mano
 ## correcta (en una Glock el cierre de corredera va al lado izquierdo).
 func _verify_alignment() -> void:
-    var check := mesh_to_weapon.basis * gun_frame_bind
+    var check := model_root.basis * gun_frame_bind
     var residual := check.orthonormalized()
     var error := 0.0
     for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
         error = maxf(error, (residual * axis - axis).length())
     var scale := check.get_scale()
-    var shear := maxf(maxf(absf(scale.x - scale.y), absf(scale.y - scale.z)), absf(scale.x - scale.z))
-    alignment_ok = error <= 0.002 and shear <= 0.002
+    # Este rig trae el bind algo anisótropo, así que la escala se aplica por eje:
+    # se comprueba que sea razonable, no que los tres ejes sean idénticos.
+    var spread := maxf(maxf(scale.x, scale.y), scale.z) / maxf(minf(minf(scale.x, scale.y), scale.z), 0.000001)
+    # Signos físicos del arma: la mira va por encima de la corredera, el
+    # cargador por debajo y detrás. Si alguno falla, el arma quedó girada
+    # (pasó: las manos apuntaban hacia abajo, 180 grados).
+    var signs_ok := true
+    if measured_marks.has("slide") and measured_marks.has("sight") and measured_marks.has("magazine"):
+        var slide: Vector3 = measured_marks["slide"]
+        var sight: Vector3 = measured_marks["sight"]
+        var magazine: Vector3 = measured_marks["magazine"]
+        signs_ok = (sight.y - slide.y) > 0.005 and (magazine.y - slide.y) < -0.01 and (magazine.z - slide.z) > 0.005
+        if not signs_ok:
+            push_error("Orientación del arma incoherente: mira dy=%.4f cargador dy=%.4f dz=%.4f" % [
+                sight.y - slide.y, magazine.y - slide.y, magazine.z - slide.z])
+    alignment_ok = error <= 0.002 and spread <= 1.5 and signs_ok
+    if gun_box.has_volume():
+        var centre := gun_box.position + gun_box.size * 0.5
+        if absf(centre.x) > 0.004 or absf(centre.z) > 0.004:
+            push_error("El arma no está centrada en el frame: centro=%s" % centre)
+            alignment_ok = false
     if not alignment_ok:
         push_error("Alineación del Glock incorrecta: residual=%s escala=%s" % [residual, scale])
     if skeleton == null:
@@ -723,11 +945,13 @@ func _build_reference_markers(measure: Dictionary) -> void:
         _build_flash()
         return
 
+    # Ojo: los vértices medidos vienen en espacio de MODELO, así que a frame de
+    # arma se pasan con la transformación del modelo (no con la de bind).
     var verts: PackedVector3Array = measure["verts"]
     var weapon_verts := PackedVector3Array()
     weapon_verts.resize(verts.size())
     for i in range(verts.size()):
-        weapon_verts[i] = mesh_to_weapon * verts[i]
+        weapon_verts[i] = model_root.transform * verts[i]
     var box := _bounds(weapon_verts)
     gun_box = box
 
@@ -875,6 +1099,7 @@ func _setup_bones() -> void:
     if bone_magazine >= 0:
         rest_magazine = skeleton.get_bone_rest(bone_magazine)
 
+    _calibrate_bone_units()
     var root_idx := skeleton.find_bone("Root")
     if root_idx >= 0:
         var root_rest := skeleton.get_bone_global_rest(root_idx)
@@ -888,14 +1113,37 @@ func _setup_bones() -> void:
         magazine_axis = (inverse_root * down_skel).normalized()
 
 
+## Cuántas unidades de pose mueven un metro de mundo. No se supone: se mide
+## desplazando el hueso de la corredera y viendo cuánto se mueve de verdad.
+func _calibrate_bone_units() -> void:
+    if skeleton == null or bone_slide < 0:
+        return
+    skeleton.set_bone_pose_position(bone_slide, rest_slide.origin)
+    skeleton.force_update_all_bone_transforms()
+    var base := _bone_world_position(bone_slide)
+    skeleton.set_bone_pose_position(bone_slide, rest_slide.origin + slide_axis)
+    skeleton.force_update_all_bone_transforms()
+    var moved := _bone_world_position(bone_slide)
+    var metres_per_unit := (moved - base).length()
+    skeleton.set_bone_pose_position(bone_slide, rest_slide.origin)
+    skeleton.force_update_all_bone_transforms()
+    if metres_per_unit > 0.000001:
+        bone_units_per_meter = 1.0 / metres_per_unit
+        print("GLOCK unidades de pose por metro=", snappedf(bone_units_per_meter, 0.01))
+
+
+func _bone_world_position(bone: int) -> Vector3:
+    return recoil_node.global_transform.affine_inverse() * skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin
+
+
 func _apply_bone_poses() -> void:
     if skeleton == null:
         return
     if bone_slide >= 0:
-        var slide_units := slide_pos * model_units_per_meter
+        var slide_units := slide_pos * bone_units_per_meter
         skeleton.set_bone_pose_position(bone_slide, rest_slide.origin + slide_axis * slide_units)
     if bone_magazine >= 0:
-        var mag_units := mag_visual_drop * model_units_per_meter
+        var mag_units := mag_visual_drop * bone_units_per_meter
         skeleton.set_bone_pose_position(bone_magazine, rest_magazine.origin + magazine_axis * mag_units)
     if bone_trigger >= 0:
         var angle := -0.30 * trigger_visual

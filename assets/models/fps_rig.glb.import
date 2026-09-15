@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dlcooo1dobnr3"
-path="res://.godot/imported/fps_arms.glb-52f9afdfe5cc9112621586ad5a94eb04.scn"
+uid="uid://cn22fyw0mdpih"
+path="res://.godot/imported/fps_rig.glb-7f2f8e8d98d7db34742c776e7f23febb.scn"
 
 [deps]
 
-source_file="res://assets/models/fps_arms.glb"
-dest_files=["res://.godot/imported/fps_arms.glb-52f9afdfe5cc9112621586ad5a94eb04.scn"]
+source_file="res://assets/models/fps_rig.glb"
+dest_files=["res://.godot/imported/fps_rig.glb-7f2f8e8d98d7db34742c776e7f23febb.scn"]
 
 [params]
 

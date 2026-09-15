@@ -3,7 +3,6 @@ extends CanvasLayer
 var player
 var post: ColorRect
 var post_mat: ShaderMaterial
-var crosshair_lines: Array[ColorRect] = []
 var ammo_label: Label
 var reserve_label: Label
 var reload_label: Label
@@ -12,8 +11,6 @@ var rec_label: Label
 var rec_dot: ColorRect
 var bottom_label: Label
 var fps_label: Label
-var hitmarker: Label
-var hitmarker_time := 0.0
 var clock_timer := 0.0
 
 
@@ -77,18 +74,6 @@ func _build_hud() -> void:
     reload_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     add_child(reload_label)
 
-    hitmarker = _make_label("✕", 30, Color(1, 1, 1, 0))
-    hitmarker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    hitmarker.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    add_child(hitmarker)
-
-    for _i in range(4):
-        var line := ColorRect.new()
-        line.color = Color(0.92, 0.95, 1.0, 0.9)
-        line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        crosshair_lines.append(line)
-        add_child(line)
-
 
 func _make_label(text: String, size: int, color: Color) -> Label:
     var label := Label.new()
@@ -110,10 +95,10 @@ func _on_ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool) -> 
     reload_label.text = "RECARGANDO" if reloading else "RECARGAR (R)"
 
 
-func _on_target_hit(zone: String) -> void:
-    hitmarker_time = 0.13
-    hitmarker.modulate.a = 1.0
-    hitmarker.add_theme_color_override("font_color", Color(1.0, 0.2, 0.12) if zone == "CABEZA" else Color(1, 1, 1))
+## La señal se mantiene (es API pública) pero ya no se dibuja nada en pantalla:
+## apuntar con las miras reales y sin marcadores es más creíble.
+func _on_target_hit(_zone: String) -> void:
+    pass
 
 
 func _process(delta: float) -> void:
@@ -135,22 +120,10 @@ func _process(delta: float) -> void:
     reserve_label.size = Vector2(180, 30)
     reload_label.position = Vector2(center.x - 120, viewport_size.y - 92)
     reload_label.size = Vector2(240, 30)
-    hitmarker.position = Vector2(center.x - 40, center.y - 42)
-    hitmarker.size = Vector2(80, 80)
-
+    # Sin mira en pantalla: se apunta con las miras reales del arma (es lo que
+    # hace creíble una bodycam). Sólo queda el marcador de impacto.
     var speed_now = player.current_speed if player != null else 0.0
     var aim_amount = player.weapon.aim_blend if player != null else 0.0
-    var gap = 10.0 + speed_now * 1.4 + (18.0 if (player != null and player.weapon.reloading) else 0.0)
-    if aim_amount > 0.55:
-        gap = 4.0
-    _set_cross_line(0, Vector2(2, 9), Vector2(center.x - 1, center.y - gap - 9), Color(0.92, 0.95, 1.0, 0.35 + (1.0 - aim_amount) * 0.55))
-    _set_cross_line(1, Vector2(2, 9), Vector2(center.x - 1, center.y + gap), Color(0.92, 0.95, 1.0, 0.35 + (1.0 - aim_amount) * 0.55))
-    _set_cross_line(2, Vector2(9, 2), Vector2(center.x - gap - 9, center.y - 1), Color(0.92, 0.95, 1.0, 0.35 + (1.0 - aim_amount) * 0.55))
-    _set_cross_line(3, Vector2(9, 2), Vector2(center.x + gap, center.y - 1), Color(0.92, 0.95, 1.0, 0.35 + (1.0 - aim_amount) * 0.55))
-
-    if hitmarker_time > 0.0:
-        hitmarker_time -= delta
-        hitmarker.modulate.a = maxf(0.0, hitmarker_time / 0.13)
 
     clock_timer -= delta
     if clock_timer <= 0.0:
@@ -170,8 +143,3 @@ func _process(delta: float) -> void:
     post_mat.set_shader_parameter("grain_amount", 0.028 + clampf(speed_now / 6.3, 0.0, 1.0) * 0.012)
 
 
-func _set_cross_line(index: int, size: Vector2, pos: Vector2, color: Color) -> void:
-    var line := crosshair_lines[index]
-    line.size = size
-    line.position = pos
-    line.color = color
