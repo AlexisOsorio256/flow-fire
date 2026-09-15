@@ -43,9 +43,12 @@ static func build() -> Dictionary:
         "GrayShade2": _make(Color(0.135, 0.14, 0.152), 0.80, 0.31, {
             "detail_scale": 130.0, "streak": 0.4, "wear": 0.25,
         }),
-        # Cargador: cuerpo de polímero con la boca metálica.
-        "Magazine": _make(Color(0.052, 0.053, 0.058), 0.10, 0.56, {
-            "detail_scale": 190.0, "stipple": 0.45, "detail_albedo": 0.06, "wear": 0.18,
+        # Cargador: cuerpo de acero con recubrimiento, más liso y brillante que
+        # el polímero del armazón. Ese contraste es lo que permite verlo salir y
+        # entrar en la recarga (antes era el mismo negro que el arma y
+        # desaparecía contra ella y contra el guante).
+        "Magazine": _make(Color(0.078, 0.079, 0.084), 0.42, 0.36, {
+            "detail_scale": 190.0, "stipple": 0.25, "detail_albedo": 0.05, "wear": 0.22,
         }),
         # Cartuchos (los usa el cargador y la bala que se oculta).
         "BulletCasing": _make(Color(0.66, 0.47, 0.17), 0.90, 0.26, {

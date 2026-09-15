@@ -15,6 +15,7 @@ var _player: CharacterBody3D
 var _hud: CanvasLayer
 var _timeline_fired := 0
 var _hip_bbox := Rect2()          # caja del arma en pantalla con la pose de lista
+var _mag_rest_box := AABB()       # caja del cargador en reposo, frame de arma
 var _exposure_hip := {}           # exposición medida del arma en hip
 var _exposure_ads := {}           # exposición medida del arma en ADS
 
@@ -101,7 +102,7 @@ func run_timeline() -> void:
     _timeline_fired = 0
     var step := 0.1
     var index := 0
-    while index * step < 5.5:
+    while index * step < 6.6:
         var t := index * step
         _timeline_drive(t)
         await get_tree().create_timer(step).timeout
@@ -201,12 +202,14 @@ func run_geometrydebug() -> void:
     await get_tree().create_timer(0.4).timeout
     var travel := _print_bone_travel()
     var cycle := _measure_slide_cycle()
-    # Durante la recarga: dónde acaba el cargador medido en frame de arma.
+    # Durante la recarga: recorrido real del cargador y estado de los huesos.
     _force_reloadable_state()
     _player.weapon.start_reload()
-    await get_tree().create_timer(0.75).timeout
+    await get_tree().create_timer(0.45).timeout
+    _print_geometry("reload")
     _print_live_bones("reload")
-    _finish_geometrydebug(travel, cycle)
+    var mag: Dictionary = await _measure_reload_mag()
+    _finish_geometrydebug(travel, cycle, mag)
 
 
 ## Comprueba las medidas del arma: si deja de medirse o alinearse bien, el
@@ -234,7 +237,7 @@ func _print_live_bones(label: String) -> void:
             continue
         var live: Vector3 = recoil_inv * (skeleton_node.global_transform * skeleton_node.get_bone_global_pose(idx).origin)
         print("LIVE ", label, " ", bone_name, " pose=", live.snapped(Vector3(0.0001, 0.0001, 0.0001)),
-            " drop=", snappedf(w.mag_visual_drop, 0.0001), " slide_pos=", snappedf(w.slide_pos, 0.0001))
+            " slide_pos=", snappedf(w.slide_pos, 0.0001))
 
 
 ## Comprueba que la corredera y el cargador viajan en la dirección medida: la
@@ -244,11 +247,10 @@ func _print_live_bones(label: String) -> void:
 func _print_bone_travel() -> Dictionary:
     var w = _player.weapon
     var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
-    w.slide_pos = 0.039
-    w.mag_visual_drop = 0.20
+    w.slide_pos = w.SLIDE_TRAVEL
     w._apply_bone_poses()
     var deltas := {}
-    for bone_name in ["Slide", "Magazine"]:
+    for bone_name in ["Slide"]:
         var idx: int = (w.skeleton as Skeleton3D).find_bone(bone_name)
         if idx < 0:
             continue
@@ -259,9 +261,44 @@ func _print_bone_travel() -> Dictionary:
             " posed=", posed.snapped(Vector3(0.0001, 0.0001, 0.0001)),
             " delta=", (posed - rest).snapped(Vector3(0.0001, 0.0001, 0.0001)))
     w.slide_pos = 0.0
-    w.mag_visual_drop = 0.0
     w._apply_bone_poses()
     return deltas
+
+
+## Recorrido máximo del cargador durante una recarga real, medido en vivo: lo
+## mueve la animación del autor, así que hay que muestrear mientras ocurre.
+func _measure_reload_mag() -> Dictionary:
+    var w = _player.weapon
+    var bone: int = (w.skeleton as Skeleton3D).find_bone("Magazine")
+    if bone < 0:
+        return {}
+    var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
+    var rest: Vector3 = recoil_inv * ((w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_rest(bone).origin)
+    var max_travel := 0.0
+    var at := 0.0
+    var on_screen := 0
+    var best_margin := -1e9
+    var viewport := get_viewport().get_visible_rect().size
+    var cam: Camera3D = _player.camera
+    for _i in range(26):
+        await get_tree().create_timer(0.1).timeout
+        var world: Vector3 = (w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_pose(bone).origin
+        var live: Vector3 = recoil_inv * world
+        var travel := (live - rest).length()
+        if travel > max_travel:
+            max_travel = travel
+            at = w.reload_elapsed
+        # Lo que importa de verdad: que el cargador se VEA salir y entrar. Se
+        # proyecta el hueso y se cuenta cuánto tiempo está dentro del encuadre.
+        if not cam.is_position_behind(world):
+            var screen := cam.unproject_position(world)
+            var margin := minf(minf(screen.x, viewport.x - screen.x), minf(screen.y, viewport.y - screen.y))
+            best_margin = maxf(best_margin, margin)
+            if margin > 20.0:
+                on_screen += 1
+    print("RELOAD_MAG recorrido_max=", snappedf(max_travel, 0.001), " m en t=", snappedf(at, 0.01),
+        " s muestras_en_pantalla=", on_screen, "/26 margen_max=", snappedf(best_margin, 0.1), "px")
+    return {"travel": max_travel, "on_screen": on_screen}
 
 
 func _print_geometry(label: String) -> void:
@@ -464,7 +501,7 @@ func _transform_aabb(box: AABB, transform: Transform3D) -> AABB:
     return result
 
 
-func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary) -> void:
+func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionary) -> void:
     var w = _player.weapon
     var failures: Array[String] = []
     if not w.alignment_ok:
@@ -477,9 +514,10 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary) -> void:
     var slide: Vector3 = travel.get("Slide", Vector3.ZERO)
     if slide.z < 0.02:
         failures.append("la corredera no viaja hacia atrás (delta %s)" % slide)
-    var magazine: Vector3 = travel.get("Magazine", Vector3.ZERO)
-    if magazine.y > -0.15:
-        failures.append("el cargador no baja al recargar (delta %s)" % magazine)
+    if float(mag.get("travel", 0.0)) < 0.08:
+        failures.append("el cargador casi no se separa del arma al recargar (%.3f m)" % float(mag.get("travel", 0.0)))
+    if int(mag.get("on_screen", 0)) < 3:
+        failures.append("el cargador no llega a verse en pantalla al recargar (%d/26 muestras)" % int(mag.get("on_screen", 0)))
 
     # Encuadre: el arma tiene que caber en pantalla con la pose de lista. Antes
     # quedaban 264 px por debajo del borde y sólo se veía media corredera.
@@ -526,18 +564,26 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary) -> void:
     print("GEOMETRYDEBUG passed=", passed, " largo_m=", snappedf(w.measured_length_m, 0.0001),
         " caja=", size.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " slide=", slide.snapped(Vector3(0.001, 0.001, 0.001)),
-        " cargador=", magazine.snapped(Vector3(0.001, 0.001, 0.001)))
+        " cargador=", snappedf(float(mag.get("travel", 0.0)), 0.001), " m visible=", int(mag.get("on_screen", 0)), "/26")
     if not passed:
         push_error("GEOMETRYDEBUG falló: " + "; ".join(failures))
     get_tree().quit(0 if passed else 1)
 
 
-## Captura en cámara lenta del disparo: el ciclo de la corredera dura ~78 ms y
-## a 10-14 FPS cabe entero entre dos frames, así que en la timeline nunca se ve.
-## Aquí se baja time_scale para que cada frame renderizado avance ~6 ms de juego
-## y se guardan los frames con sus métricas (corredera, casquillo, retroceso).
-## Uso: godot4 --path . --rendering-driver vulkan -- --shotcapture
-func run_shotcapture() -> void:
+## Captura en cámara lenta del disparo y de la recarga: el ciclo de la corredera
+## dura ~78 ms y a 10-14 FPS cabe entero entre dos frames, así que en la timeline
+## nunca se ve. Aquí se baja time_scale para que cada frame renderizado avance
+## ~6 ms de juego y se guardan los frames con sus métricas (corredera, casquillo,
+## retroceso y cargador, este último medido sobre su geometría proyectada).
+## Uso: godot4 --path . --rendering-driver vulkan -- --slowmo
+func run_slowmo() -> void:
+    await _slowmo_shot()
+    await _slowmo_reload()
+    Engine.time_scale = 1.0
+    get_tree().quit()
+
+
+func _slowmo_shot() -> void:
     var dir := ProjectSettings.globalize_path("res://captures/shot")
     DirAccess.make_dir_recursive_absolute(dir)
     await get_tree().create_timer(1.0).timeout
@@ -594,9 +640,117 @@ func run_shotcapture() -> void:
         " frames_con_casquillo=", shell_frames, " casquillo_max_px=", snappedf(shell_px, 0.1),
         " primer_casquillo=", shell_first, " retroceso_max=", snappedf(peak_back * 1000.0, 1.0), "mm",
         " cabeceo_max=", snappedf(peak_pitch, 2.0), " dir=", dir)
-    get_tree().quit()
+    Engine.time_scale = 1.0
+    await get_tree().create_timer(0.4).timeout
 
 
+
+
+
+## Caja del cargador en pantalla, medida sobre su GEOMETRÍA: se toma su caja de
+## reposo en frame de arma y se le aplica la transformación RELATIVA del hueso
+## Magazine, conjugada al frame del arma (el esqueleto y el arma no comparten
+## ejes: sin conjugar, la medida sale donde no está el cargador).
+func _mag_screen_box() -> Dictionary:
+    var w = _player.weapon
+    var bone: int = (w.skeleton as Skeleton3D).find_bone("Magazine")
+    if bone < 0:
+        return {}
+    if _mag_rest_box.size == Vector3.ZERO:
+        var verts := PackedVector3Array()
+        var mesh: MeshInstance3D = w.glock_mesh
+        for i in range(mesh.mesh.get_surface_count()):
+            if mesh.mesh.surface_get_name(i) != "Magazine":
+                continue
+            for v in mesh.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
+                verts.append((w.mesh_to_weapon as Transform3D) * v)
+        if verts.is_empty():
+            return {}
+        _mag_rest_box = _bounds_of(verts)
+    var skeleton_node: Skeleton3D = w.skeleton
+    var skel_from_weapon: Transform3D = ((w.model_root as Node3D).transform *
+        _chain_to(w.skeleton, w.model_root)).affine_inverse()
+    var weapon_from_skel: Transform3D = skel_from_weapon.affine_inverse()
+    var rel_skel: Transform3D = skeleton_node.get_bone_global_pose(bone) * skeleton_node.get_bone_global_rest(bone).affine_inverse()
+    var rel_weapon: Transform3D = weapon_from_skel * rel_skel * skel_from_weapon
+    var posed: AABB = _transform_aabb(_mag_rest_box, (w.recoil_node as Node3D).global_transform * rel_weapon)
+    var cam: Camera3D = _player.camera
+    var sbox := Rect2()
+    var first := true
+    var cmin := posed.position
+    var cmax := posed.position + posed.size
+    for xi in [0.0, 1.0]:
+        for yi in [0.0, 1.0]:
+            for zi in [0.0, 1.0]:
+                var corner := Vector3(lerpf(cmin.x, cmax.x, xi), lerpf(cmin.y, cmax.y, yi), lerpf(cmin.z, cmax.z, zi))
+                if cam.is_position_behind(corner):
+                    return {}
+                var sp := cam.unproject_position(corner)
+                if first:
+                    sbox = Rect2(sp, Vector2.ZERO)
+                    first = false
+                else:
+                    sbox = sbox.expand(sp)
+    return {"box": sbox, "centro": cam.unproject_position(posed.position + posed.size * 0.5)}
+
+
+func _bounds_of(verts: PackedVector3Array) -> AABB:
+    if verts.is_empty():
+        return AABB()
+    var mn := verts[0]
+    var mx := verts[0]
+    for v in verts:
+        mn = mn.min(v)
+        mx = mx.max(v)
+    return AABB(mn, mx - mn)
+
+
+func _chain_to(node: Node, ancestor: Node) -> Transform3D:
+    var result := Transform3D.IDENTITY
+    var current := node
+    while current != null and current != ancestor:
+        if current is Node3D:
+            result = (current as Node3D).transform * result
+        current = current.get_parent()
+    return result
+
+
+func _slowmo_reload() -> void:
+    var dir := ProjectSettings.globalize_path("res://captures/reload")
+    DirAccess.make_dir_recursive_absolute(dir)
+    var w = _player.weapon
+    w.set_aim(false)
+    await get_tree().create_timer(0.6).timeout
+    _force_reloadable_state()
+    w.start_reload()
+    # 0.35 de escala: cada frame renderizado avanza ~30 ms, así que 60 frames
+    # cubren la recarga entera (2.11 s) sin perder el momento del cargador.
+    Engine.time_scale = 0.35
+    var frames := 60
+    var visible_samples := 0
+    var biggest := 0.0
+    for i in range(frames):
+        await get_tree().process_frame
+        await _capture_view("%s/reload_%03d.png" % [dir, i])
+        var sbox: Dictionary = _mag_screen_box()
+        var text := "cargador fuera de pantalla"
+        if not sbox.is_empty():
+            var box: Rect2 = sbox["box"]
+            var viewport := get_viewport().get_visible_rect().size
+            var margin := minf(minf(box.position.x, viewport.x - box.end.x), minf(box.position.y, viewport.y - box.end.y))
+            biggest = maxf(biggest, box.size.x)
+            if margin > 6.0:
+                visible_samples += 1
+            var centroid: Vector2 = sbox["centro"]
+            centroid.x = clampf(centroid.x, 0.0, viewport.x)
+            centroid.y = clampf(centroid.y, 0.0, viewport.y)
+            text = "cargador caja=(%.0f,%.0f %.0fx%.0f) centro=(%.0f,%.0f) margen=%.0fpx" % [
+                box.position.x, box.position.y, box.size.x, box.size.y, centroid.x, centroid.y, margin]
+        print("RELOAD %02d t=%.2fs mag=%d cham=%d slide=%.1fmm pose=%.2f %s" % [
+            i, w.reload_elapsed, w.mag, w.chamber, w.slide_pos * 1000.0, w.reload_pose_blend, text])
+    Engine.time_scale = 1.0
+    print("RELOADCAPTURE frames=", frames, " muestras_con_cargador_visible=", visible_samples,
+        " ancho_max=", snappedf(biggest, 1.0), "px dir=", dir)
 
 ## Vuelca a WAV lo que sale por Master durante una secuencia guionizada
 ## (disparos, recarga, pasos). Sirve para revisar el mix con el oído y para

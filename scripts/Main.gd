@@ -46,8 +46,8 @@ func _run_dev_tools() -> void:
         tools.run_geometrydebug()
     if args.has("--timeline"):
         tools.run_timeline()
-    if args.has("--shotcapture"):
-        tools.run_shotcapture()
+    if args.has("--slowmo"):
+        tools.run_slowmo()
     if args.has("--audiocapture"):
         tools.run_audiocapture()
 
@@ -112,22 +112,78 @@ func _build_hud() -> void:
     hud.setup(player)
 
 
+## Las dos recargas que existen, cada una con su contrato:
+##  - en vacío (sin cartucho en recámara): hay que liberar la corredera, que
+##    recámara un cartucho del cargador nuevo -> 16+1 y el total se conserva;
+##  - táctica (con cartucho en recámara): el cargador se cambia pero la recámara
+##    NO se toca y la corredera no se manipula; además la animación se corta
+##    antes de ese gesto, así que la recarga es más corta.
 func _run_reloadtest() -> void:
     await get_tree().create_timer(0.25).timeout
-    # Estado de corredera abierta con un cargador vacío y exactamente 17 cartuchos de reserva.
-    player.weapon.mag = 0
-    player.weapon.chamber = 0
-    player.weapon.reserve = 17
-    player.weapon.slide_locked = true
-    player.weapon.slide_pos = 0.039
-    player.weapon.slide_vel = 0.0
-    var started: bool = player.weapon.start_reload()
+    var w = player.weapon
+    var failures: Array[String] = []
+
+    # --- recarga en vacío ---
+    w.mag = 0
+    w.chamber = 0
+    w.reserve = 17
+    w.slide_locked = true
+    w.slide_pos = 0.039
+    w.slide_vel = 0.0
+    var empty_started: bool = w.start_reload()
+    var empty_total: float = w.reload_total
     await get_tree().create_timer(2.65).timeout
-    var total_rounds: int = player.weapon.mag + player.weapon.chamber + player.weapon.reserve
-    var passed: bool = started and not player.weapon.reloading and not player.weapon.slide_locked and player.weapon.chamber == 1 and player.weapon.mag == 16 and total_rounds == 17
-    print("RELOADTEST passed=", passed, " mag=", player.weapon.mag, " chamber=", player.weapon.chamber, " reserve=", player.weapon.reserve, " total=", total_rounds, " slide=", player.weapon.slide_pos)
+    var empty_rounds: int = w.mag + w.chamber + w.reserve
+    if not empty_started:
+        failures.append("la recarga en vacío no arrancó")
+    if w.reloading:
+        failures.append("la recarga en vacío no terminó")
+    if w.slide_locked:
+        failures.append("la corredera siguió trabada tras recargar en vacío")
+    if w.chamber != 1 or w.mag != 16:
+        failures.append("recarga en vacío dejó mag=%d chamber=%d (esperado 16+1)" % [w.mag, w.chamber])
+    if empty_rounds != 17:
+        failures.append("la recarga en vacío no conservó la munición (%d cartuchos)" % empty_rounds)
+    print("RELOADTEST vacia mag=", w.mag, " chamber=", w.chamber, " reserve=", w.reserve,
+        " total=", empty_rounds, " reload_total=", snappedf(empty_total, 0.01))
+
+    # --- recarga táctica (conservando la recámara) ---
+    w.mag = 5
+    w.chamber = 1
+    w.reserve = 10
+    w.slide_locked = false
+    w.slide_pos = 0.0
+    var tactical_started: bool = w.start_reload()
+    var tactical_total: float = w.reload_total
+    var tactical_empty: bool = w.reload_empty
+    var slide_moved := false
+    var guard := 0.0
+    while w.reloading and guard < 3.0:
+        await get_tree().process_frame
+        guard += get_process_delta_time()
+        if w.slide_locked or w.slide_pos > 0.004:
+            slide_moved = true
+    var tactical_rounds: int = w.mag + w.chamber + w.reserve
+    if not tactical_started:
+        failures.append("la recarga táctica no arrancó")
+    if tactical_empty:
+        failures.append("la recarga con recámara llena se marcó como recarga en vacío")
+    if slide_moved:
+        failures.append("la recarga táctica manipuló la corredera")
+    if w.chamber != 1:
+        failures.append("la recarga táctica perdió el cartucho de la recámara (chamber=%d)" % w.chamber)
+    if w.mag != 15 or tactical_rounds != 16:
+        failures.append("recarga táctica dejó mag=%d y %d cartuchos (esperado 15 y 16)" % [w.mag, tactical_rounds])
+    if tactical_total >= empty_total:
+        failures.append("la recarga táctica no es más corta que la de vacío (%.2f vs %.2f)" % [tactical_total, empty_total])
+    print("RELOADTEST tactica mag=", w.mag, " chamber=", w.chamber, " reserve=", w.reserve,
+        " total=", tactical_rounds, " reload_total=", snappedf(tactical_total, 0.01),
+        " corredera_movida=", slide_moved)
+
+    var passed := failures.is_empty()
+    print("RELOADTEST passed=", passed)
     if not passed:
-        push_error("RELOADTEST falló: la recarga vacía no dejó 16+1 cartuchos conservando el total")
+        push_error("RELOADTEST falló: " + "; ".join(failures))
     get_tree().quit(0 if passed else 1)
 
 

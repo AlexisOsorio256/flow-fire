@@ -23,6 +23,23 @@ const SLIDE_C := 70.8          # amortiguación (zeta 0.7)
 const SLIDE_IMPULSE := 4.6     # velocidad de retroceso tras el disparo (m/s)
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto
+# Tiempos de la animación "Reload" del autor (medidos sobre sus claves, ver
+# tools/_rig_dump.gd): el cargador sale a los 0.40 s, vuelve a su sitio a los
+# 1.10 s y la corredera se libera a los 1.70 s. La lógica usa esos mismos
+# instantes, así que las manos y la mecánica no pueden contradecirse.
+const RELOAD_MAG_OUT_T := 0.40
+const RELOAD_MAG_IN_T := 1.10
+const RELOAD_SLIDE_T := 1.70
+const RELOAD_TACTICAL_END := 1.62  # corta antes de la liberación de corredera
+const RELOAD_EMPTY_TOTAL := 2.11   # animación completa (2.042) + mezcla al idle
+const RELOAD_TACTICAL_TOTAL := 1.80
+# Pose de recarga: el tirador sube el arma y la gira para ver el brocal del
+# cargador (es lo que hace de verdad). Sin esto la empuñadura queda por debajo
+# del borde de la pantalla y el cargador sale del encuadre sin verse nunca.
+const RELOAD_POSE_UP := 0.075     # sube el arma
+const RELOAD_POSE_FWD := 0.045    # y la acerca algo a la cámara
+const RELOAD_POSE_PITCH := 0.17   # gira el brocal hacia la cara
+const RELOAD_POSE_ROLL := -0.30
 
 var camera: Camera3D
 var pose_root: Node3D
@@ -50,6 +67,7 @@ var slide_vel := 0.0
 var slide_locked := false
 var slide_extracted := false
 var slide_open := false  # la corredera llegó a abrirse (para recamarar al cerrar)
+var reload_pose_blend := 0.0
 
 # Retroceso en capas independientes, cada una con su escala de tiempo:
 #  1) mecánica: corredera/gatillo/cargador (la manda la lógica, ~80 ms)
@@ -83,7 +101,8 @@ var reload_total := 0.0
 var reload_empty := false
 var reload_slide_released := false
 var reload_mag_seated := false
-var mag_inserted_sound := false
+var reload_anim_cut := false
+var mag_sound_out := false
 
 var player_speed := 0.0
 var look_delta := Vector2.ZERO
@@ -106,11 +125,8 @@ var rest_slide := Transform3D.IDENTITY
 var rest_trigger := Transform3D.IDENTITY
 var rest_magazine := Transform3D.IDENTITY
 var slide_axis := Vector3(0, 1, 0)
-var magazine_axis := Vector3(0, 0, -1)
 var model_units_per_meter := 0.241
 var bone_units_per_meter := 0.241  # calibrado en runtime
-var mag_visual_drop := 0.0
-var reload_pose_blend := 0.0
 var trigger_visual := 0.0
 var sight_marker: Node3D
 var ads_offset := Vector3(-0.17, 0.138, 0.105)
@@ -216,18 +232,39 @@ func start_reload() -> bool:
     # recarga con la recámara vacía y la corredera en batería dejaba el arma
     # cargada pero sin cartucho listo (mag=17, chamber=0).
     reload_empty = chamber <= 0
-    reload_total = 2.36 if reload_empty else 1.72
+    # La animación del autor se reproduce a velocidad 1 (es su cadencia, y con
+    # ella las claves caen donde él las puso). La recarga táctica conserva la
+    # recámara, así que se corta antes de la liberación de corredera: la
+    # animación nunca enseña algo que la mecánica no esté haciendo.
+    reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TACTICAL_TOTAL
     reload_slide_released = false
     reload_mag_seated = false
-    mag_inserted_sound = false
+    reload_anim_cut = false
     aim = false
     trigger_held = false
-    GameAudio.play_2d("magout", 0.0, randf_range(0.95, 1.05))
-    # La animación del autor dura 2.04 s: se escala a la recarga del juego para
-    # que las manos vayan sincronizadas con la lógica y el audio.
-    _play_animation("Reload", 2.04 / maxf(reload_total, 0.001))
+    _play_reload_animation()
     _emit_ammo()
     return true
+
+
+## Arranca la animación de recarga del autor sin encolar el idle: el final lo
+## decide la lógica (corte táctico o mezcla al terminar).
+func _play_reload_animation() -> void:
+    if animation_player == null:
+        return
+    var resolved := _resolve_animation("Reload")
+    if resolved != "":
+        animation_player.play(resolved, -1.0, 1.0)
+
+
+func _blend_to_idle(blend: float) -> void:
+    if animation_player == null:
+        return
+    var idle := _resolve_animation("Idle")
+    if idle == "":
+        idle = _resolve_animation("Grip")
+    if idle != "":
+        animation_player.play(idle, blend)
 
 
 func _can_fire() -> bool:
@@ -404,33 +441,36 @@ func _update_reload(delta: float) -> void:
     if not reloading:
         return
     reload_elapsed += delta
-    var seat_start := 1.16 if reload_empty else 0.98
-    var out_t := clampf((reload_elapsed - 0.1) / 0.3, 0.0, 1.0)
-    var in_t := clampf((reload_elapsed - (seat_start - 0.22)) / 0.3, 0.0, 1.0)
 
-    if reload_elapsed >= seat_start and not reload_mag_seated:
+    # El sonido va en el instante en que ocurre el gesto, no al empezar.
+    if not mag_sound_out and reload_elapsed >= RELOAD_MAG_OUT_T:
+        mag_sound_out = true
+        GameAudio.play_2d("magout", 0.0, randf_range(0.95, 1.05))
+
+    if not reload_mag_seated and reload_elapsed >= RELOAD_MAG_IN_T:
         _seat_reload_mag()
-
-    if reload_elapsed > seat_start and not mag_inserted_sound:
-        mag_inserted_sound = true
         GameAudio.play_2d("magin", 0.0, randf_range(0.95, 1.05))
 
-    if reload_empty and not reload_slide_released and reload_elapsed > 1.72:
+    # Corredera: en una recarga en vacío se libera a mano en el mismo momento en
+    # que la animación del autor la suelta.
+    if reload_empty and not reload_slide_released and reload_elapsed >= RELOAD_SLIDE_T:
         reload_slide_released = true
         slide_locked = false
         slide_pos = SLIDE_TRAVEL
         slide_vel = -4.2
         GameAudio.play_2d("slide", 1.0)
 
-    var drop_t := 0.0
-    if reload_elapsed < seat_start - 0.22:
-        drop_t = _smooth(out_t)
-    elif reload_elapsed < seat_start:
-        drop_t = 1.0
-    else:
-        drop_t = 1.0 - _smooth(in_t)
-    mag_visual_drop = drop_t * 0.20
-    reload_pose_blend = sin(clampf(reload_elapsed / maxf(reload_total, 0.001), 0.0, 1.0) * PI)
+    # La pose sube con la mano (0.05-0.30 s), se mantiene mientras está el
+    # cargador fuera y baja cuando ya está dentro.
+    var up_t := clampf((reload_elapsed - 0.05) / 0.25, 0.0, 1.0)
+    var down_t := clampf((reload_elapsed - RELOAD_MAG_IN_T) / 0.35, 0.0, 1.0)
+    reload_pose_blend = _smooth(up_t) * (1.0 - _smooth(down_t))
+
+    # Recarga táctica: la recámara conserva su cartucho, así que no se toca la
+    # corredera y la animación se corta antes de ese gesto.
+    if not reload_empty and not reload_anim_cut and reload_elapsed >= RELOAD_TACTICAL_END:
+        reload_anim_cut = true
+        _blend_to_idle(0.16)
 
     if reload_elapsed >= reload_total:
         _finish_reload()
@@ -452,9 +492,7 @@ func _finish_reload() -> void:
     if not reload_mag_seated:
         _seat_reload_mag()
     reloading = false
-    mag_inserted_sound = false
-    mag_visual_drop = 0.0
-    reload_pose_blend = 0.0
+    _blend_to_idle(0.14)
     _emit_ammo()
 
 
@@ -507,12 +545,12 @@ func _update_pose(delta: float) -> void:
     rot.y = clampf(rot.y, -0.35, 0.35)
     rot.z = clampf(rot.z, -0.25, 0.25)
 
-    # Recarga: el arma sube y se ladea hacia la cámara para que la animación se
-    # vea de verdad (con el arma baja no se alcanzaba a ver el cargador).
-    pos.y += reload_pose_blend * 0.14
-    pos.z += reload_pose_blend * 0.03
-    rot.x += reload_pose_blend * 0.26
-    rot.z -= reload_pose_blend * 0.22
+    # Pose de recarga: sube y gira el arma para que el brocal entre en pantalla.
+    # Las manos van en el mismo rig, así que suben con ella: no hay desincronía.
+    pos.y += reload_pose_blend * RELOAD_POSE_UP
+    pos.z += reload_pose_blend * RELOAD_POSE_FWD
+    rot.x += reload_pose_blend * RELOAD_POSE_PITCH
+    rot.z += reload_pose_blend * RELOAD_POSE_ROLL
     pose_root.position = pos
     pose_root.rotation = rot
 
@@ -1186,9 +1224,7 @@ func _setup_bones() -> void:
         # espacio del hueso: la corredera abre hacia atrás y el cargador baja.
         # No se asume que el GLB esté alineado con los ejes de Godot.
         var back_skel := (bind_in_skeleton.basis * gun_frame_bind.z).normalized()
-        var down_skel := (bind_in_skeleton.basis * -gun_frame_bind.y).normalized()
         slide_axis = (inverse_root * back_skel).normalized()
-        magazine_axis = (inverse_root * down_skel).normalized()
 
 
 ## Cuántas unidades de pose mueven un metro de mundo. No se supone: se mide
@@ -1221,8 +1257,14 @@ func _apply_bone_poses() -> void:
         var slide_units := slide_pos * bone_units_per_meter
         skeleton.set_bone_pose_position(bone_slide, rest_slide.origin + slide_axis * slide_units)
     if bone_magazine >= 0:
-        var mag_units := mag_visual_drop * bone_units_per_meter
-        skeleton.set_bone_pose_position(bone_magazine, rest_magazine.origin + magazine_axis * mag_units)
+        # Autoridad del estado: mientras la lógica no da el cargador por
+        # asentado, lo mueve la animación del autor (va sincronizada con las
+        # manos: sale a 0.40 s y vuelve a 1.10 s). En cuanto está dentro, el
+        # juego fuerza la pose de reposo y la animación no puede contradecirlo.
+        var animation_drives_mag := reloading and reload_elapsed < RELOAD_MAG_IN_T and animation_player != null
+        if not animation_drives_mag:
+            skeleton.set_bone_pose_position(bone_magazine, rest_magazine.origin)
+            skeleton.set_bone_pose_rotation(bone_magazine, rest_magazine.basis.get_rotation_quaternion())
     if bone_trigger >= 0:
         var angle := -0.30 * trigger_visual
         var trigger_basis := rest_trigger.basis.rotated(Vector3(1, 0, 0), angle)
