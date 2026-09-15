@@ -1435,6 +1435,7 @@ func _build_high_fidelity_pistol() -> bool:
 
     _apply_pistol_materials(inst)
     _calibrate_viewmodel_lights()
+    _rebuild_markers_from_pistol(inst, holder)
     pistol_ok = true
     print("PISTOL_OWK19 piezas=", pistol_parts.size(), " escala=", snappedf(pistol_scale, 0.00001),
         " largo_modelo=", snappedf(box.size[ax_len], 0.0001),
@@ -1495,6 +1496,42 @@ func _apply_pistol_materials(root: Node3D) -> void:
         for child in node.get_children():
             stack.append(child)
     print("PISTOL_MATERIALES tocados=", seen.keys())
+
+
+## Vuelve a medir boca, mira y puerto de expulsion sobre el arma NUEVA.
+##
+## Los marcadores los calcula _build_reference_markers a partir de los vertices
+## del rig VIEJO, asi que al cambiar de arma seguian diciendo donde estaba la
+## mira de la Glock low-poly. `aimtest` pasaba igual, porque comprueba el
+## marcador contra el centro de la camara, no la mira que se ve: con el arma
+## nueva se podia estar apuntando con una mira que no era donde cae la bala.
+##
+## Se reutilizan los mismos ayudantes (_band_centroid, _ejection_point) sobre la
+## geometria nueva, en el frame del arma, para que la regla sea exactamente la
+## misma que con el arma vieja.
+func _rebuild_markers_from_pistol(inst: Node3D, holder: Node3D) -> void:
+    if muzzle == null or sight_marker == null or ejection_port == null:
+        return
+    var weapon_verts := PackedVector3Array()
+    for part_name in pistol_parts:
+        if part_name == "Shell" or part_name == "Bullet":
+            continue
+        for v in _part_verts(inst, pistol_parts[part_name], []):
+            weapon_verts.append(holder.transform * v)
+    if weapon_verts.is_empty():
+        push_error("No se pudo medir el arma nueva para recolocar los marcadores")
+        return
+    gun_box = _bounds(weapon_verts)
+    muzzle.position = _band_centroid(weapon_verts, gun_box, 0.0, 0.04, 0.0, 1.0)
+    sight_marker.position = _band_centroid(weapon_verts, gun_box, 0.80, 1.0, 0.90, 1.0)
+    ejection_port.position = _ejection_point(weapon_verts, gun_box)
+    wrist_local = Vector3(0.0, gun_box.position.y + gun_box.size.y * 0.55,
+        gun_box.position.z + gun_box.size.z + 0.030)
+    _compute_ads_offset()
+    print("PISTOL_MARCADORES mira=", sight_marker.position.snapped(Vector3(0.001,0.001,0.001)),
+        " boca=", muzzle.position.snapped(Vector3(0.001,0.001,0.001)),
+        " caja=", gun_box.size.snapped(Vector3(0.001,0.001,0.001)),
+        " ads_offset=", ads_offset.snapped(Vector3(0.001,0.001,0.001)))
 
 
 ## Recalibra las dos luces del viewmodel para el arma nueva.
