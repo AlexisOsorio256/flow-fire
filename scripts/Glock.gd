@@ -529,7 +529,7 @@ func _update_pose(delta: float) -> void:
     var ads_pos := ads_offset
     var sprint_pos := Vector3(0.05, -0.135, -0.02)
     var hip_rot := Vector3.ZERO
-    var ads_rot := Vector3.ZERO
+    var ads_rot := ads_rot_extra
     var sprint_rot := Vector3(deg_to_rad(-14.0), deg_to_rad(-5.0), deg_to_rad(5.0))
 
     var carry_pos := hip_pos.lerp(sprint_pos, sprint_blend)
@@ -1340,6 +1340,7 @@ var pistol_slide_dir := Vector3(0, 0, 1)   # avance de la corredera, en espacio 
 var pistol_mag_down := Vector3(0, -1, 0)   # (sin uso; se conserva el nombre por claridad del eje)
 var pistol_mag_rest_weapon := Transform3D.IDENTITY  # cargador en reposo, frame del arma
 var pistol_grip_local := Vector3.ZERO             # empuñadura medida, frame del arma
+var ads_rot_extra := Vector3.ZERO                 # giro de ADS (los brazos pivotan, no se trasladan)
 var pistol_slide_units := Vector3(0, 0, 1) # metros -> unidades locales de la corredera
 var pistol_trigger_axis := Vector3(1, 0, 0)
 var pistol_trigger_pivot := Vector3.ZERO
@@ -1671,8 +1672,13 @@ func _install_arms() -> void:
     # Inclinacion del conjunto: sin ella el arma apunta hacia ARRIBA en vez de
     # quedar baja, que es la postura de lista. Se gira sobre el eje X del frame
     # del arma (el transversal), que es el que baja la boca.
-    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(-46.0))
-    var fijo := inclinacion * fix
+    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(-78.0))
+    # ESTIRADO a lo largo del eje de vision. Los hombros seguian entrando en
+    # cuadro por abajo: son la masa grande de las esquinas. Alargar los brazos en
+    # Z aleja esa masa por detras de la camara mientras las manos y el arma, que
+    # estan en el origen del montaje, se quedan donde estan.
+    var estirar := Basis.from_scale(Vector3(1.0, 1.0, 1.45))
+    var fijo := estirar * inclinacion * fix
     holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fijo.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
     arms_skeleton.force_update_transform()
@@ -1728,31 +1734,33 @@ func _install_arms() -> void:
             # entraban en cuadro. Retrasando el conjunto esa masa queda detras de
             # la camara y solo se ven antebrazos, manos y arma.
             var RETRASO := 0.105
-            var BAJADA := 0.050
+            var BAJADA := 0.130
             var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y) - BAJADA, -centro.z + RETRASO)
             holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
-            # Y con esos MISMOS vertices se vuelve a medir la mira y la boca del
-            # arma visible. Hasta ahora los marcadores eran los de la OWK, que en
-            # este modo esta oculta: `aimtest` comprobaba la mira de un arma que
-            # no se dibuja, asi que podia pasar o fallar sin relacion con lo que
-            # ve el jugador. Con esto el marcador vuelve a estar sobre el arma
-            # que se ve, y `aimtest` recupera su sentido.
+            # La mira se mide en el espacio del RIG, no en el frame del arma. En
+            # el frame del arma el conjunto esta girado 46 grados, asi que su caja
+            # envolvente alineada a los ejes NO corresponde al arma y las bandas
+            # "20% trasero x 10% superior" salian vacias: el marcador caia en el
+            # origen y `aimtest` pasaba comprobando un punto que no era la mira.
+            # En el espacio del rig la pistola esta en su orientacion natural.
+            var pv_r := PackedVector3Array()
             for m in mallas:
                 if m == brazos:
                     continue
-                var mi3 := m as MeshInstance3D
-                var xf3: Transform3D = (gun_frame as Node3D).global_transform.affine_inverse() * mi3.global_transform
-                for si3 in range(mi3.mesh.get_surface_count()):
-                    for v3 in mi3.mesh.surface_get_arrays(si3)[Mesh.ARRAY_VERTEX]:
-                        cv.append(xf3 * v3)
-            var cb2 := _bounds(cv)
-            gun_box = cb2
-            sight_marker.position = _band_centroid(cv, cb2, 0.80, 1.0, 0.90, 1.0)
-            muzzle.position = _band_centroid(cv, cb2, 0.0, 0.04, 0.0, 1.0)
-            _compute_ads_offset()
-            print("ARMS_MARCADORES_AUTOR mira=", sight_marker.position.snapped(Vector3(0.001, 0.001, 0.001)),
-                " boca=", muzzle.position.snapped(Vector3(0.001, 0.001, 0.001)),
-                " ads_offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)))
+                var miR := m as MeshInstance3D
+                var xfR: Transform3D = _local_chain(miR, arms_root)
+                for siR in range(miR.mesh.get_surface_count()):
+                    for vR in miR.mesh.surface_get_arrays(siR)[Mesh.ARRAY_VERTEX]:
+                        pv_r.append(xfR * vR)
+            if pv_r.size() > 8:
+                var bR := _bounds(pv_r)
+                var a_arma: Transform3D = (gun_frame as Node3D).global_transform.affine_inverse() * arms_root.global_transform
+                sight_marker.position = a_arma * _band_centroid(pv_r, bR, 0.80, 1.0, 0.90, 1.0)
+                muzzle.position = a_arma * _band_centroid(pv_r, bR, 0.0, 0.04, 0.0, 1.0)
+                _compute_ads_offset()
+                print("ARMS_MARCADORES caja_rig=", bR.size.snapped(Vector3(0.001, 0.001, 0.001)),
+                    " mira=", sight_marker.position.snapped(Vector3(0.001, 0.001, 0.001)),
+                    " ads_offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)))
 
     if arms_mesh != null:
         arms_mesh.visible = false
