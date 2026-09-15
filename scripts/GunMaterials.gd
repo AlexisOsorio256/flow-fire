@@ -22,7 +22,7 @@ static func build() -> Dictionary:
         # interior sin reflejos, el metal sólo refleja el cielo y el resto es
         # negro. Un polímero real es difuso: así la luz del viewmodel lo modela.
         "Frame": _make(Color(0.052, 0.053, 0.057), 0.0, 0.62, {
-            "detail_scale": 210.0, "stipple": 0.75, "detail_albedo": 0.055, "wear": 0.14,
+            "detail_scale": 210.0, "stipple": 0.75, "detail_albedo": 0.055, "wear": 0.14, "micro": 0.30,
         }),
         # Piezas negras (gatillo, seguros, piezas internas).
         "Black": _make(Color(0.032, 0.032, 0.036), 0.18, 0.48, {
@@ -32,7 +32,7 @@ static func build() -> Dictionary:
         # poca componente especular y bastante rugosidad, o el reflejo del cielo
         # la deja en mancha blanca (medido: 15% de la corredera recortada).
         "Slide": _make(Color(0.058, 0.060, 0.066), 0.28, 0.40, {
-            "detail_scale": 190.0, "streak": 0.5, "detail_roughness": 0.10, "wear": 0.22,
+            "detail_scale": 190.0, "streak": 0.5, "detail_roughness": 0.10, "wear": 0.22, "micro": 0.22,
         }),
         # Puntos y contorno de la mira: blancos, con un punto de emisión.
         # Puntos y contorno de la mira: pintura blanca, que devuelve luz aunque
@@ -67,12 +67,13 @@ static func build() -> Dictionary:
         # de tejido y guante de polímero.
         "Shirt": _make(Color(0.115, 0.122, 0.135), 0.0, 0.90, {
             "detail_scale": 130.0, "detail_albedo": 0.08, "wear": 0.18,
+            "micro": 0.55,
         }),
         "Skin": _make(Color(0.245, 0.170, 0.132), 0.0, 0.66, {
-            "detail_scale": 150.0, "detail_albedo": 0.09, "wear": 0.10,
+            "detail_scale": 150.0, "detail_albedo": 0.09, "wear": 0.10, "micro": 0.40,
         }),
         "Glove": _make(Color(0.042, 0.044, 0.048), 0.05, 0.62, {
-            "detail_scale": 150.0, "detail_albedo": 0.09, "wear": 0.16,
+            "detail_scale": 150.0, "detail_albedo": 0.09, "wear": 0.16, "micro": 0.30,
         }),
     }
 

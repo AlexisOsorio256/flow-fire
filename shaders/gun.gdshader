@@ -20,6 +20,10 @@ uniform float streak : hint_range(0.0, 1.0) = 0.0;    // rayado de mecanizado
 uniform float wear : hint_range(0.0, 1.0) = 0.35;     // desgaste en bordes
 uniform vec3 emission_color : source_color = vec3(0.0);
 uniform float emission_energy = 0.0;
+// Micro-rugosidad: rompe el reflejo a escala de milímetros. Es lo que evita que
+// una superficie plana y sin textura se lea como plástico (el fallo que se veía
+// en los brazos: caras grandes con un gris uniforme). No cuesta ninguna textura.
+uniform float micro = 0.35;
 
 float hash21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -55,6 +59,14 @@ void fragment() {
     float r = roughness + (grain - 0.5) * detail_roughness;
     r = mix(r, r + (brush - 0.5) * 0.35, streak);
     r -= wear_mask * 0.25 * wear;                              // el roce pule
+    // Micro-rugosidad independiente del albedo: el color queda limpio y es el
+    // reflejo el que se rompe. Sólo ENGROSA (nunca pule): si deja zonas más
+    // lisas que la base, el especular se dispara y recorta a blanco (medido:
+    // 23-50% de los píxeles del arma recortados con la versión simétrica).
+    // La frecuencia es de unos pocos milímetros: más fina que un píxel sólo
+    // produce ruido de muestreo.
+    float micro_noise = fbm(UV * detail_scale * 1.5 + vec2(11.3, 7.1));
+    r += micro_noise * micro * 0.35;
     ROUGHNESS = clamp(r, 0.05, 1.0);
 
     // El metal desnudo asoma donde el roce es más fuerte.
