@@ -24,6 +24,8 @@ func _ready() -> void:
         _run_aimtest()
     if OS.get_cmdline_user_args().has("--pentest"):
         _run_pentest()
+    if OS.get_cmdline_user_args().has("--reloadtest"):
+        _run_reloadtest()
 
 
 func _setup_environment() -> void:
@@ -84,6 +86,25 @@ func _build_hud() -> void:
     hud.name = "HUD"
     add_child(hud)
     hud.setup(player)
+
+
+func _run_reloadtest() -> void:
+    await get_tree().create_timer(0.25).timeout
+    # Estado de corredera abierta con un cargador vacío y exactamente 17 cartuchos de reserva.
+    player.weapon.mag = 0
+    player.weapon.chamber = 0
+    player.weapon.reserve = 17
+    player.weapon.slide_locked = true
+    player.weapon.slide_pos = 0.039
+    player.weapon.slide_vel = 0.0
+    var started: bool = player.weapon.start_reload()
+    await get_tree().create_timer(2.65).timeout
+    var total_rounds: int = player.weapon.mag + player.weapon.chamber + player.weapon.reserve
+    var passed := started and not player.weapon.reloading and not player.weapon.slide_locked and player.weapon.chamber == 1 and player.weapon.mag == 16 and total_rounds == 17
+    print("RELOADTEST passed=", passed, " mag=", player.weapon.mag, " chamber=", player.weapon.chamber, " reserve=", player.weapon.reserve, " total=", total_rounds, " slide=", player.weapon.slide_pos)
+    if not passed:
+        push_error("RELOADTEST falló: la recarga vacía no dejó 16+1 cartuchos conservando el total")
+    get_tree().quit(0 if passed else 1)
 
 
 func _run_pentest() -> void:
