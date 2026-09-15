@@ -1724,6 +1724,24 @@ func _install_arms() -> void:
             print("ARMS_CAJA tam=", cb.size.snapped(Vector3(0.001, 0.001, 0.001)),
                 " centro_antes=", centro.snapped(Vector3(0.001, 0.001, 0.001)))
 
+    # ADS para el paquete coherente. `ads_offset` se calculaba con la mira de la
+    # OWK, que aqui esta oculta, y traia +0.105 en Z: eso mueve el conjunto HACIA
+    # la camara. Con el arma vieja colaba -- era solo una pistola --, pero este
+    # conjunto incluye hombros, asi que la camara acababa DENTRO de los brazos.
+    #
+    # Se calcula desde el hueso del arma: se mide donde queda `Rif` respecto a la
+    # camara en la postura de lista y se pide subirlo a la altura del ojo y
+    # adelantarlo un poco, que es lo que hace apuntar.
+    if not usar_owk and rif_bone >= 0:
+        (gun_frame as Node3D).force_update_transform()
+        arms_skeleton.force_update_transform()
+        camera.force_update_transform()
+        var rif_mundo: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(rif_bone)).origin
+        var rif_cam: Vector3 = camera.global_transform.affine_inverse() * rif_mundo
+        ads_offset = HIP_POS + Vector3(-rif_cam.x, -rif_cam.y + 0.02, -0.06)
+        print("ARMS_ADS rif_cam=", rif_cam.snapped(Vector3(0.001, 0.001, 0.001)),
+            " ads_offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)))
+
     if arms_mesh != null:
         arms_mesh.visible = false
     arms_ok = true
