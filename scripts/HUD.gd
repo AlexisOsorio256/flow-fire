@@ -167,7 +167,7 @@ func _process(delta: float) -> void:
     post_mat.set_shader_parameter("exposure_pulse", shot_pulse)
     post_mat.set_shader_parameter("blur_amount", clampf(speed_now * 0.0011 + absf(turn) * 0.0016 + shot_pulse * 0.012, 0.0, 0.018))
     post_mat.set_shader_parameter("blur_dir", Vector2(-turn * 0.7, 0.0))
-    post_mat.set_shader_parameter("grain_amount", 0.05 + clampf(speed_now / 6.3, 0.0, 1.0) * 0.02)
+    post_mat.set_shader_parameter("grain_amount", 0.028 + clampf(speed_now / 6.3, 0.0, 1.0) * 0.012)
 
 
 func _set_cross_line(index: int, size: Vector2, pos: Vector2, color: Color) -> void:

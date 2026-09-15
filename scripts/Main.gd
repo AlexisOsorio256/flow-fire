@@ -20,6 +20,8 @@ func _ready() -> void:
         _run_autotest()
     if OS.get_cmdline_user_args().has("--capture"):
         _run_capture()
+    if OS.get_cmdline_user_args().has("--aimtest"):
+        _run_aimtest()
 
 
 func _setup_environment() -> void:
@@ -80,6 +82,18 @@ func _build_hud() -> void:
     hud.name = "HUD"
     add_child(hud)
     hud.setup(player)
+
+
+func _run_aimtest() -> void:
+    await get_tree().create_timer(0.7).timeout
+    player.weapon.set_aim(true)
+    await get_tree().create_timer(1.0).timeout
+    var sight: Vector3 = player.weapon.get_sight_world_position()
+    var screen_pos: Vector2 = player.camera.unproject_position(sight)
+    var center: Vector2 = get_viewport().get_visible_rect().size * 0.5
+    var delta: float = screen_pos.distance_to(center)
+    print("AIMTEST sight_screen=", screen_pos, " center=", center, " delta_px=", delta, " aim_blend=", player.weapon.aim_blend)
+    get_tree().quit()
 
 
 func _run_capture() -> void:

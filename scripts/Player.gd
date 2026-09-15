@@ -119,7 +119,11 @@ func _input(event: InputEvent) -> void:
     if event is InputEventMouseMotion and mouse_captured:
         yaw_target -= event.relative.x * MOUSE_SENS
         pitch_target = clampf(pitch_target - event.relative.y * MOUSE_SENS, -1.38, 1.38)
-        look_delta = event.relative
+        # Evita saltos enormes al girar rápido.
+        look_delta = Vector2(
+            clampf(event.relative.x, -12.0, 12.0),
+            clampf(event.relative.y, -12.0, 12.0)
+        )
 
 
 func _capture_mouse() -> void:

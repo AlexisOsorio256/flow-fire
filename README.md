@@ -35,6 +35,10 @@ godot4 --headless --path . -- --autotest
 godot4 --path . --rendering-driver vulkan -- --capture
 # Guarda /tmp/godot_frame.png
 
+# Verificar que la mira quede centrada (ads)
+godot4 --headless --path . -- --aimtest
+# Debe imprimir delta_px cercano a 0
+
 # Previsualizar el arma aislada (útil para ajustar escala/materiales/huesos)
 godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulkan
 # Guarda /tmp/weapon_preview.png
@@ -96,15 +100,18 @@ Cualquier IA o persona puede tomar un punto y abrir un PR. Mantener el rumbo:
 - [x] Huesos separados para corredera, gatillo, cargador y cañón.
 - [x] Limitador de audio en el bus Master.
 - [x] SSAO/SSIL desactivados para matar artefactos de líneas negras.
-- [ ] Ajustar a ojo la dirección/recorrido de los huesos en `Glock.gd`
-      (`slide_axis`, `magazine_axis`) con la escena `WeaponPreview`.
+- [x] Corregir orientación del Glock (cañón al frente, arriba real).
+- [x] Centrar ADS con la transformación real del marcador de mira
+      (`--aimtest` verifica delta < 0.2 px).
+- [x] Limitar sway/pose del arma para que no se salga de pantalla al girar.
+- [x] Nitidez: 1920x1080 nativo, sin FXAA, MSAA 2x, anisotrópico 2x y menos grano.
 - [ ] Añadir manos/brazos en primera persona con animaciones reales.
+- [ ] Evitar que el arma se oculte detrás de geometría (viewmodel en capa/subviewport).
 - [ ] Recarga con animación esquelética completa y sincronizada al audio.
 - [ ] Fogonazo con geometría/partículas volumétricas más creíble.
-- [ ] Seguir puliendo sombras y luces para cero artefactos.
 - [ ] Hacer casquillos más visibles en primera persona (escala/trayectoria).
 - [ ] Penetración y rebotes con más materiales reales.
-- [ ] Optimizar Forward+ sin bajar calidad (LODs, escalado, sombras).
+- [ ] Optimizar Forward+ sin bajar calidad (LODs, sombras dinámicas, oclusión).
 - [ ] Migrar a un entorno urbano con assets reales.
 
 ## Convenciones para IAs

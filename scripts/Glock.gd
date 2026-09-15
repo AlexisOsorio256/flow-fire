@@ -88,6 +88,9 @@ var model_units_per_meter := 0.241
 var mag_visual_drop := 0.0
 var reload_pose_blend := 0.0
 var trigger_visual := 0.0
+var sight_marker: Node3D
+var ads_offset := Vector3(-0.17, 0.138, 0.105)
+var model_visual_scale := 4.094
 
 
 func _ready() -> void:
@@ -107,6 +110,7 @@ func _ready() -> void:
 
 func setup(cam: Camera3D) -> void:
     camera = cam
+    _compute_ads_offset()
 
 
 func set_aim(value: bool) -> void:
@@ -358,14 +362,18 @@ func _update_pose(delta: float) -> void:
     var target_aim := (1.0 if aim else 0.0) * (1.0 - sprint_blend)
     aim_blend += (target_aim - aim_blend) * (1.0 - exp(-9.0 * delta))
 
-    sway.x += (-look_delta.x * 0.055 - sway.x) * (1.0 - exp(-10.0 * delta))
-    sway.y += (-look_delta.y * 0.055 - sway.y) * (1.0 - exp(-10.0 * delta))
+    var look_x := clampf(look_delta.x, -12.0, 12.0) * 0.0015
+    var look_y := clampf(look_delta.y, -12.0, 12.0) * 0.0015
+    sway.x += (-look_x - sway.x) * (1.0 - exp(-10.0 * delta))
+    sway.y += (-look_y - sway.y) * (1.0 - exp(-10.0 * delta))
+    sway.x = clampf(sway.x, -0.012, 0.012)
+    sway.y = clampf(sway.y, -0.012, 0.012)
 
     if player_speed > 0.25:
         bob_phase += delta * (1.8 + player_speed * 1.45)
 
     var hip_pos := Vector3.ZERO
-    var ads_pos := Vector3(-0.17, 0.138, 0.105)
+    var ads_pos := ads_offset
     var sprint_pos := Vector3(0.05, -0.135, -0.02)
     var hip_rot := Vector3.ZERO
     var ads_rot := Vector3.ZERO
@@ -379,12 +387,20 @@ func _update_pose(delta: float) -> void:
     var move_norm := clampf(player_speed / 4.35, 0.0, 1.0)
     pos.x += cos(bob_phase * 0.5) * 0.0045 * move_norm + sway.x * (1.0 - aim_blend * 0.65)
     pos.y += sin(bob_phase) * 0.0065 * move_norm + sin(idle_phase * 1.05) * 0.0016 * (1.0 - aim_blend * 0.55) + sway.y * (1.0 - aim_blend * 0.65)
-    pos.x -= _last_local_move.x * 0.02 * (1.0 - aim_blend * 0.5)
-    pos.y -= absf(_last_local_move.y) * 0.008 * (1.0 - aim_blend * 0.5)
+    var move_x := clampf(_last_local_move.x, -1.0, 1.0)
+    var move_y := clampf(_last_local_move.y, -1.0, 1.0)
+    pos.x -= move_x * 0.02 * (1.0 - aim_blend * 0.5)
+    pos.y -= absf(move_y) * 0.008 * (1.0 - aim_blend * 0.5)
 
-    rot.x += sway.y * 0.5 + sin(idle_phase * 1.05) * 0.0025 * (1.0 - aim_blend * 0.6) - _last_local_move.y * 0.008
+    rot.x += sway.y * 0.5 + sin(idle_phase * 1.05) * 0.0025 * (1.0 - aim_blend * 0.6) - move_y * 0.008
     rot.y += sway.x * 0.5 + sin(idle_phase * 0.73 + 1.0) * 0.0020 * (1.0 - aim_blend * 0.6)
-    rot.z += -_last_local_move.x * 0.012 - sin(bob_phase) * 0.012 * sprint_blend
+    rot.z += -move_x * 0.012 - sin(bob_phase) * 0.012 * sprint_blend
+    pos.x = clampf(pos.x, -0.30, 0.30)
+    pos.y = clampf(pos.y, -0.30, 0.18)
+    pos.z = clampf(pos.z, -0.20, 0.15)
+    rot.x = clampf(rot.x, -0.35, 0.35)
+    rot.y = clampf(rot.y, -0.35, 0.35)
+    rot.z = clampf(rot.z, -0.25, 0.25)
 
     pos.y -= reload_pose_blend * 0.07
     pos.z += reload_pose_blend * 0.03
@@ -534,6 +550,12 @@ func _build_model() -> void:
     recoil_node.add_child(trigger_mesh)
 
     var marker_parent: Node3D = skeleton if skeleton != null else (model_root if model_root != null else recoil_node)
+    sight_marker = Node3D.new()
+    sight_marker.name = "SightReference"
+    marker_parent.add_child(sight_marker)
+    # Local: +Z frente, +Y arriba. Referencia de la línea de miras.
+    sight_marker.position = Vector3(0.0, 0.0225, -0.010)
+
     muzzle = Node3D.new()
     muzzle.name = "Muzzle"
     marker_parent.add_child(muzzle)
@@ -571,6 +593,26 @@ func _build_flash() -> void:
     muzzle_light.omni_range = 5.5
     muzzle_light.shadow_enabled = false
     muzzle.add_child(muzzle_light)
+
+
+func _compute_ads_offset() -> void:
+    if sight_marker == null or camera == null:
+        return
+    # Posición del marcador de mira dentro del espacio local del arma (con pose cero).
+    sight_marker.force_update_transform()
+    force_update_transform()
+    camera.force_update_transform()
+    var p_rel := global_transform.affine_inverse() * sight_marker.global_position
+    # Transformación cámara -> arma (incluye el offset/rotación del WeaponRig).
+    var cam_from_glock := camera.global_transform.affine_inverse() * global_transform
+    var desired_cam := Vector3(0.0, 0.0, -0.27)
+    ads_offset = cam_from_glock.affine_inverse() * desired_cam - p_rel
+
+
+func get_sight_world_position() -> Vector3:
+    if sight_marker != null:
+        return sight_marker.global_position
+    return global_position
 
 
 func _apply_model_materials() -> void:

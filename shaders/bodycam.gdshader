@@ -3,9 +3,9 @@ render_mode unshaded;
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
 uniform float distortion = 0.055;
-uniform float chroma = 0.0014;
+uniform float chroma = 0.0007;
 uniform float vignette = 0.62;
-uniform float grain_amount = 0.055;
+uniform float grain_amount = 0.028;
 uniform float exposure_pulse = 0.0;
 uniform float blur_amount = 0.0;
 uniform vec2 blur_dir = vec2(0.0, 0.0);
