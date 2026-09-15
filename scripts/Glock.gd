@@ -250,6 +250,10 @@ func start_reload() -> bool:
     aim = false
     trigger_held = false
     _play_reload_animation()
+    # Las dos recargas del autor se corresponden una a una con las dos de
+    # FlowFire: `Reload_easy` conserva la recamara (tactica) y `Reload_full`
+    # libera la corredera (vacio). Esa distincion ya existe en el asset.
+    _play_arms_anim("FPS_Pistol_Reload_full" if reload_empty else "FPS_Pistol_Reload_easy")
     _emit_ammo()
     return true
 
@@ -350,6 +354,7 @@ func _fire() -> void:
 
     GameAudio.play_shot()
     _play_animation("Shoot", 1.4)
+    _play_arms_anim("FPS_Pistol_Fire")
 
     var origin := muzzle.global_position
     var cam_fwd := -camera.global_transform.basis.z.normalized()
@@ -1622,6 +1627,7 @@ func _install_arms() -> void:
         pistol_holder.visible = false
         if glock_mesh != null:
             glock_mesh.visible = false
+    _play_arms_anim("FPS_Pistol_Idle", true)
     print("ARMS_MALLAS total=", mallas.size(), " brazos=", (brazos.name if brazos != null else "?"),
         " vertices_brazos=", mayor, " pistol_autor_oculta=", ocultas, " modo=", ("owk" if usar_owk else "paquete_autor"))
 
@@ -1686,6 +1692,35 @@ func _install_arms() -> void:
         arms_mesh.visible = false
     arms_ok = true
     print("ARMS_CRANSH ok anclado_al_arma anim=", arms_player.get_animation_list() if arms_player != null else [])
+
+
+## Reproduce una animacion del rig de brazos por sufijo (el importador les pone
+## prefijo "Armature|"). Sin loop vuelve sola al idle al terminar.
+func _play_arms_anim(short_name: String, loop := false) -> bool:
+    if not arms_ok or arms_player == null:
+        return false
+    var resolved := ""
+    for candidate in arms_player.get_animation_list():
+        if candidate == short_name or candidate.ends_with("|" + short_name):
+            resolved = candidate
+            break
+    if resolved == "":
+        return false
+    arms_player.play(resolved, -1.0, 1.0)
+    if not loop:
+        var idle := _resolve_arms_idle()
+        if idle != "":
+            arms_player.queue(idle)
+    return true
+
+
+func _resolve_arms_idle() -> String:
+    if arms_player == null:
+        return ""
+    for candidate in arms_player.get_animation_list():
+        if candidate.ends_with("FPS_Pistol_Idle"):
+            return candidate
+    return ""
 
 
 ## Vuelve a medir boca, mira y puerto de expulsion sobre el arma NUEVA.
