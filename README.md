@@ -62,6 +62,7 @@ Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 - Glock 19 + brazos/manos en `assets/models/fps_rig.glb`, mismo esqueleto y animaciones `Grip`, `Idle`, `Shoot`, `Reload`.
 - Arma medida en runtime: orientación, escala, boca, mira, puerto de expulsión y unidades de pose se verifican en vez de depender de offsets ciegos.
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
+- Arma centrada en el encuadre en pose de lista y, al apuntar, vista desde detrás del arma con la mira clavada en el centro (donde impacta la bala).
 - Corredera, gatillo, cargador, cañón, recarga, expulsión de casquillo y recamarado.
 - Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona.
 - Jolt para jugador, blancos y casquillos.
@@ -146,7 +147,7 @@ Los cuatro tests deben devolver **exit code 0**. Si una regresión produce exit 
 ### Herramientas de medida
 
 ```bash
-# Geometría y recorrido de huesos
+# Geometría, encuadre, exposición real del arma, ciclo de corredera y recarga
 godot4 --path . --rendering-driver vulkan -- --geometrydebug
 
 # Secuencia visual reproducible
@@ -155,6 +156,9 @@ bash tools/make_timeline_media.sh
 
 # Estados hip / ADS / disparo / recarga
 godot4 --path . --rendering-driver vulkan -- --probe
+
+# Disparo y recarga en cámara lenta (corredera, casquillo, capas de retroceso)
+godot4 --path . --rendering-driver vulkan -- --slowmo
 
 # Rendimiento real de la escena (no usar headless para juzgar GPU)
 godot4 --path . --rendering-driver vulkan -- --fpsbench

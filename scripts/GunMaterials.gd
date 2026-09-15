@@ -35,9 +35,12 @@ static func build() -> Dictionary:
             "detail_scale": 190.0, "streak": 0.5, "detail_roughness": 0.10, "wear": 0.22,
         }),
         # Puntos y contorno de la mira: blancos, con un punto de emisión.
-        "White": _make(Color(0.80, 0.81, 0.83), 0.0, 0.42, {
-            "detail_scale": 300.0, "wear": 0.0, "emission_color": Color(0.30, 0.31, 0.33),
-            "emission_energy": 0.12,
+        # Puntos y contorno de la mira: pintura blanca, que devuelve luz aunque
+        # esté a contraluz (si no, el punto de mira se ve negro y no sirve para
+        # apuntar). Es lo que hace legible la mira en un interior oscuro.
+        "White": _make(Color(0.84, 0.85, 0.87), 0.0, 0.42, {
+            "detail_scale": 300.0, "wear": 0.0, "emission_color": Color(0.55, 0.56, 0.58),
+            "emission_energy": 0.42,
         }),
         # Piezas grises (cañón, guía de muelle, extractor): acero desnudo.
         "GrayShade2": _make(Color(0.135, 0.14, 0.152), 0.80, 0.31, {

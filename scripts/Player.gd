@@ -80,8 +80,10 @@ func _build_camera() -> void:
 func _build_weapon() -> void:
     var rig := Node3D.new()
     rig.name = "WeaponRig"
-    rig.position = Vector3(0.17, -0.185, -0.345)
-    rig.rotation_degrees = Vector3(0, -4.0, 0)
+    # El arma va CENTRADA en la pantalla (como en una bodycam real: la pistola
+    # y el brazo bajan por el centro del encuadre), no desplazada a la derecha.
+    rig.position = Vector3(0.0, -0.185, -0.345)
+    rig.rotation_degrees = Vector3(0, 0.0, 0)
     camera.add_child(rig)
     weapon = preload("res://scripts/Glock.gd").new()
     weapon.name = "Glock"

@@ -47,6 +47,16 @@ func run_fpsbench() -> void:
     get_tree().quit()
 
 
+## Espera a que la pose del arma se asiente (la transición hip<->ADS tarda ~0.5 s
+## y medir a mitad da números falsos).
+func _settle_pose() -> void:
+    for _i in range(200):
+        await get_tree().process_frame
+        var w = _player.weapon
+        if absf(w.aim_blend - (1.0 if w.aim else 0.0)) < 0.01 and w.sprint_blend < 0.01:
+            break
+
+
 func _capture_view(path: String) -> void:
     await RenderingServer.frame_post_draw
     var image := get_viewport().get_texture().get_image()
@@ -191,11 +201,11 @@ func _screen_bbox(verts_box: AABB, world_transform: Transform3D, camera_node: Ca
 func run_geometrydebug() -> void:
     await get_tree().create_timer(0.8).timeout
     _player.weapon.set_aim(false)
-    await get_tree().create_timer(0.5).timeout
+    await _settle_pose()
     _print_geometry("hip")
     _exposure_hip = await _measure_gun_exposure("hip")
     _player.weapon.set_aim(true)
-    await get_tree().create_timer(0.8).timeout
+    await _settle_pose()
     _print_geometry("ads")
     _exposure_ads = await _measure_gun_exposure("ads")
     _player.weapon.set_aim(false)
@@ -528,6 +538,8 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionar
         var top_frac := _hip_bbox.position.y / viewport.y
         var visible := (minf(_hip_bbox.end.y, viewport.y) - maxf(_hip_bbox.position.y, 0.0)) / maxf(_hip_bbox.size.y, 1.0)
         var right_frac := _hip_bbox.end.x / viewport.x
+        var left_frac := _hip_bbox.position.x / viewport.x
+        var centre_frac := (_hip_bbox.position.x + _hip_bbox.size.x * 0.5) / viewport.x
         if _hip_bbox.position.y < 0.24 * viewport.y:
             failures.append("el arma tapa el centro de la pantalla (y=%.0f de %.0f)" % [_hip_bbox.position.y, viewport.y])
         if top_frac > 0.74:
@@ -536,6 +548,11 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionar
             failures.append("sólo se ve el %.0f%% del arma en pose de lista" % (visible * 100.0))
         if right_frac > 1.02:
             failures.append("el arma se sale por la derecha (x=%.0f de %.0f)" % [_hip_bbox.end.x, viewport.x])
+        if left_frac < -0.02:
+            failures.append("el arma se sale por la izquierda (x=%.0f)" % _hip_bbox.position.x)
+        # Centrado: el arma va en el centro del encuadre, no desplazada a un lado.
+        if absf(centre_frac - 0.5) > 0.09:
+            failures.append("el arma no va centrada: su centro cae en el %.0f%% del ancho" % (centre_frac * 100.0))
 
     # Exposición: ni silueta negra ni mancha recortada.
     for entry in [["hip", _exposure_hip], ["ads", _exposure_ads]]:
@@ -555,12 +572,17 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionar
     if not cycle.is_empty():
         if cycle["peak"] < 0.0385 or cycle["peak"] > 0.041:
             failures.append("la corredera no completa su recorrido (%.1f mm)" % (cycle["peak"] * 1000.0))
-        if cycle["above"] < 0.02:
+        if cycle["above"] < 0.025:
             failures.append("la corredera pasa demasiado rápido por el fondo (%.1f ms sobre 25 mm)" % (cycle["above"] * 1000.0))
-        if cycle["total"] < 0.06 or cycle["total"] > 0.16:
+        if cycle["total"] < 0.07 or cycle["total"] > 0.17:
             failures.append("el ciclo de corredera es demasiado lento (%.0f ms)" % (cycle["total"] * 1000.0))
 
     var passed := failures.is_empty()
+    var view := get_viewport().get_visible_rect().size
+    print("ENCUADRE hip_centro_x=", snappedf((_hip_bbox.position.x + _hip_bbox.size.x * 0.5) / view.x * 100.0, 0.1),
+        "% del ancho, ancho=", snappedf(_hip_bbox.size.x / view.x * 100.0, 0.1), "%",
+        " alto=", snappedf(_hip_bbox.size.y / view.y * 100.0, 0.1), "%",
+        " borde_sup=", snappedf(_hip_bbox.position.y / view.y * 100.0, 0.1), "%")
     print("GEOMETRYDEBUG passed=", passed, " largo_m=", snappedf(w.measured_length_m, 0.0001),
         " caja=", size.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " slide=", slide.snapped(Vector3(0.001, 0.001, 0.001)),

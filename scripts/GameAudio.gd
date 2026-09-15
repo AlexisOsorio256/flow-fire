@@ -33,7 +33,7 @@ const SOUNDS := {
 const SHOT_STREAMS: Array[AudioStream] = [
     preload("res://assets/audio/shot_1.wav"),
     preload("res://assets/audio/shot_2.wav"),
-    preload("res://assets/audio/shot_3b.wav"),
+    preload("res://assets/audio/shot_3.wav"),
     preload("res://assets/audio/shot_4.wav"),
     preload("res://assets/audio/shot_5.wav"),
 ]

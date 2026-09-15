@@ -10,17 +10,17 @@ const MODEL_PATH := "res://assets/models/fps_rig.glb"
 const MAG_SIZE := 17
 const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
 const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
-const ADS_SIGHT_DROP := 0.008  # La mira queda algo bajo el centro para no taparlo.
+const ADS_SIGHT_DROP := 0.0  # La mira va clavada en el centro: donde apunta, impacta.
 const HIP_POS := Vector3(0.0, 0.062, 0.0)  # Pose de lista: el arma va baja pero visible.
 const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
-# Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm) y
-# muelle recuperador con la rigidez que da un ciclo legible sin falsearlo: el
-# impulso (4.4 m/s) es el de una corredera real y el ciclo sale ~79 ms, algo más
-# lento que los ~50 ms reales porque por debajo de eso no se ve a 60 FPS.
+# Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm) y un
+# impulso también real (4 m/s): el ciclo sale ~105 ms, el doble que los ~50 ms
+# de una Glock de verdad, porque por debajo de eso el ojo (y un frame a 60 FPS)
+# sólo ve un parpadeo. Sigue siendo frenético, pero se ve el viaje completo.
 const SLIDE_TRAVEL := 0.039
-const SLIDE_K := 2560.0        # rigidez del muelle recuperador
-const SLIDE_C := 70.8          # amortiguación (zeta 0.7)
-const SLIDE_IMPULSE := 4.6     # velocidad de retroceso tras el disparo (m/s)
+const SLIDE_K := 1800.0        # rigidez del muelle recuperador
+const SLIDE_C := 64.0          # amortización (zeta 0.755)
+const SLIDE_IMPULSE := 4.05    # velocidad de retroceso tras el disparo (m/s)
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto
 # Tiempos de la animación "Reload" del autor (medidos sobre sus claves, ver
@@ -167,21 +167,24 @@ func _build_viewmodel_light() -> void:
     viewmodel_light = OmniLight3D.new()
     viewmodel_light.name = "ViewmodelKey"
     viewmodel_light.light_color = Color(0.94, 0.96, 1.0)
-    viewmodel_light.light_energy = 2.6
+    viewmodel_light.light_energy = 2.9
     viewmodel_light.omni_range = 1.5
     viewmodel_light.omni_attenuation = 1.35
     viewmodel_light.shadow_enabled = false
-    viewmodel_light.position = Vector3(-0.26, 0.24, 0.10)
+    # Detrás y arriba: la cara que ve la cámara al apuntar (el dorso de la
+    # corredera y la mira) tiene que estar iluminada, o el punto de mira se lee
+    # negro y no se puede apuntar con él.
+    viewmodel_light.position = Vector3(-0.30, 0.26, 0.42)
     pose_root.add_child(viewmodel_light)
 
     var fill := OmniLight3D.new()
     fill.name = "ViewmodelFill"
     fill.light_color = Color(1.0, 0.94, 0.86)
-    fill.light_energy = 0.85
+    fill.light_energy = 0.95
     fill.omni_range = 1.3
     fill.omni_attenuation = 1.2
     fill.shadow_enabled = false
-    fill.position = Vector3(0.26, -0.12, 0.26)
+    fill.position = Vector3(0.28, -0.08, 0.46)
     pose_root.add_child(fill)
 
 
@@ -593,6 +596,10 @@ func _spawn_shell() -> void:
     physics_mat.bounce = 0.52
     physics_mat.friction = 0.45
     shell.physics_material_override = physics_mat
+    # Rozamiento del aire sobre una vaina de 8 g: frena en vuelo en vez de
+    # cruzar la pantalla de lado a lado en 90 ms (que es lo que hacía).
+    shell.linear_damp = 0.9
+    shell.angular_damp = 0.5
 
     get_tree().current_scene.add_child(shell)
     # Grupo de medición: la herramienta de captura en cámara lenta sigue a los
@@ -605,7 +612,7 @@ func _spawn_shell() -> void:
     # La vaina sale empujada por el extractor: hacia atrás hereda parte de la
     # velocidad real de la corredera, y el expulsor la tira a la derecha y
     # arriba. El giro es rápido (una vaina recién expulsada voltea).
-    var local_vel := Vector3(2.0 + randf() * 1.0, 1.7 + randf() * 0.8, maxf(0.5, slide_vel * 0.45))
+    var local_vel := Vector3(1.5 + randf() * 0.7, 1.3 + randf() * 0.6, maxf(0.6, slide_vel * 0.35))
     shell.linear_velocity = basis * local_vel + player_velocity * 0.8
     shell.angular_velocity = Vector3(randf_range(-34.0, 34.0), randf_range(-34.0, 34.0), randf_range(-34.0, 34.0))
 

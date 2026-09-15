@@ -233,11 +233,13 @@ func _run_aimtest() -> void:
     var forward: Vector3 = -player.camera.global_transform.basis.z.normalized()
     var angle_mrad: float = acos(clampf((sight - eye).normalized().dot(forward), -1.0, 1.0)) * 1000.0
     var offset_mm: float = tan(angle_mrad * 0.001) * (sight - eye).length() * 1000.0
-    # El arma se enmarca con la mira algo por debajo del centro a propósito
-    # (ADS_SIGHT_DROP) para no tapar el punto de mira: el test comprueba que el
-    # desvío no se va de esa tolerancia y que el ADS está asentado.
-    const MAX_OFFSET_MM := 14.0
-    const MAX_ANGLE_MRAD := 30.0
+    # La mira y el impacto tienen que coincidir: el arma se coloca con el ADS
+    # medido, así que el desvío debe ser de milímetros, no de un grado.
+    # La mira va en el centro de la pantalla porque es ahí donde va la bala:
+    # antes se dejaba 8 mm por debajo (1 grado de error) y el disparo no caía
+    # donde el jugador veía la mira.
+    const MAX_OFFSET_MM := 6.0
+    const MAX_ANGLE_MRAD := 12.0
     var passed: bool = offset_mm <= MAX_OFFSET_MM and angle_mrad <= MAX_ANGLE_MRAD and player.weapon.aim_blend > 0.99
     print("AIMTEST sight_screen=", screen_pos, " center=", center, " delta_px=", delta,
         " angle_mrad=", snappedf(angle_mrad, 0.01), " offset_mm=", snappedf(offset_mm, 0.1),

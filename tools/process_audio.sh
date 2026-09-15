@@ -14,6 +14,11 @@
 #
 # Uso: tools/process_audio.sh [--dry-run]
 # Requiere ffmpeg/ffprobe. Los originales se guardan en /tmp/audio_backup.
+#
+# Después de cambiar un WAV hay que reimportar el proyecto antes de ejecutarlo:
+#   godot4 --headless --path . --editor --quit
+# Un WAV sin importar hace fallar el preload del autoload de audio y el juego se
+# queda sin sonido (y sin disparo: la señal sale antes de la balística).
 
 set -euo pipefail
 
@@ -131,7 +136,7 @@ process() {
 }
 
 echo "== Disparos (misma loudness de ataque, cola corta) =="
-for s in shot_1 shot_2 shot_3b shot_4 shot_5 shot_6; do process "$s" "$SHOT_ATTACK_TARGET" 0.55 0.15 lead; done
+for s in shot_1 shot_2 shot_3 shot_4 shot_5; do process "$s" "$SHOT_ATTACK_TARGET" 0.55 0.15 lead; done
 
 echo "== Impactos =="
 for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 lead; done
