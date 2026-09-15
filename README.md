@@ -128,6 +128,26 @@ mejora el núcleo. Si no convence, no entra.
 
 ---
 
+## 3.5. Godot AI MCP (herramienta oficial del repo)
+
+El proyecto trae el addon **Godot AI v4.1.0** en `addons/godot_ai/`, habilitado
+en `project.godot`. Al abrir el editor normal (GUI), el plugin arranca solo un
+servidor MCP local y se conecta a él:
+
+- HTTP: `http://127.0.0.1:8000/mcp`
+- WebSocket: `ws://127.0.0.1:9500`
+- Namespace de herramientas: `mcp__godot-ai__<tool>`
+
+DeepSeek Harness queda configurado automáticamente en
+`~/.dsh/cordis.patch.yml` como `mcp-godot-ai` con `godot-ai attach`. Reinicia
+DeepSeek Harness después de abrir Godot para que cargue las herramientas MCP.
+
+Requisitos: `uv` / `uvx` (ya instalado en el entorno) y Godot 4.7+.
+
+**Para IAs con shell:** además del MCP, el editor expone el servidor HTTP en
+`127.0.0.1:8000`; se puede consultar con cualquier cliente MCP. El plugin
+funciona en localhost y usa autenticación interna.
+
 ## 4. Estado actual (vertical slice jugable)
 
 ### Funcionando
@@ -300,6 +320,7 @@ Estos controles aún son de escritorio. Antes de Android deben pasar por accione
 - **Audio real:** CC0 de Freesound, recortado con ffmpeg.
   Ver [`CREDITS_AUDIO.md`](CREDITS_AUDIO.md).
 - **Texturas actuales:** prototipo; superficies 3D configuradas con mipmaps y normal-map import correcto.
+- **Godot AI MCP:** MIT (`addons/godot_ai/`), versión 4.1.0.
 - **Código:** MIT. Ver [`LICENSE`](LICENSE).
 
 Nunca agregues un asset sin licencia compatible y su crédito correspondiente.

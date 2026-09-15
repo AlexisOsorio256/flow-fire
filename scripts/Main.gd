@@ -100,7 +100,7 @@ func _run_reloadtest() -> void:
     var started: bool = player.weapon.start_reload()
     await get_tree().create_timer(2.65).timeout
     var total_rounds: int = player.weapon.mag + player.weapon.chamber + player.weapon.reserve
-    var passed := started and not player.weapon.reloading and not player.weapon.slide_locked and player.weapon.chamber == 1 and player.weapon.mag == 16 and total_rounds == 17
+    var passed: bool = started and not player.weapon.reloading and not player.weapon.slide_locked and player.weapon.chamber == 1 and player.weapon.mag == 16 and total_rounds == 17
     print("RELOADTEST passed=", passed, " mag=", player.weapon.mag, " chamber=", player.weapon.chamber, " reserve=", player.weapon.reserve, " total=", total_rounds, " slide=", player.weapon.slide_pos)
     if not passed:
         push_error("RELOADTEST falló: la recarga vacía no dejó 16+1 cartuchos conservando el total")
