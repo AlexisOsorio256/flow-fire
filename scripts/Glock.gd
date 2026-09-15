@@ -1555,11 +1555,12 @@ var arms_player: AnimationPlayer
 var arms_ok := false
 
 func _install_arms() -> void:
-    # OPT-IN con --newarms. El montaje esta a medio resolver: el anclaje por el
-    # hueso de camara coloca bien el punto de vista, pero los brazos todavia no
-    # encuadran (queda uno suelto y sobredimensionado y el arma flota). Hasta que
-    # eso se cierre, el juego usa los brazos del rig viejo, que funcionan.
-    if not OS.get_cmdline_user_args().has("--newarms"):
+    # Los brazos del autor son los que se usan. El rig viejo queda accesible con
+    # --oldarms para poder comparar los dos con el mismo banco, pero deja de ser
+    # el camino por defecto: tener el asset nuevo detras de una bandera hacia que
+    # cada verificacion se hiciera sobre el viejo.
+    if OS.get_cmdline_user_args().has("--oldarms"):
+        print("GLOCK brazos=rig_viejo (--oldarms)")
         return
     var packed := load(ARMS_PATH) as PackedScene
     if packed == null:
@@ -1667,7 +1668,12 @@ func _install_arms() -> void:
     # encajan; aplicar el factor ahi encogia tambien SU pistola (206 mm -> 149)
     # y falseaba el tamano en pantalla.
     var escala_manos := (130.0 / 180.0) if usar_owk else 1.0
-    holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fix.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
+    # Inclinacion del conjunto: sin ella el arma apunta hacia ARRIBA en vez de
+    # quedar baja, que es la postura de lista. Se gira sobre el eje X del frame
+    # del arma (el transversal), que es el que baja la boca.
+    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(-38.0))
+    var fijo := inclinacion * fix
+    holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fijo.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
     arms_skeleton.force_update_transform()
     # Se alinea el punto de agarre del rig (media de las dos manos) con la
@@ -1689,9 +1695,34 @@ func _install_arms() -> void:
         return
     var mano_l: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(hl)).origin
     var mano_r: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(hr)).origin
-    var agarre: Vector3 = mano_l.lerp(mano_r, 0.5)
-    var empunadura: Vector3 = (gun_frame as Node3D).global_transform * pistol_grip_local
-    holder.global_transform.origin += empunadura - agarre
+    if usar_owk:
+        # Solo en el modo OWK: alli hay que llevar las manos a la empuñadura de
+        # OTRA pistola. En el paquete coherente esto desplazaba las manos de
+        # sitio, porque la empuñadura que se usaba como destino era la de la OWK
+        # y el rig del autor ya viene agarrando la suya.
+        var agarre: Vector3 = mano_l.lerp(mano_r, 0.5)
+        var empunadura: Vector3 = (gun_frame as Node3D).global_transform * pistol_grip_local
+        holder.global_transform.origin += empunadura - agarre
+    else:
+        # Paquete coherente: colocar por CAJA, como se hizo con el rig viejo. Se
+        # mide la caja de la pistola del autor en el frame del arma y se deja
+        # centrada en X y Z con la corona de la corredera en GUN_TOP_OVER_ORIGIN.
+        var cv := PackedVector3Array()
+        for m in mallas:
+            if m == brazos:
+                continue
+            var mi2 := m as MeshInstance3D
+            var xf2: Transform3D = (gun_frame as Node3D).global_transform.affine_inverse() * mi2.global_transform
+            for si2 in range(mi2.mesh.get_surface_count()):
+                for v2 in mi2.mesh.surface_get_arrays(si2)[Mesh.ARRAY_VERTEX]:
+                    cv.append(xf2 * v2)
+        if cv.size() > 8:
+            var cb := _bounds(cv)
+            var centro := cb.position + cb.size * 0.5
+            var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y), -centro.z)
+            holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
+            print("ARMS_CAJA tam=", cb.size.snapped(Vector3(0.001, 0.001, 0.001)),
+                " centro_antes=", centro.snapped(Vector3(0.001, 0.001, 0.001)))
 
     if arms_mesh != null:
         arms_mesh.visible = false
