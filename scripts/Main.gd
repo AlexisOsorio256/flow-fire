@@ -46,6 +46,8 @@ func _run_dev_tools() -> void:
         tools.run_geometrydebug()
     if args.has("--timeline"):
         tools.run_timeline()
+    if args.has("--shotcapture"):
+        tools.run_shotcapture()
     if args.has("--audiocapture"):
         tools.run_audiocapture()
 

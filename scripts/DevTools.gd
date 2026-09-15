@@ -14,6 +14,9 @@ var _main: Node3D
 var _player: CharacterBody3D
 var _hud: CanvasLayer
 var _timeline_fired := 0
+var _hip_bbox := Rect2()          # caja del arma en pantalla con la pose de lista
+var _exposure_hip := {}           # exposición medida del arma en hip
+var _exposure_ads := {}           # exposición medida del arma en ADS
 
 
 func setup(main_node: Node3D, player_node: CharacterBody3D, hud_node: CanvasLayer) -> void:
@@ -189,18 +192,21 @@ func run_geometrydebug() -> void:
     _player.weapon.set_aim(false)
     await get_tree().create_timer(0.5).timeout
     _print_geometry("hip")
+    _exposure_hip = await _measure_gun_exposure("hip")
     _player.weapon.set_aim(true)
     await get_tree().create_timer(0.8).timeout
     _print_geometry("ads")
+    _exposure_ads = await _measure_gun_exposure("ads")
     _player.weapon.set_aim(false)
     await get_tree().create_timer(0.4).timeout
     var travel := _print_bone_travel()
+    var cycle := _measure_slide_cycle()
     # Durante la recarga: dónde acaba el cargador medido en frame de arma.
     _force_reloadable_state()
     _player.weapon.start_reload()
     await get_tree().create_timer(0.75).timeout
     _print_live_bones("reload")
-    _finish_geometrydebug(travel)
+    _finish_geometrydebug(travel, cycle)
 
 
 ## Comprueba las medidas del arma: si deja de medirse o alinearse bien, el
@@ -308,6 +314,115 @@ func _print_geometry(label: String) -> void:
         " sight_cam=", sight_cam.snapped(Vector3(0.001, 0.001, 0.001)),
         " muzzle_cam=", muzzle_cam.snapped(Vector3(0.001, 0.001, 0.001)),
         " viewport=", get_viewport().get_visible_rect().size)
+    if label == "hip":
+        _hip_bbox = Rect2(bbox["min"], bbox["size"])
+
+
+## Cuánta luz recibe de verdad el arma en pantalla. El arma se aísla por
+## diferencia (captura con y sin ella) para que la medida no la contamine el
+## fondo: devuelve la luminancia media de sus píxeles, el percentil 90, cuántos
+## están recortados a blanco y cuántos a negro.
+func _measure_gun_exposure(label: String) -> Dictionary:
+    Engine.time_scale = 0.0
+    await get_tree().process_frame
+    await get_tree().process_frame
+    var with_gun := await _capture_image()
+    _player.weapon.visible = false
+    await get_tree().process_frame
+    await get_tree().process_frame
+    var without := await _capture_image()
+    _player.weapon.visible = true
+    Engine.time_scale = 1.0
+    if with_gun == null or without == null:
+        print("EXPOSURE ", label, " sin captura")
+        return {}
+    with_gun.convert(Image.FORMAT_RGB8)
+    without.convert(Image.FORMAT_RGB8)
+    var a := with_gun.get_data()
+    var b := without.get_data()
+    var width := with_gun.get_width()
+    var height := with_gun.get_height()
+    var samples := PackedFloat32Array()
+    var total := 0
+    var sum := 0.0
+    var bright := 0
+    var dark := 0
+    var step := 2
+    for y in range(0, height, step):
+        for x in range(0, width, step):
+            var i := (y * width + x) * 3
+            var dr := absi(a[i] - b[i])
+            var dg := absi(a[i + 1] - b[i + 1])
+            var db := absi(a[i + 2] - b[i + 2])
+            if dr + dg + db < 6:
+                continue
+            var luma := (a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114) / 255.0
+            samples.append(luma)
+            sum += luma
+            total += 1
+            if luma > 0.96:
+                bright += 1
+            if luma < 0.03:
+                dark += 1
+    if total == 0:
+        print("EXPOSURE ", label, " el arma no ocupa ningún píxel")
+        return {}
+    samples.sort()
+    var result := {
+        "pixels": total,
+        "mean": sum / float(total),
+        "p90": samples[int(float(total) * 0.90)],
+        "blown": float(bright) / float(total),
+        "black": float(dark) / float(total),
+    }
+    print("EXPOSURE ", label, " px=", total,
+        " media=", snappedf(result["mean"] * 255.0, 0.1), "/255",
+        " p90=", snappedf(result["p90"] * 255.0, 0.1),
+        " recortado=", snappedf(result["blown"] * 100.0, 0.1), "%",
+        " negro=", snappedf(result["black"] * 100.0, 0.1), "%")
+    return result
+
+
+func _capture_image() -> Image:
+    await RenderingServer.frame_post_draw
+    return get_viewport().get_texture().get_image()
+
+
+## Mide el ciclo REAL de la corredera usando el integrador del juego (no una
+## copia): se dispara el impulso de un tiro y se avanza el subpaso con dt fijo
+## hasta que vuelve a batería. Devuelve recorrido máximo y tiempos, que son el
+## contrato de "la corredera se ve viajar".
+func _measure_slide_cycle() -> Dictionary:
+    var w = _player.weapon
+    w.slide_pos = 0.0
+    w.slide_vel = 0.0
+    w.slide_locked = false
+    w.slide_open = false
+    w.slide_extracted = false
+    w.slide_vel += w.SLIDE_IMPULSE  # mismo impulso que _fire()
+    var dt := 0.001
+    var peak := 0.0
+    var t_total := 0.0
+    var t_above := 0.0
+    var came_back := false
+    for i in range(400):
+        w._update_slide(dt)
+        var t := float(i) * dt
+        peak = maxf(peak, w.slide_pos)
+        if w.slide_pos > 0.025:
+            t_above += dt
+        if i > 4 and w.slide_pos < 0.002 and not came_back:
+            came_back = true
+            t_total = t
+    if not came_back:
+        t_total = 0.4
+    w.slide_pos = 0.0
+    w.slide_vel = 0.0
+    var result := {"peak": peak, "total": t_total, "above": t_above}
+    print("SLIDECYCLE recorrido_max=", snappedf(peak * 1000.0, 0.1), " mm",
+        " ciclo_total=", snappedf(t_total * 1000.0, 1), " ms",
+        " sobre_25mm=", snappedf(t_above * 1000.0, 1), " ms")
+    return result
 
 
 func _bind_aabb(mesh: MeshInstance3D) -> AABB:
@@ -349,7 +464,7 @@ func _transform_aabb(box: AABB, transform: Transform3D) -> AABB:
     return result
 
 
-func _finish_geometrydebug(travel: Dictionary) -> void:
+func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary) -> void:
     var w = _player.weapon
     var failures: Array[String] = []
     if not w.alignment_ok:
@@ -365,6 +480,48 @@ func _finish_geometrydebug(travel: Dictionary) -> void:
     var magazine: Vector3 = travel.get("Magazine", Vector3.ZERO)
     if magazine.y > -0.15:
         failures.append("el cargador no baja al recargar (delta %s)" % magazine)
+
+    # Encuadre: el arma tiene que caber en pantalla con la pose de lista. Antes
+    # quedaban 264 px por debajo del borde y sólo se veía media corredera.
+    var viewport := get_viewport().get_visible_rect().size
+    if _hip_bbox.size.y < 1.0:
+        failures.append("no se midió el encuadre del arma")
+    else:
+        var top_frac := _hip_bbox.position.y / viewport.y
+        var visible := (minf(_hip_bbox.end.y, viewport.y) - maxf(_hip_bbox.position.y, 0.0)) / maxf(_hip_bbox.size.y, 1.0)
+        var right_frac := _hip_bbox.end.x / viewport.x
+        if _hip_bbox.position.y < 0.24 * viewport.y:
+            failures.append("el arma tapa el centro de la pantalla (y=%.0f de %.0f)" % [_hip_bbox.position.y, viewport.y])
+        if top_frac > 0.74:
+            failures.append("el arma está demasiado baja: su borde superior cae en y=%.0f (%.0f%% de la pantalla)" % [_hip_bbox.position.y, top_frac * 100.0])
+        if visible < 0.94:
+            failures.append("sólo se ve el %.0f%% del arma en pose de lista" % (visible * 100.0))
+        if right_frac > 1.02:
+            failures.append("el arma se sale por la derecha (x=%.0f de %.0f)" % [_hip_bbox.end.x, viewport.x])
+
+    # Exposición: ni silueta negra ni mancha recortada.
+    for entry in [["hip", _exposure_hip], ["ads", _exposure_ads]]:
+        var label: String = entry[0]
+        var data: Dictionary = entry[1]
+        if data.is_empty():
+            failures.append("no se pudo medir la exposición del arma en %s" % label)
+            continue
+        if data["mean"] * 255.0 < 14.0:
+            failures.append("el arma está sin luz en %s (media %.1f/255)" % [label, data["mean"] * 255.0])
+        if data["p90"] * 255.0 < 38.0:
+            failures.append("el arma no tiene zonas claras en %s (p90 %.1f/255)" % [label, data["p90"] * 255.0])
+        if data["blown"] > 0.02:
+            failures.append("brillo especular recortado en %s (%.1f%% de sus píxeles)" % [label, data["blown"] * 100.0])
+
+    # Ciclo de corredera: recorrido completo y legible.
+    if not cycle.is_empty():
+        if cycle["peak"] < 0.0385 or cycle["peak"] > 0.041:
+            failures.append("la corredera no completa su recorrido (%.1f mm)" % (cycle["peak"] * 1000.0))
+        if cycle["above"] < 0.02:
+            failures.append("la corredera pasa demasiado rápido por el fondo (%.1f ms sobre 25 mm)" % (cycle["above"] * 1000.0))
+        if cycle["total"] < 0.06 or cycle["total"] > 0.16:
+            failures.append("el ciclo de corredera es demasiado lento (%.0f ms)" % (cycle["total"] * 1000.0))
+
     var passed := failures.is_empty()
     print("GEOMETRYDEBUG passed=", passed, " largo_m=", snappedf(w.measured_length_m, 0.0001),
         " caja=", size.snapped(Vector3(0.0001, 0.0001, 0.0001)),
@@ -373,6 +530,72 @@ func _finish_geometrydebug(travel: Dictionary) -> void:
     if not passed:
         push_error("GEOMETRYDEBUG falló: " + "; ".join(failures))
     get_tree().quit(0 if passed else 1)
+
+
+## Captura en cámara lenta del disparo: el ciclo de la corredera dura ~78 ms y
+## a 10-14 FPS cabe entero entre dos frames, así que en la timeline nunca se ve.
+## Aquí se baja time_scale para que cada frame renderizado avance ~6 ms de juego
+## y se guardan los frames con sus métricas (corredera, casquillo, retroceso).
+## Uso: godot4 --path . --rendering-driver vulkan -- --shotcapture
+func run_shotcapture() -> void:
+    var dir := ProjectSettings.globalize_path("res://captures/shot")
+    DirAccess.make_dir_recursive_absolute(dir)
+    await get_tree().create_timer(1.0).timeout
+    _player.weapon.set_aim(true)
+    await get_tree().create_timer(0.9).timeout
+    var w = _player.weapon
+    w.force_fire_once()
+    Engine.time_scale = 0.08
+    var frames := 26
+    var above_10 := 0
+    var above_25 := 0
+    var shell_frames := 0
+    var shell_px := 0.0
+    var shell_first := Vector2.ZERO
+    var peak_back := 0.0
+    var peak_pitch := 0.0
+    for i in range(frames):
+        await get_tree().process_frame
+        await _capture_view("%s/shot_%03d.png" % [dir, i])
+        var cam: Camera3D = _player.camera
+        # Cada capa del retroceso se mide por separado: no deben ser el mismo
+        # movimiento disfrazado.
+        var back: float = w.recoil_pos.z
+        var pitch := rad_to_deg(w.recoil_rot.x)
+        var arm_back: float = w.arm_recoil_pos.z
+        var arm_pitch := rad_to_deg(w.arm_recoil_rot.x)
+        peak_back = maxf(peak_back, back)
+        peak_pitch = maxf(peak_pitch, pitch)
+        if w.slide_pos > 0.010:
+            above_10 += 1
+        if w.slide_pos > 0.025:
+            above_25 += 1
+        var shells := get_tree().get_nodes_in_group("shells")
+        var shell_text := "sin_casquillo"
+        for shell in shells:
+            var pos: Vector3 = (shell as Node3D).global_position
+            var screen := cam.unproject_position(pos)
+            var behind := cam.is_position_behind(pos)
+            var edge := cam.unproject_position(pos + cam.global_transform.basis.x * 0.0057)
+            var size_px := screen.distance_to(edge) * 2.0
+            if not behind:
+                shell_frames += 1
+                shell_px = maxf(shell_px, size_px)
+                if shell_first == Vector2.ZERO:
+                    shell_first = screen
+                shell_text = "casquillo pantalla=(%.0f,%.0f) tam=%.0fpx" % [screen.x, screen.y, size_px]
+            else:
+                shell_text = "casquillo detrás de cámara"
+        print("SHOT %02d slide=%.1fmm arma(retro=%.1fmm cabeceo=%.2f°) brazos(retro=%.1fmm cabeceo=%.2f°) camara=%.2f° %s" % [
+            i, w.slide_pos * 1000.0, back * 1000.0, pitch, arm_back * 1000.0, arm_pitch,
+            rad_to_deg(_player.recoil_pitch), shell_text])
+    Engine.time_scale = 1.0
+    print("SHOTCAPTURE frames=", frames, " corredera>10mm=", above_10, " >25mm=", above_25,
+        " frames_con_casquillo=", shell_frames, " casquillo_max_px=", snappedf(shell_px, 0.1),
+        " primer_casquillo=", shell_first, " retroceso_max=", snappedf(peak_back * 1000.0, 1.0), "mm",
+        " cabeceo_max=", snappedf(peak_pitch, 2.0), " dir=", dir)
+    get_tree().quit()
+
 
 
 ## Vuelca a WAV lo que sale por Master durante una secuencia guionizada

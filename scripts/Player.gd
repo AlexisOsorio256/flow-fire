@@ -265,8 +265,8 @@ func _process(delta: float) -> void:
 
 func _update_camera_recoil(delta: float) -> void:
     # Resortes estables (Springs): un hitch de frame no debe volcar la cámara.
-    var k := 105.0
-    var c := 11.4
+    var k := 150.0
+    var c := 16.0
     var pitch := Springs.scalar(recoil_pitch, recoil_pitch_vel, k, c, delta)
     recoil_pitch = pitch.x
     recoil_pitch_vel = pitch.y
@@ -288,7 +288,9 @@ func _update_camera_recoil(delta: float) -> void:
 
 
 func _on_shot_fired() -> void:
-    recoil_pitch_vel += randf_range(1.05, 1.35)
-    recoil_yaw_vel += randf_range(-0.22, 0.22)
-    recoil_roll_vel += randf_range(-0.4, 0.4)
-    recoil_kick_vel += randf_range(0.045, 0.085)
+    # La cámara (la cabeza del operador) sube menos que el arma: el pico medido
+    # es de ~2.5 grados y vuelve en ~0.35 s.
+    recoil_pitch_vel += randf_range(0.95, 1.25)
+    recoil_yaw_vel += randf_range(-0.20, 0.20)
+    recoil_roll_vel += randf_range(-0.35, 0.35)
+    recoil_kick_vel += randf_range(0.040, 0.075)

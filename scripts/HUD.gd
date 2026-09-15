@@ -121,8 +121,7 @@ func _process(delta: float) -> void:
     reload_label.position = Vector2(center.x - 120, viewport_size.y - 92)
     reload_label.size = Vector2(240, 30)
     # Sin mira en pantalla: se apunta con las miras reales del arma (es lo que
-    # hace creíble una bodycam). Sólo queda el marcador de impacto.
-    var speed_now = player.current_speed if player != null else 0.0
+    # hace creíble una bodycam).
     var aim_amount = player.weapon.aim_blend if player != null else 0.0
 
     clock_timer -= delta
@@ -133,13 +132,11 @@ func _process(delta: float) -> void:
     fps_label.text = str(Engine.get_frames_per_second()) + " FPS"
 
     var shot_pulse = player.weapon.shot_pulse if player != null else 0.0
-    var turn = clampf(player.yaw_vel / 7.0, -1.0, 1.0) if player != null else 0.0
     post_mat.set_shader_parameter("time", Time.get_ticks_msec() / 1000.0)
     post_mat.set_shader_parameter("aim_amount", aim_amount)
-    post_mat.set_shader_parameter("speed_amount", clampf(speed_now / 6.3, 0.0, 1.0))
+    # Sin blur de movimiento ni grano variable: el post sólo da carácter de
+    # cámara (lente, viñeta, sensor) y no debe esconder detalle ni con el
+    # jugador corriendo. El grano y la nitidez se midieron sobre capturas.
     post_mat.set_shader_parameter("exposure_pulse", shot_pulse)
-    post_mat.set_shader_parameter("blur_amount", clampf(speed_now * 0.0011 + absf(turn) * 0.0016 + shot_pulse * 0.012, 0.0, 0.018))
-    post_mat.set_shader_parameter("blur_dir", Vector2(-turn * 0.7, 0.0))
-    post_mat.set_shader_parameter("grain_amount", 0.028 + clampf(speed_now / 6.3, 0.0, 1.0) * 0.012)
 
 

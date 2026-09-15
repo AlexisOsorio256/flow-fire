@@ -17,50 +17,56 @@ const SHADER: Shader = preload("res://shaders/gun.gdshader")
 
 static func build() -> Dictionary:
     return {
-        # Armazón de polímero: sin metal, rugoso y con picado.
-        "Frame": _make(Color(0.082, 0.083, 0.088), 0.04, 0.70, {
-            "detail_scale": 220.0, "stipple": 0.9, "detail_albedo": 0.10, "wear": 0.10,
+        # Armazón de polímero: dieléctrico (nada de metallic), rugoso y picado.
+        # Antes llevaba metallic 0.04-0.70 y el arma se leía negra: en un
+        # interior sin reflejos, el metal sólo refleja el cielo y el resto es
+        # negro. Un polímero real es difuso: así la luz del viewmodel lo modela.
+        "Frame": _make(Color(0.052, 0.053, 0.057), 0.0, 0.62, {
+            "detail_scale": 210.0, "stipple": 0.75, "detail_albedo": 0.055, "wear": 0.14,
         }),
         # Piezas negras (gatillo, seguros, piezas internas).
-        "Black": _make(Color(0.038, 0.038, 0.042), 0.30, 0.50, {
-            "detail_scale": 260.0, "wear": 0.15,
+        "Black": _make(Color(0.032, 0.032, 0.036), 0.18, 0.48, {
+            "detail_scale": 200.0, "detail_albedo": 0.05, "wear": 0.18,
         }),
-        # Corredera: acero pavonado, rayado de mecanizado y roce en los cantos.
-        "Slide": _make(Color(0.105, 0.11, 0.12), 0.70, 0.34, {
-            "detail_scale": 200.0, "streak": 0.55, "detail_roughness": 0.14, "wear": 0.30,
+        # Corredera: acero nitrurado, oscuro y semi-mate. Tenifer no es cromo:
+        # poca componente especular y bastante rugosidad, o el reflejo del cielo
+        # la deja en mancha blanca (medido: 15% de la corredera recortada).
+        "Slide": _make(Color(0.058, 0.060, 0.066), 0.28, 0.40, {
+            "detail_scale": 190.0, "streak": 0.5, "detail_roughness": 0.10, "wear": 0.22,
         }),
         # Puntos y contorno de la mira: blancos, con un punto de emisión.
-        "White": _make(Color(0.82, 0.83, 0.85), 0.0, 0.35, {
-            "detail_scale": 300.0, "wear": 0.0, "emission_color": Color(0.35, 0.36, 0.38),
-            "emission_energy": 0.15,
+        "White": _make(Color(0.80, 0.81, 0.83), 0.0, 0.42, {
+            "detail_scale": 300.0, "wear": 0.0, "emission_color": Color(0.30, 0.31, 0.33),
+            "emission_energy": 0.12,
         }),
-        # Piezas grises (cañón, guía de muelle, extractor).
-        "GrayShade2": _make(Color(0.135, 0.14, 0.155), 0.75, 0.30, {
-            "detail_scale": 190.0, "streak": 0.35, "wear": 0.22,
+        # Piezas grises (cañón, guía de muelle, extractor): acero desnudo.
+        "GrayShade2": _make(Color(0.135, 0.14, 0.152), 0.80, 0.31, {
+            "detail_scale": 130.0, "streak": 0.4, "wear": 0.25,
         }),
         # Cargador: cuerpo de polímero con la boca metálica.
-        "Magazine": _make(Color(0.075, 0.076, 0.082), 0.20, 0.58, {
-            "detail_scale": 200.0, "stipple": 0.5, "wear": 0.15,
+        "Magazine": _make(Color(0.052, 0.053, 0.058), 0.10, 0.56, {
+            "detail_scale": 190.0, "stipple": 0.45, "detail_albedo": 0.06, "wear": 0.18,
         }),
         # Cartuchos (los usa el cargador y la bala que se oculta).
-        "BulletCasing": _make(Color(0.62, 0.45, 0.17), 0.95, 0.24, {
+        "BulletCasing": _make(Color(0.66, 0.47, 0.17), 0.90, 0.26, {
             "detail_scale": 260.0, "wear": 0.2,
         }),
-        "BulletCasing2": _make(Color(0.52, 0.34, 0.12), 0.95, 0.28, {
+        "BulletCasing2": _make(Color(0.55, 0.36, 0.13), 0.90, 0.30, {
             "detail_scale": 260.0, "wear": 0.2,
         }),
-        "BulletTip": _make(Color(0.45, 0.19, 0.08), 0.75, 0.35, {
+        "BulletTip": _make(Color(0.42, 0.18, 0.08), 0.55, 0.40, {
             "detail_scale": 260.0, "wear": 0.2,
         }),
-        # Brazos del mismo rig (manga, piel y guante).
-        "Shirt": _make(Color(0.19, 0.20, 0.22), 0.0, 0.86, {
-            "detail_scale": 90.0, "detail_albedo": 0.06, "wear": 0.12,
+        # Brazos del mismo rig: piel real (albedo ~0.3, no salmón plano), manga
+        # de tejido y guante de polímero.
+        "Shirt": _make(Color(0.115, 0.122, 0.135), 0.0, 0.90, {
+            "detail_scale": 130.0, "detail_albedo": 0.08, "wear": 0.18,
         }),
-        "Skin": _make(Color(0.42, 0.29, 0.22), 0.0, 0.62, {
-            "detail_scale": 260.0, "detail_albedo": 0.05, "wear": 0.1,
+        "Skin": _make(Color(0.245, 0.170, 0.132), 0.0, 0.66, {
+            "detail_scale": 150.0, "detail_albedo": 0.09, "wear": 0.10,
         }),
-        "Glove": _make(Color(0.075, 0.078, 0.085), 0.05, 0.55, {
-            "detail_scale": 230.0, "detail_albedo": 0.10, "wear": 0.12,
+        "Glove": _make(Color(0.042, 0.044, 0.048), 0.05, 0.62, {
+            "detail_scale": 150.0, "detail_albedo": 0.09, "wear": 0.16,
         }),
     }
 

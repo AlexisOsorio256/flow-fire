@@ -11,8 +11,18 @@ const MAG_SIZE := 17
 const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
 const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
 const ADS_SIGHT_DROP := 0.008  # La mira queda algo bajo el centro para no taparlo.
-const HIP_POS := Vector3(0.0, -0.05, 0.0)  # Pose de lista: el arma va baja.
+const HIP_POS := Vector3(0.0, 0.062, 0.0)  # Pose de lista: el arma va baja pero visible.
 const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
+# Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm) y
+# muelle recuperador con la rigidez que da un ciclo legible sin falsearlo: el
+# impulso (4.4 m/s) es el de una corredera real y el ciclo sale ~79 ms, algo más
+# lento que los ~50 ms reales porque por debajo de eso no se ve a 60 FPS.
+const SLIDE_TRAVEL := 0.039
+const SLIDE_K := 2560.0        # rigidez del muelle recuperador
+const SLIDE_C := 70.8          # amortiguación (zeta 0.7)
+const SLIDE_IMPULSE := 4.6     # velocidad de retroceso tras el disparo (m/s)
+const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
+const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto
 
 var camera: Camera3D
 var pose_root: Node3D
@@ -41,10 +51,23 @@ var slide_locked := false
 var slide_extracted := false
 var slide_open := false  # la corredera llegó a abrirse (para recamarar al cerrar)
 
+# Retroceso en capas independientes, cada una con su escala de tiempo:
+#  1) mecánica: corredera/gatillo/cargador (la manda la lógica, ~80 ms)
+#  2) arma en la mano: recoil_node girando sobre la MUÑECA (~240 ms)
+#  3) brazos/viewmodel: pose_root entero, más lento y blando (~660 ms)
+#  4) cámara: resortes de Player.gd, la más lenta
+# No son el mismo movimiento disfrazado: cada capa tiene constante y amplitud
+# propias, y se miden por separado en --shotcapture.
+var wrist_pivot := Node3D.new()
 var recoil_pos := Vector3.ZERO
 var recoil_vel := Vector3.ZERO
 var recoil_rot := Vector3.ZERO
 var recoil_rot_vel := Vector3.ZERO
+var arm_recoil_pos := Vector3.ZERO
+var arm_recoil_vel := Vector3.ZERO
+var arm_recoil_rot := Vector3.ZERO
+var arm_recoil_rot_vel := Vector3.ZERO
+var wrist_local := Vector3.ZERO  # punto de giro medido (frame de arma)
 
 var aim := false
 var sprinting := false
@@ -106,9 +129,11 @@ func _ready() -> void:
     pose_root.name = "PoseRoot"
     add_child(pose_root)
 
+    wrist_pivot.name = "WristPivot"
+    pose_root.add_child(wrist_pivot)
     recoil_node = Node3D.new()
     recoil_node.name = "RecoilNode"
-    pose_root.add_child(recoil_node)
+    wrist_pivot.add_child(recoil_node)
 
     _build_materials()
     _build_viewmodel_light()
@@ -117,18 +142,31 @@ func _ready() -> void:
     _emit_ammo()
 
 
-## Luz corta de relleno para el arma. Es un viewmodel en un interior oscuro: sin
-## esto el negro de la corredera se lee como una mancha. Sin sombras y con rango
-## corto, así que no toca al resto de la escena.
+## Luces del viewmodel: el arma vive en un interior oscuro y con su albedo real
+## (polímero ~0.08) se leía como una mancha negra: medido, 5/255 de luminancia
+## media sobre los píxeles del arma. Dos luces cortas y sin sombras (clave
+## arriba-izquierda y relleno desde la cámara) la definen sin tocar la escena.
+## Cuelgan de pose_root para que acompañen al arma en recarga y apuntado.
 func _build_viewmodel_light() -> void:
     viewmodel_light = OmniLight3D.new()
-    viewmodel_light.name = "ViewmodelLight"
-    viewmodel_light.light_color = Color(0.90, 0.93, 1.0)
-    viewmodel_light.light_energy = 1.1
-    viewmodel_light.omni_range = 1.0
+    viewmodel_light.name = "ViewmodelKey"
+    viewmodel_light.light_color = Color(0.94, 0.96, 1.0)
+    viewmodel_light.light_energy = 2.6
+    viewmodel_light.omni_range = 1.5
+    viewmodel_light.omni_attenuation = 1.35
     viewmodel_light.shadow_enabled = false
-    viewmodel_light.position = Vector3(0.22, 0.30, 0.12)
-    add_child(viewmodel_light)
+    viewmodel_light.position = Vector3(-0.26, 0.24, 0.10)
+    pose_root.add_child(viewmodel_light)
+
+    var fill := OmniLight3D.new()
+    fill.name = "ViewmodelFill"
+    fill.light_color = Color(1.0, 0.94, 0.86)
+    fill.light_energy = 0.85
+    fill.omni_range = 1.3
+    fill.omni_attenuation = 1.2
+    fill.shadow_enabled = false
+    fill.position = Vector3(0.26, -0.12, 0.26)
+    pose_root.add_child(fill)
 
 
 func setup(cam: Camera3D) -> void:
@@ -248,11 +286,17 @@ func _fire() -> void:
     trigger_reset_timer = 0.075
     slide_extracted = false
     slide_open = false
-    slide_vel += 4.35
+    slide_vel += SLIDE_IMPULSE
     shot_pulse = 1.0
 
-    recoil_vel += Vector3((randf() - 0.5) * 0.18, 0.09, 0.62)
-    recoil_rot_vel += Vector3(5.4 + randf() * 1.3, (randf() - 0.5) * 1.3, (randf() - 0.5) * 1.5)
+    # 2) arma en la mano: impulso corto y recuperación rápida (k=700, zeta 0.75
+    #    -> pico a los ~41 ms y vuelta a batería en ~0.24 s). Antes el pico era
+    #    de 12 grados de cabeceo: medido y exagerado.
+    recoil_vel += Vector3((randf() - 0.5) * 0.06, 0.10, 0.66 + randf() * 0.06)
+    recoil_rot_vel += Vector3((4.7 + randf() * 0.7) * (1.0 if randf() > 0.5 else 1.0), (randf() - 0.5) * 0.55, (randf() - 0.5) * 0.9)
+    # 3) brazos: el mismo disparo, pero el hombro absorbe en otra escala (k=90).
+    arm_recoil_vel += Vector3((randf() - 0.5) * 0.03, 0.05, 0.20 + randf() * 0.03)
+    arm_recoil_rot_vel += Vector3(0.47 + randf() * 0.12, 0.0, (randf() - 0.5) * 0.16)
 
     muzzle_timer = 0.04
     muzzle_flash.rotation.z = randf_range(0.0, TAU)
@@ -282,29 +326,30 @@ func _fire() -> void:
 
 func _update_slide(delta: float) -> void:
     if slide_locked:
-        slide_pos = 0.039
+        slide_pos = SLIDE_TRAVEL
         slide_vel = 0.0
     else:
         # Se integra por subpasos en vez de usar Springs porque los avisos
         # ("abrió", "volvió a batería", "tocó extraer") hay que verlos DENTRO del
         # recorrido: a pocos FPS el ciclo entero de la corredera cabe en un frame
-        # y mirando solo el estado final no se recamaraba ni salía el casquillo.
-        # El subpaso de 2.5 ms es estable para k=8800 y c=92.
+        # y mirando solo el estado final no se recamarraba ni salía el casquillo.
+        # El subpaso de 2.5 ms es estable para k=2560 y c=70.8.
         const SUBSTEP := 0.0025
         var span := minf(delta, SUBSTEP * 64.0)
         var steps := maxi(1, ceili(span / SUBSTEP))
         var h := span / float(steps)
         for _i in range(steps):
-            slide_vel += (-8800.0 * slide_pos - 92.0 * slide_vel) * h
+            slide_vel += (-SLIDE_K * slide_pos - SLIDE_C * slide_vel) * h
             slide_pos += slide_vel * h
             if slide_pos < 0.0:
                 slide_pos = 0.0
                 slide_vel = maxf(0.0, slide_vel)
-            if slide_pos > 0.045:
-                slide_pos = 0.045
-                slide_vel = minf(0.0, slide_vel)
+            if slide_pos > SLIDE_TRAVEL:
+                # Tope trasero real: la corredera golpea el armazón y rebota.
+                slide_pos = SLIDE_TRAVEL
+                slide_vel = -slide_vel * SLIDE_RESTITUTION
 
-            if not slide_extracted and slide_pos > 0.021:
+            if not slide_extracted and slide_pos > SLIDE_EJECT_AT:
                 slide_extracted = true
                 _spawn_shell()
 
@@ -319,24 +364,40 @@ func _update_slide(delta: float) -> void:
                 chamber = 1
                 _emit_ammo()
 
-    if slide_pos > 0.034 and mag <= 0 and chamber <= 0 and not reloading:
+    if slide_pos > SLIDE_TRAVEL * 0.87 and mag <= 0 and chamber <= 0 and not reloading:
         slide_locked = true
-        slide_pos = 0.039
+        slide_pos = SLIDE_TRAVEL
         slide_vel = 0.0
         GameAudio.play_2d("slide")
 
 
 func _update_recoil(delta: float) -> void:
-    var pos := Springs.vector(recoil_pos, recoil_vel, 330.0, 20.0, delta)
+    # Capa 2: el arma gira en la mano sobre la muñeca. El pivote va detrás y
+    # debajo de la empuñadura (medido de la caja del arma), así que la boca sube
+    # mientras la empuñadura casi no se mueve: es lo que hace un retroceso real y
+    # lo que antes se sentía "forzado" (giro sobre el centro del arma).
+    var pos := Springs.vector(recoil_pos, recoil_vel, 700.0, 39.7, delta)
     recoil_pos = pos[0]
     recoil_vel = pos[1]
-    var rot := Springs.vector(recoil_rot, recoil_rot_vel, 300.0, 18.0, delta)
+    var rot := Springs.vector(recoil_rot, recoil_rot_vel, 700.0, 39.7, delta)
     recoil_rot = rot[0]
     recoil_rot_vel = rot[1]
-    recoil_pos = Vector3(clampf(recoil_pos.x, -0.05, 0.05), clampf(recoil_pos.y, -0.05, 0.05), clampf(recoil_pos.z, -0.05, 0.09))
-    recoil_rot = Vector3(clampf(recoil_rot.x, -0.35, 0.35), clampf(recoil_rot.y, -0.2, 0.2), clampf(recoil_rot.z, -0.25, 0.25))
-    recoil_node.position = recoil_pos
+    recoil_pos = Vector3(clampf(recoil_pos.x, -0.03, 0.03), clampf(recoil_pos.y, -0.03, 0.03), clampf(recoil_pos.z, -0.03, 0.045))
+    recoil_rot = Vector3(clampf(recoil_rot.x, -0.16, 0.16), clampf(recoil_rot.y, -0.08, 0.08), clampf(recoil_rot.z, -0.1, 0.1))
+    recoil_node.position = -wrist_local + recoil_pos
     recoil_node.rotation = recoil_rot
+    wrist_pivot.position = wrist_local
+    wrist_pivot.rotation = recoil_rot
+
+    # Capa 3: brazos y viewmodel entero, más lento y blando.
+    var arm_pos := Springs.vector(arm_recoil_pos, arm_recoil_vel, 90.0, 15.2, delta)
+    arm_recoil_pos = arm_pos[0]
+    arm_recoil_vel = arm_pos[1]
+    var arm_rot := Springs.vector(arm_recoil_rot, arm_recoil_rot_vel, 90.0, 15.2, delta)
+    arm_recoil_rot = arm_rot[0]
+    arm_recoil_rot_vel = arm_rot[1]
+    arm_recoil_pos = Vector3(clampf(arm_recoil_pos.x, -0.02, 0.02), clampf(arm_recoil_pos.y, -0.02, 0.02), clampf(arm_recoil_pos.z, -0.02, 0.03))
+    arm_recoil_rot = Vector3(clampf(arm_recoil_rot.x, -0.08, 0.08), 0.0, clampf(arm_recoil_rot.z, -0.04, 0.04))
 
 
 func _update_reload(delta: float) -> void:
@@ -357,7 +418,7 @@ func _update_reload(delta: float) -> void:
     if reload_empty and not reload_slide_released and reload_elapsed > 1.72:
         reload_slide_released = true
         slide_locked = false
-        slide_pos = 0.039
+        slide_pos = SLIDE_TRAVEL
         slide_vel = -4.2
         GameAudio.play_2d("slide", 1.0)
 
@@ -434,6 +495,8 @@ func _update_pose(delta: float) -> void:
     pos.x -= move_x * 0.02 * (1.0 - aim_blend * 0.5)
     pos.y -= absf(move_y) * 0.008 * (1.0 - aim_blend * 0.5)
 
+    pos += arm_recoil_pos
+    rot += arm_recoil_rot
     rot.x += sway.y * 0.5 + sin(idle_phase * 1.05) * 0.0025 * (1.0 - aim_blend * 0.6) - move_y * 0.008
     rot.y += sway.x * 0.5 + sin(idle_phase * 0.73 + 1.0) * 0.0020 * (1.0 - aim_blend * 0.6)
     rot.z += -move_x * 0.012 - sin(bob_phase) * 0.012 * sprint_blend
@@ -463,23 +526,29 @@ func _spawn_shell() -> void:
     shell.collision_mask = 1
     shell.continuous_cd = true
 
+    # Vaina del 9x19 real: 19,15 mm de largo y 9,6 mm de culote. Nada de
+    # agrandarla para que se vea: la hace visible su brillo, su giro y el sitio
+    # por donde sale, no el tamaño.
     var cylinder := CylinderMesh.new()
-    cylinder.height = 0.0195
-    cylinder.top_radius = 0.00425
-    cylinder.bottom_radius = 0.00425
-    cylinder.radial_segments = 10
+    cylinder.height = 0.01915
+    cylinder.top_radius = 0.0048
+    cylinder.bottom_radius = 0.0048
+    cylinder.radial_segments = 12
     cylinder.material = brass_mat
     var shell_mesh := MeshInstance3D.new()
     shell_mesh.mesh = cylinder
-    # Un poco más grande que el real para que se vea en primera persona.
-    shell_mesh.scale = Vector3(1.35, 1.0, 1.35)
+    # El cilindro nace con el eje en Y: la vaina sale tumbada, con el eje a lo
+    # largo del cañón (la boca hacia delante y el culote donde la sujeta el
+    # extractor). Antes salía de pie, atravesada.
+    shell_mesh.rotation.x = deg_to_rad(-90.0)
     shell.add_child(shell_mesh)
 
     var shape := CylinderShape3D.new()
-    shape.height = 0.0195
-    shape.radius = 0.00425
+    shape.height = 0.01915
+    shape.radius = 0.0048
     var collider := CollisionShape3D.new()
     collider.shape = shape
+    collider.rotation.x = deg_to_rad(-90.0)
     shell.add_child(collider)
 
     var physics_mat := PhysicsMaterial.new()
@@ -488,13 +557,19 @@ func _spawn_shell() -> void:
     shell.physics_material_override = physics_mat
 
     get_tree().current_scene.add_child(shell)
+    # Grupo de medición: la herramienta de captura en cámara lenta sigue a los
+    # casquillos para comprobar que se ven salir (igual que "targets").
+    shell.add_to_group("shells")
     shell.global_transform = ejection_port.global_transform
     var basis := ejection_port.global_transform.basis
     # El puerto está en la cara derecha del arma: el casquillo sale a la derecha
     # (+X), arriba (+Y) y algo hacia atrás (+Z, que es la cola del arma).
-    var local_vel := Vector3(2.2 + randf() * 1.2, 1.9 + randf() * 0.9, 0.6 + randf() * 0.7)
+    # La vaina sale empujada por el extractor: hacia atrás hereda parte de la
+    # velocidad real de la corredera, y el expulsor la tira a la derecha y
+    # arriba. El giro es rápido (una vaina recién expulsada voltea).
+    var local_vel := Vector3(2.0 + randf() * 1.0, 1.7 + randf() * 0.8, maxf(0.5, slide_vel * 0.45))
     shell.linear_velocity = basis * local_vel + player_velocity * 0.8
-    shell.angular_velocity = Vector3(randf_range(-26.0, 26.0), randf_range(-26.0, 26.0), randf_range(-26.0, 26.0))
+    shell.angular_velocity = Vector3(randf_range(-34.0, 34.0), randf_range(-34.0, 34.0), randf_range(-34.0, 34.0))
 
 
 func _emit_ammo() -> void:
@@ -509,13 +584,12 @@ func _build_materials() -> void:
     # Los materiales del arma los construye GunMaterials (por nombre de
     # primitiva, con detalle procedural). Aquí sólo quedan el latón de los
     # casquillos y el material del fogonazo.
+    # Latón pulido: albedo de metal real y sin emisión (una vaina caliente no
+    # brilla; la hacía visible el brillo del entorno, no un truco).
     brass_mat = StandardMaterial3D.new()
-    brass_mat.albedo_color = Color(0.78, 0.55, 0.16)
-    brass_mat.metallic = 1.0
-    brass_mat.roughness = 0.28
-    brass_mat.emission_enabled = true
-    brass_mat.emission = Color(0.25, 0.08, 0.01)
-    brass_mat.emission_energy_multiplier = 0.5
+    brass_mat.albedo_color = Color(0.86, 0.68, 0.30)
+    brass_mat.metallic = 0.95
+    brass_mat.roughness = 0.24
 
     flash_mat = StandardMaterial3D.new()
     flash_mat.albedo_texture = preload("res://assets/textures/muzzle_flash.png")
@@ -961,6 +1035,10 @@ func _build_reference_markers(measure: Dictionary) -> void:
     sight_marker.position = _band_centroid(weapon_verts, box, 0.80, 1.0, 0.90, 1.0)
     # Puerto de expulsión: cara derecha de la corredera, a media longitud.
     ejection_port.position = _ejection_point(weapon_verts, box)
+    # Muñeca: justo detrás de la empuñadura y a la altura del gatillo. El
+    # retroceso gira aquí, no sobre el centro del arma.
+    wrist_local = Vector3(0.0, box.position.y + box.size.y * 0.55, box.position.z + box.size.z + 0.030)
+    print("GLOCK muneca=", wrist_local.snapped(Vector3(0.001, 0.001, 0.001)))
     _build_flash()
 
 
