@@ -1,0 +1,11 @@
+# Caché de Godot 4 (se regenera al abrir el proyecto)
+.godot/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
