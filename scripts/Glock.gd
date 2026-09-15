@@ -44,6 +44,7 @@ var slide_pos := 0.0
 var slide_vel := 0.0
 var slide_locked := false
 var slide_extracted := false
+var slide_open := false  # la corredera llegó a abrirse (para recamarar al cerrar)
 
 var recoil_pos := Vector3.ZERO
 var recoil_vel := Vector3.ZERO
@@ -218,6 +219,7 @@ func _fire() -> void:
     trigger_latched = true
     trigger_reset_timer = 0.075
     slide_extracted = false
+    slide_open = false
     slide_vel += 4.35
     shot_pulse = 1.0
 
@@ -254,26 +256,44 @@ func _update_slide(delta: float) -> void:
         slide_pos = 0.039
         slide_vel = 0.0
     else:
-        var integrated := Springs.scalar(slide_pos, slide_vel, 8800.0, 92.0, delta)
-        slide_pos = clampf(integrated.x, 0.0, 0.045)
-        slide_vel = integrated.y
-        if slide_pos <= 0.0 or slide_pos >= 0.045:
-            # Topes reales: la corredera no rebota contra ellos.
-            slide_vel = maxf(0.0, slide_vel) if slide_pos <= 0.0 else minf(0.0, slide_vel)
+        # Se integra por subpasos en vez de usar Springs porque los avisos
+        # ("abrió", "volvió a batería", "tocó extraer") hay que verlos DENTRO del
+        # recorrido: a pocos FPS el ciclo entero de la corredera cabe en un frame
+        # y mirando solo el estado final no se recamaraba ni salía el casquillo.
+        # El subpaso de 2.5 ms es estable para k=8800 y c=92.
+        const SUBSTEP := 0.0025
+        var span := minf(delta, SUBSTEP * 64.0)
+        var steps := maxi(1, ceili(span / SUBSTEP))
+        var h := span / float(steps)
+        for _i in range(steps):
+            slide_vel += (-8800.0 * slide_pos - 92.0 * slide_vel) * h
+            slide_pos += slide_vel * h
+            if slide_pos < 0.0:
+                slide_pos = 0.0
+                slide_vel = maxf(0.0, slide_vel)
+            if slide_pos > 0.045:
+                slide_pos = 0.045
+                slide_vel = minf(0.0, slide_vel)
+
+            if not slide_extracted and slide_pos > 0.021:
+                slide_extracted = true
+                _spawn_shell()
+
+            # Alimentar el siguiente cartucho cuando la corredera vuelve a
+            # batería. Se detecta por evento (abrió y volvió a cerrar) y no por
+            # velocidad: la velocidad oscila alrededor de cero al asentarse.
+            if slide_pos > 0.02:
+                slide_open = true
+            if slide_open and slide_pos <= 0.001 and chamber <= 0 and mag > 0:
+                slide_open = false
+                mag -= 1
+                chamber = 1
+                _emit_ammo()
 
     if slide != null:
         slide.position.z = slide_pos
     if barrel_group != null:
         barrel_group.position.z = slide_pos * 0.34
-
-    if not slide_extracted and slide_pos > 0.021:
-        slide_extracted = true
-        _spawn_shell()
-
-    if slide_pos < 0.001 and slide_vel <= 0.0 and chamber <= 0 and mag > 0:
-        mag -= 1
-        chamber = 1
-        _emit_ammo()
 
     if slide_pos > 0.034 and mag <= 0 and chamber <= 0 and not reloading:
         slide_locked = true

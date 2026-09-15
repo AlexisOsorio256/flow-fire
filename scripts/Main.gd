@@ -34,6 +34,53 @@ func _ready() -> void:
         _run_geometrydebug()
     if OS.get_cmdline_user_args().has("--timeline"):
         _run_timeline()
+    if OS.get_cmdline_user_args().has("--audiocapture"):
+        _run_audiocapture()
+
+
+## Vuelca a WAV lo que sale por Master durante una secuencia guionizada
+## (disparos, recarga, pasos). Sirve para revisar el mix con el oído y para
+## medirlo (pico, clipping) sin depender de la placa de sonido de la máquina.
+## Uso: godot4 --path . --rendering-driver vulkan -- --audiocapture
+func _run_audiocapture() -> void:
+    var capture := AudioEffectCapture.new()
+    capture.buffer_length = 12.0
+    AudioServer.add_bus_effect(AudioServer.get_bus_index("Master"), capture)
+    await get_tree().create_timer(1.0).timeout
+    capture.clear_buffer()
+    for i in range(6):
+        var before: int = player.weapon.chamber
+        player.weapon.force_fire_once()
+        print("AUDIOCAP shot ", i, " chamber ", before, "->", player.weapon.chamber,
+            " mag=", player.weapon.mag, " slide=", snappedf(player.weapon.slide_pos, 0.0001))
+        await get_tree().create_timer(0.22).timeout
+    _force_reloadable_state()
+    player.weapon.start_reload()
+    await get_tree().create_timer(2.6).timeout
+    for _i in range(4):
+        GameAudio.play_2d("footstep", 0.0, randf_range(0.92, 1.08))
+        await get_tree().create_timer(0.5).timeout
+    var buffer := capture.get_buffer(capture.get_frames_available())
+    var path := ProjectSettings.globalize_path("res://captures/mix.wav")
+    _save_wav(buffer, path)
+    print("AUDIOCAPTURE frames=", buffer.size(), " path=", path)
+    get_tree().quit()
+
+
+func _save_wav(buffer: PackedVector2Array, path: String) -> void:
+    var data := PackedByteArray()
+    data.resize(buffer.size() * 4)
+    var offset := 0
+    for i in range(buffer.size()):
+        data.encode_s16(offset, int(clampf(buffer[i].x, -1.0, 1.0) * 32767.0))
+        data.encode_s16(offset + 2, int(clampf(buffer[i].y, -1.0, 1.0) * 32767.0))
+        offset += 4
+    var wav := AudioStreamWAV.new()
+    wav.format = AudioStreamWAV.FORMAT_16_BITS
+    wav.stereo = true
+    wav.mix_rate = int(AudioServer.get_mix_rate())
+    wav.data = data
+    wav.save_to_wav(path)
 
 
 ## Timeline de capturas: graba una secuencia guionizada (quieto, caminando,
