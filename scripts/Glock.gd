@@ -1333,6 +1333,7 @@ var pistol_scale := 1.0        # metros de arma por unidad del modelo
 var pistol_slide_dir := Vector3(0, 0, 1)   # avance de la corredera, en espacio local
 var pistol_mag_down := Vector3(0, -1, 0)   # (sin uso; se conserva el nombre por claridad del eje)
 var pistol_mag_rest_weapon := Transform3D.IDENTITY  # cargador en reposo, frame del arma
+var pistol_grip_local := Vector3.ZERO             # empuñadura medida, frame del arma
 var pistol_slide_units := Vector3(0, 0, 1) # metros -> unidades locales de la corredera
 var pistol_trigger_axis := Vector3(1, 0, 0)
 var pistol_trigger_pivot := Vector3.ZERO
@@ -1444,6 +1445,24 @@ func _build_high_fidelity_pistol() -> bool:
         if pistol_parts.has(hidden):
             (pistol_parts[hidden] as Node3D).visible = false
 
+    # Empuñadura: vertice mas bajo de la banda trasera del armazon, en el frame
+    # del arma. Es donde tiene que caer la mano, no el origen del frame: el arma
+    # se centra por su caja envolvente, asi que su empuñadura queda por debajo y
+    # por detras del origen.
+    var frame_verts := PackedVector3Array()
+    for v in _part_verts(inst, pistol_parts["Frame"], []):
+        frame_verts.append(holder.transform * v)
+    if not frame_verts.is_empty():
+        var fb := _bounds(frame_verts)
+        var best := Vector3(0.0, 1e9, 0.0)
+        var found := false
+        for v in frame_verts:
+            if v.z < fb.position.z + fb.size.z * 0.55:
+                continue
+            if not found or v.y < best.y:
+                best = v
+                found = true
+        pistol_grip_local = best if found else Vector3(0.0, fb.position.y, fb.position.z + fb.size.z)
     _apply_pistol_materials(inst)
     _calibrate_viewmodel_lights()
     _rebuild_markers_from_pistol(inst, holder)
@@ -1617,8 +1636,29 @@ func _install_arms() -> void:
     holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fix, Vector3.ZERO)
     force_update_transform()
     arms_skeleton.force_update_transform()
-    var rif_pos: Vector3 = (arms_skeleton.global_transform * rif_rest).origin
-    holder.global_transform.origin += (gun_frame as Node3D).global_transform.origin - rif_pos
+    # Se alinea el punto de agarre del rig (media de las dos manos) con la
+    # EMPUÑADURA medida de la OWK, no con el origen del frame: alinear el hueso
+    # del arma con el origen dejaba la mano desplazada, porque la empuñadura de
+    # la OWK cae por debajo y por detras de ese origen.
+    var hl := -1
+    var hr := -1
+    for b in range(arms_skeleton.get_bone_count()):
+        var bn := arms_skeleton.get_bone_name(b)
+        if bn.begins_with("Hand_L"):
+            hl = b
+        elif bn.begins_with("Hand_R"):
+            hr = b
+    if hl < 0 or hr < 0:
+        push_warning("Los brazos nuevos no traen huesos de mano")
+        holder.queue_free()
+        arms_root = null
+        return
+    var mano_l: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(hl)).origin
+    var mano_r: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(hr)).origin
+    var agarre: Vector3 = mano_l.lerp(mano_r, 0.5)
+    var empunadura: Vector3 = (gun_frame as Node3D).global_transform * pistol_grip_local
+    holder.global_transform.origin += empunadura - agarre
+    print("ARMS_AGARRE empunadura_owk=", pistol_grip_local.snapped(Vector3(0.001,0.001,0.001)))
 
     if arms_mesh != null:
         arms_mesh.visible = false
