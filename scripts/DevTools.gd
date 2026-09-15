@@ -37,6 +37,7 @@ const BENCH_VARIANTS := [
     {"id": "glow_off", "label": "glow_off"},
     {"id": "fog_off", "label": "fog_off"},
     {"id": "stage_omnis_off", "label": "luces_omni_interior_off"},
+    {"id": "stage_omnis_baked", "label": "luces_omni_fuera_del_pase_dinamico"},
     {"id": "dir_shadow_off", "label": "sombra_direccional_off"},
     {"id": "vm_lights_off", "label": "luces_viewmodel_off"},
     {"id": "viewmodel_off", "label": "viewmodel_oculto"},
@@ -242,9 +243,15 @@ func _bench_apply_variant(variant_id: String) -> void:
     _hud.post.visible = variant_id != "post_off"
     env.glow_enabled = variant_id != "glow_off"
     env.fog_enabled = variant_id != "fog_off"
-    var stage_on := variant_id != "stage_omnis_off"
+    var stage_on := variant_id != "stage_omnis_off" and variant_id != "stage_omnis_baked"
     for light in _bench_stage_omnis:
         light.visible = stage_on
+        # `stage_omnis_off` oculta las luces y `stage_omnis_baked` las saca del
+        # pase dinamico (BAKE_STATIC). Medido, las dos ahorran lo mismo
+        # (13.2 ms contra 12.8 ms), asi que ocultarlas YA mide bien su coste y
+        # la segunda solo sirve para confirmarlo por una via independiente.
+        light.light_bake_mode = (Light3D.BAKE_STATIC if variant_id == "stage_omnis_baked"
+            else Light3D.BAKE_DISABLED)
     if _bench_sun != null:
         _bench_sun.shadow_enabled = variant_id != "dir_shadow_off"
     var vm_lights_on := variant_id != "vm_lights_off"
