@@ -191,6 +191,10 @@ func _build_viewmodel_light() -> void:
 func setup(cam: Camera3D) -> void:
     camera = cam
     _compute_ads_offset()
+    # Los brazos se montan aqui y no en _ready porque necesitan la camara para
+    # anclarse, y en _ready todavia es null: Player llama a setup() despues de
+    # add_child.
+    _install_arms()
 
 
 func set_aim(value: bool) -> void:
@@ -707,7 +711,7 @@ func _install_pistol() -> void:
         return
     if glock_mesh != null:
         glock_mesh.visible = false
-    print("GLOCK arma=owk19 (brazos y animaciones del rig viejo)")
+    print("GLOCK arma=owk19")
 
 
 
@@ -1503,6 +1507,92 @@ func _apply_pistol_materials(root: Node3D) -> void:
         for child in node.get_children():
             stack.append(child)
     print("PISTOL_MATERIALES tocados=", seen.keys())
+
+
+## ---------------------------------------------------------------------------
+## Brazos del rig de Cransh.
+##
+## Este rig trae las animaciones CON los brazos, asi que no hay retargeting: se
+## sustituye el conjunto entero. Se alinea anclando su hueso de camara
+## (`Head_Cam_014`) a la camara del juego, que es un punto que el propio autor
+## puso donde va el ojo: en vez de suponer escala y orientacion, se mide.
+##
+## Solo se usa la malla de brazos. El GLB trae ademas una pistola propia
+## (`xd_frame`, 17 818 tris) que no se dibuja porque el arma de FlowFire es la
+## OWK 19.
+## ---------------------------------------------------------------------------
+const ARMS_PATH := "res://assets/models/fps_pistol_arms.glb"
+
+var arms_root: Node3D
+var arms_skeleton: Skeleton3D
+var arms_player: AnimationPlayer
+var arms_ok := false
+
+func _install_arms() -> void:
+    # OPT-IN con --newarms. El montaje esta a medio resolver: el anclaje por el
+    # hueso de camara coloca bien el punto de vista, pero los brazos todavia no
+    # encuadran (queda uno suelto y sobredimensionado y el arma flota). Hasta que
+    # eso se cierre, el juego usa los brazos del rig viejo, que funcionan.
+    if not OS.get_cmdline_user_args().has("--newarms"):
+        return
+    var packed := load(ARMS_PATH) as PackedScene
+    if packed == null:
+        push_warning("No se pudieron cargar los brazos nuevos: " + ARMS_PATH)
+        return
+    arms_root = packed.instantiate()
+    arms_root.name = "ArmsCransh"
+    arms_skeleton = arms_root.find_child("Skeleton3D", true, false) as Skeleton3D
+    arms_player = arms_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+    if arms_skeleton == null or camera == null:
+        push_warning("Los brazos nuevos no traen esqueleto utilizable")
+        arms_root.queue_free()
+        arms_root = null
+        return
+    # La raiz del GLB trae su propia escala/rotacion de Sketchfab. NO se puede
+    # sobrescribir su transform: hay que meterla bajo un envoltorio y mover el
+    # envoltorio. Sin esto las proporciones se pierden y los brazos salen
+    # gigantes (medido: se comian media pantalla).
+    var holder := Node3D.new()
+    holder.name = "ArmsMount"
+    recoil_node.add_child(holder)
+    holder.add_child(arms_root)
+
+    # Fuera la pistola que trae el asset: el arma es la OWK 19. Los nombres que
+    # genera el importador llevan sufijo, asi que se filtra por prefijo.
+    var stack: Array = [arms_root]
+    while not stack.is_empty():
+        var n = stack.pop_back()
+        if n is MeshInstance3D and n.mesh != null and str(n.name).begins_with("xd_frame"):
+            (n as MeshInstance3D).visible = false
+        for c in n.get_children():
+            stack.append(c)
+
+    var cam_bone := -1
+    for b in range(arms_skeleton.get_bone_count()):
+        if arms_skeleton.get_bone_name(b).begins_with("Head_Cam"):
+            cam_bone = b
+            break
+    if cam_bone < 0:
+        push_warning("Los brazos nuevos no traen hueso de camara: no se puede anclar")
+        arms_root.queue_free()
+        arms_root = null
+        return
+    # Se ancla corrigiendo en espacio mundo: se mide donde quedo el hueso de
+    # camara del rig y se aplica al envoltorio la correccion que lo lleva a la
+    # camara del juego. Asi no hay que reconstruir a mano la cadena de nodos ni
+    # suponer escalas.
+    (recoil_node as Node3D).force_update_transform()
+    camera.force_update_transform()
+    arms_skeleton.force_update_transform()
+    var head_rest: Transform3D = arms_skeleton.get_bone_global_rest(cam_bone)
+    var head_world: Transform3D = arms_skeleton.global_transform * head_rest
+    holder.global_transform = camera.global_transform * head_world.affine_inverse() * holder.global_transform
+
+    if arms_mesh != null:
+        arms_mesh.visible = false
+    arms_ok = true
+    print("ARMS_CRANSH ok cam_rest=", head_rest.origin.snapped(Vector3(0.001, 0.001, 0.001)),
+        " anim=", arms_player.get_animation_list() if arms_player != null else [])
 
 
 ## Vuelve a medir boca, mira y puerto de expulsion sobre el arma NUEVA.
