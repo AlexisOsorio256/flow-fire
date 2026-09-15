@@ -1733,8 +1733,8 @@ func _install_arms() -> void:
             # DEMASIADO brazo: la masa de los hombros y las bocas de las mangas
             # entraban en cuadro. Retrasando el conjunto esa masa queda detras de
             # la camara y solo se ven antebrazos, manos y arma.
-            var RETRASO := 0.200
-            var BAJADA := 0.230
+            var RETRASO := 0.130
+            var BAJADA := 0.265
             var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y) - BAJADA, -centro.z + RETRASO)
             holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
             # La mira se mide en el espacio del RIG, no en el frame del arma. En
