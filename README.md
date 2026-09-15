@@ -24,6 +24,7 @@ Este repo se mantiene pequeño a propósito. La prioridad es **profundizar**, no
 12. **Assets:** licencia compatible y crédito en `CREDITS_*.md` en el mismo cambio. Nunca NonCommercial.
 13. **Commits pequeños y explicables.** Un tema por commit. No mezclar una feature con un refactor grande no solicitado.
 14. **Mantén este README corto y verdadero.** Corrige información vieja; no sigas agregando párrafos duplicados. Si una regla ya existe, no la repitas.
+15. **Rendimiento es parte de la calidad.** No aceptar FPS bajos como precio del realismo, pero tampoco “optimizar” degradando la imagen a ciegas. Primero perfilar y comparar A/B; eliminar trabajo redundante, overdraw, luces/sombras innecesarias, lecturas de pantalla evitables, allocations y coste invisible. Si una técnica visual cara debe cambiarse, sustituirla por una solución de calidad equivalente o mejor, no simplemente apagar calidad.
 
 ### Orden de prioridad
 
@@ -81,6 +82,7 @@ Mientras el usuario no cambie la fase, el trabajo debe concentrarse en:
 - estabilidad ante FPS bajos e hitches;
 - rendimiento y perfil Android;
 - claridad visual del bodycam;
+- sustituir assets de primera persona visiblemente low-poly cuando la propia geometría limite el realismo; un shader puede mejorar material y microdetalle, pero no corrige silueta, topología, manos/dedos pobres ni una forma incorrecta;
 - eliminar bugs, residuos y contradicciones.
 
 No ampliar el juego para “aprovechar” que una tarea terminó pronto.
@@ -93,6 +95,7 @@ No ampliar el juego para “aprovechar” que una tarea terminó pronto.
 - **Física:** Jolt, 60 ticks/s, unidades SI.
 - **Perfil de desarrollo actual:** Forward+ a 1920×1080.
 - **Destino de producción:** PC + Android; el perfil móvil final todavía debe medirse en dispositivo real.
+- **Objetivo de rendimiento:** 60 FPS como meta de diseño. Una medición muy por debajo de eso es un problema a investigar, no un nuevo estándar de aceptación.
 - **Autoloads actuales:** `GameAudio`, `ImpactFX`, `Ballistics`.
 - **Escena principal:** `scenes/Main.tscn`.
 
@@ -167,6 +170,8 @@ godot4 --path . --rendering-driver vulkan -- --fpsbench
 godot4 --path . --rendering-driver vulkan -- --audiocapture
 ```
 
+Para optimización, medir siempre **la misma escena, resolución, cámara y duración**. Hacer cambios de una variable cada vez cuando sea posible. No declarar una mejora por una sola corrida ruidosa: repetir y comparar.
+
 ### Definition of Done
 
 Un cambio no está terminado porque “funciona”. Está terminado cuando:
@@ -176,9 +181,10 @@ Un cambio no está terminado porque “funciona”. Está terminado cuando:
 3. no crea una segunda autoridad ni arquitectura innecesaria;
 4. se midió o inspeccionó el aspecto que modifica;
 5. no empeora perceptiblemente la estabilidad ni el rendimiento; una caída >10% requiere causa clara y decisión consciente;
-6. no introduce assets sin licencia/crédito;
-7. elimina código/documentación obsoleta que el propio cambio deje atrás;
-8. el resultado se siente más sólido que antes, no simplemente más complejo.
+6. una optimización visual demuestra con captura A/B que no degradó de forma apreciable la identidad, nitidez o realismo;
+7. no introduce assets sin licencia/crédito;
+8. elimina código/documentación obsoleta que el propio cambio deje atrás;
+9. el resultado se siente más sólido que antes, no simplemente más complejo.
 
 ---
 
@@ -206,6 +212,8 @@ Antes de controles táctiles, el input debe pasar por acciones reutilizables. **
 - **Código del proyecto:** MIT. Ver `LICENSE`.
 
 Nunca sustituir un asset bueno sólo por novedad. Cambiarlo únicamente si mejora de forma visible/medible el resultado o resuelve una limitación real.
+
+Los assets de **primera persona** tienen un estándar más alto que el decorado: arma, manos, brazos, cargador y casquillo ocupan gran parte de la pantalla y no pueden verse deliberadamente low-poly si el objetivo visual es realista. Se permite buscar y sustituir/remapear estos assets por otros de mayor fidelidad con licencia comercial compatible, siempre midiendo coste de memoria/render y conservando la lógica y animación correctas.
 
 ---
 
