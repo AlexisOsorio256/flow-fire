@@ -35,6 +35,31 @@
 
 ---
 
+## FPS pistol animations — Cransh
+
+- Archivo: `assets/models/fps_pistol_arms.glb` (12.39 MB, md5 `8f0dd2f35061ca4442e22e24701fa25d`).
+- Fuente: Sketchfab — https://sketchfab.com/3d-models/fps-pistol-animations-0d7a343dcb6f401197a73c91aee93f6d
+- Autor: **Cransh** — https://sketchfab.com/ccransh
+- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en `asset.extras` del GLB.
+- Atribución a incluir: *"FPS pistol animations" by Cransh, licensed under CC-BY 4.0, via Sketchfab*.
+- 32 670 triángulos en 4 mallas, **81 huesos**, 5 animaciones propias:
+  `FPS_Pistol_Idle`, `FPS_Pistol_Walk`, `FPS_Pistol_Fire`, `FPS_Pistol_Reload_easy`
+  y `FPS_Pistol_Reload_full`.
+- El rig trae huesos específicos de pistola: **`Rif`** (arma), **`Pmag`** (cargador) y
+  **`Trigger`** (gatillo), además de cadenas de dedos completas y huesos de IK.
+- Las dos recargas se corresponden con las dos que ya tiene FlowFire: `Reload_easy`
+  (conserva la recámara) con la recarga táctica y `Reload_full` (libera la
+  corredera) con la de vacío.
+- **Optimización aplicada**: se pasó de 114.55 MB a 12.39 MB limitando las
+  texturas a 1024 con `gltf-transform resize`, y se podaron 8 nodos con `prune`.
+  Comprobado después de optimizar que **la metadata de licencia sigue dentro del
+  GLB**: `asset.extras` conserva autor, licencia y fuente, así que la atribución
+  viaja con el fichero y no depende sólo de este documento.
+- Contiene además una pistola propia (`xd_frame`, 17 818 tris) que **no se usa**:
+  FlowFire mantiene la OWK 19. Falta decidir si se poda del fichero.
+- **Pendiente de integrar.** Sustituirá a los brazos y las animaciones del rig de
+  J-Toastie, que entonces se podrá borrar junto con su crédito.
+
 ## Nota: estado de la busqueda de brazos realistas
 
 Los dos rigs de brazos que se probaron (`fps_arms.glb` de DJMaesen y
