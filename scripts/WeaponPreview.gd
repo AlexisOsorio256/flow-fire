@@ -1,10 +1,12 @@
 extends Node3D
 
-## Previsualizador del arma: instancia el MISMO Glock que usa el juego (con sus
-## materiales por primitiva y su alineación medida en runtime) y lo fotografía
-## desde varios ángulos, para revisar el acabado sin abrir el juego.
+## Previsualizador del arma: instancia el MISMO Glock que usa el juego y lo
+## fotografía desde varios ángulos, para revisar el acabado sin abrir una partida.
 ##
-## Uso: godot4 --path . --scene res://scenes/WeaponPreview.tscn --rendering-driver vulkan
+## Uso: godot4 --path . --scene res://scenes/WeaponPreview.tscn
+## No pasar `--rendering-driver vulkan` a secas: puede forzar Forward+ y saltarse
+## el renderer Mobile del proyecto. Si se compara un renderer, especificar también
+## `--rendering-method` de forma explícita.
 ## Salida: /tmp/weapon_preview_<ángulo>.png
 
 const GLOCK_SCRIPT := preload("res://scripts/Glock.gd")
