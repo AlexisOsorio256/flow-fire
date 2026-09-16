@@ -46,6 +46,10 @@ func _run_dev_tools() -> void:
         tools.run_probe()
     if args.has("--geometrydebug"):
         tools.run_geometrydebug()
+    if args.has("--armdiag"):
+        tools.run_armdiag()
+    if args.has("--sightdiag"):
+        tools.run_sightdiag()
     if args.has("--timeline"):
         tools.run_timeline()
     if args.has("--slowmo"):

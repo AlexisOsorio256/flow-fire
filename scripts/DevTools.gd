@@ -702,13 +702,19 @@ func _visual_apply_state(state: String) -> void:
 ## time_scale 0 no avanza, así que la pose de brazos es la misma en cada corrida.
 func _visual_park_animation(anim_name: String, t: float) -> void:
     var w = _player.weapon
-    if w.animation_player == null:
-        return
-    var resolved: String = w._resolve_animation(anim_name)
-    if resolved == "":
-        return
-    w.animation_player.play(resolved)
-    w.animation_player.seek(t, true)
+    if w.animation_player != null:
+        var resolved: String = w._resolve_animation(anim_name)
+        if resolved != "":
+            w.animation_player.play(resolved)
+            w.animation_player.seek(t, true)
+    if w.arms_player != null:
+        var arms_anim := "FPS_Pistol_Idle"
+        if anim_name == "Shoot":
+            arms_anim = "FPS_Pistol_Fire"
+        elif anim_name == "Reload":
+            arms_anim = "FPS_Pistol_Reload_easy"
+        if w._play_arms_anim(arms_anim, true):
+            w.arms_player.seek(t, true)
 
 
 ## Vaina en una posición de vuelo fija. La trayectoria real dura milisegundos y
@@ -756,6 +762,12 @@ func _visual_pin_post(state: String) -> void:
     }
     _visual_pin_active = true
     _process(0.0)
+    if w.sight_marker != null and w.muzzle != null:
+        var camv: Camera3D = _player.camera
+        var pm: Vector2 = camv.unproject_position((w.sight_marker as Node3D).global_position)
+        var pb: Vector2 = camv.unproject_position((w.muzzle as Node3D).global_position)
+        print("VISUAL_MIRA ", state, " mira_px=(", snappedf(pm.x, 1.0), ",", snappedf(pm.y, 1.0),
+            ") boca_px=(", snappedf(pb.x, 1.0), ",", snappedf(pb.y, 1.0), ")")
 
 
 ## Espera a que la pose del arma se asiente (la transición hip<->ADS tarda ~0.5 s
@@ -788,6 +800,294 @@ func _probe_state(state_name: String) -> void:
     _hud.post.visible = true
     Engine.time_scale = 1.0
     print("PROBE ", state_name, " listo")
+
+
+## Huesos que deciden el encuadre de los brazos: hombro, codo, mano y punta de
+## cada dedo. `Rif` es el arma, y sirve de referencia de "donde deberia estar la
+## mano izquierda si el agarre fuera a dos manos".
+const ARM_BONES := [
+    "Arm_L", "UpArm_L", "Forearm_L", "Hand_L",
+    "Bone_L.007", "Bone_L.011", "Bone_L.015", "Bone_L.019", "Bone_L.022",
+    "Arm_R", "UpArm_R", "Forearm_R", "Hand_R",
+    "Bone_R.007", "Bone_R.011", "Bone_R.015", "Bone_R.019", "Bone_R.022",
+    "Rif",
+]
+
+
+## Orientacion real del arma leida de los HUESOS del rig (no de los marcadores,
+## que en el paquete coherente caen lejos de la pistola visible). `Rif` es el
+## hueso del arma y `Pmag` el del cargador: el cargador entra hacia ARRIBA en la
+## empuñadura, asi que su eje es la vertical del arma, y la boca es
+## perpendicular a esa vertical. Los tres ejes se dan en espacio de CAMARA
+## (x=derecha, y=arriba, z=hacia atras), que es donde "apunta arriba o abajo"
+## tiene sentido.
+func _print_bone_axes(label: String) -> void:
+    var w = _player.weapon
+    var sk: Skeleton3D = w.arms_skeleton
+    if sk == null:
+        return
+    var cam: Camera3D = _player.camera
+    var inv_cam := cam.global_transform.basis.inverse()
+    for bone_name in ["Rif", "Pmag"]:
+        var idx := -1
+        for b in range(sk.get_bone_count()):
+            if sk.get_bone_name(b).begins_with(bone_name):
+                idx = b
+                break
+        if idx < 0:
+            continue
+        var world_b: Basis = sk.global_transform.basis * sk.get_bone_global_pose(idx).basis
+        var cb: Basis = inv_cam * world_b
+        print("BONE_AXES ", label, " ", bone_name,
+            " x=", cb.x.snapped(Vector3(0.001, 0.001, 0.001)),
+            " y=", cb.y.snapped(Vector3(0.001, 0.001, 0.001)),
+            " z=", cb.z.snapped(Vector3(0.001, 0.001, 0.001)))
+
+
+## Vértices de una malla ESQUELETIZADA en la pose viva, en el espacio del nodo
+## indicado. Para una malla con piel, `mesh.surface_get_arrays()[VERTEX]` está en
+## el espacio de BIND: transformarlos por la cadena del nodo da la pose de
+## reposo, no la que se ve. La deformación real es
+##   p = suma_i  w_i * (pose_i * rest_i^-1) * v
+## y es la única forma de saber dónde está de verdad la pistola que el autor
+## esculpió dentro del rig de los brazos.
+func _skinned_verts(mi: MeshInstance3D, sk: Skeleton3D, space: Node3D) -> PackedVector3Array:
+    var out := PackedVector3Array()
+    var inv_rest: Array = []
+    for b in range(sk.get_bone_count()):
+        inv_rest.append(sk.get_bone_global_rest(b).affine_inverse())
+    for si in range(mi.mesh.get_surface_count()):
+        var arrays := mi.mesh.surface_get_arrays(si)
+        var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+        var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+        var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+        for i in range(verts.size()):
+            var v: Vector3 = verts[i]
+            if bones.size() < (i + 1) * 4:
+                out.append(v)
+                continue
+            var acc := Vector3.ZERO
+            var total := 0.0
+            for k in range(4):
+                var w := weights[i * 4 + k]
+                if w <= 0.0:
+                    continue
+                var b := bones[i * 4 + k]
+                acc += w * ((sk.get_bone_global_pose(b) * inv_rest[b]) * v)
+                total += w
+            if total > 0.0:
+                out.append(acc / total)
+            else:
+                out.append(v)
+    return out
+
+
+## Diagnóstico de la mira: dónde está de verdad la pistola del autor dentro del
+## rig de brazos, en qué ejes, y dónde cree el juego que está la mira. Sin esto
+## el ADS se corrige a ciegas.
+func run_sightdiag() -> void:
+    await get_tree().create_timer(0.8).timeout
+    var w = _player.weapon
+    var sk: Skeleton3D = w.arms_skeleton
+    if sk == null or w.arms_root == null:
+        print("SIGHTDIAG sin brazos")
+        get_tree().quit()
+        return
+    var mallas: Array = []
+    var stack: Array = [w.arms_root]
+    var mayor := -1
+    var brazos: MeshInstance3D = null
+    while not stack.is_empty():
+        var n = stack.pop_back()
+        if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+            mallas.append(n)
+            var vc := 0
+            for si in range((n as MeshInstance3D).mesh.get_surface_count()):
+                vc += ((n as MeshInstance3D).mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+            if vc > mayor:
+                mayor = vc
+                brazos = n
+        for c in n.get_children():
+            stack.append(c)
+    for m in mallas:
+        var mi := m as MeshInstance3D
+        var vv := _skinned_verts(mi, sk, w.arms_root)
+        var tris := 0
+        for si in range(mi.mesh.get_surface_count()):
+            var idx: PackedInt32Array = mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_INDEX]
+            tris += idx.size() / 3 if idx.size() > 0 else (mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size() / 3
+        var bb := _bounds_of(vv)
+        print("SIGHTDIAG malla=", mi.name, " verts=", vv.size(), " tris=", tris,
+            " caja=", bb.size.snapped(Vector3(0.001, 0.001, 0.001)),
+            " es_brazos=", mi == brazos)
+    var pv := PackedVector3Array()
+    for m in mallas:
+        if m == brazos:
+            continue
+        pv.append_array(_skinned_verts(m as MeshInstance3D, sk, w.arms_root))
+    if pv.is_empty():
+        print("SIGHTDIAG sin malla de pistola")
+        get_tree().quit()
+        return
+    # Proyeccion a pantalla de los vertices de la pistola: si esto no coincide
+    # con la pistola que se ve en la captura, el fallo esta en el skinning.
+    var camv: Camera3D = _player.camera
+    var smin := Vector2(INF, INF)
+    var smax := Vector2(-INF, -INF)
+    var dentro := 0
+    for v in pv:
+        var wv: Vector3 = sk.global_transform * v
+        if camv.is_position_behind(wv):
+            continue
+        var sp := camv.unproject_position(wv)
+        smin = smin.min(sp)
+        smax = smax.max(sp)
+        dentro += 1
+    print("SIGHTDIAG pistola_px min=(", snappedf(smin.x, 1.0), ",", snappedf(smin.y, 1.0),
+        ") max=(", snappedf(smax.x, 1.0), ",", snappedf(smax.y, 1.0), ") visibles=", dentro, "/", pv.size())
+    var marc: Vector3 = (w.sight_marker as Node3D).global_position
+    var mp := camv.unproject_position(marc)
+    print("SIGHTDIAG marcador_px=(", snappedf(mp.x, 1.0), ",", snappedf(mp.y, 1.0), ") mire_en_caja=",
+        marc.x > -1e9, " dist_marcador_pistola=", snappedf(marc.distance_to(_bounds_of(pv).get_center() + (sk.global_transform.origin - sk.global_transform.origin)), 0.001))
+    var caja := _bounds_of(pv)
+    print("SIGHTDIAG caja_viva_esqueleto=", caja.position.snapped(Vector3(0.001, 0.001, 0.001)),
+        " tam=", caja.size.snapped(Vector3(0.001, 0.001, 0.001)), " verts=", pv.size())
+    var rif := -1
+    var pmag := -1
+    for b in range(sk.get_bone_count()):
+        var bn := sk.get_bone_name(b)
+        if bn.begins_with("Rif"):
+            rif = b
+        elif bn.begins_with("Pmag"):
+            pmag = b
+    if rif >= 0:
+        print("SIGHTDIAG Rif_rest origin=", sk.get_bone_global_rest(rif).origin.snapped(Vector3(0.001, 0.001, 0.001)),
+            " x=", sk.get_bone_global_rest(rif).basis.x.snapped(Vector3(0.001, 0.001, 0.001)),
+            " y=", sk.get_bone_global_rest(rif).basis.y.snapped(Vector3(0.001, 0.001, 0.001)),
+            " z=", sk.get_bone_global_rest(rif).basis.z.snapped(Vector3(0.001, 0.001, 0.001)))
+        print("SIGHTDIAG Rif_pose origin=", sk.get_bone_global_pose(rif).origin.snapped(Vector3(0.001, 0.001, 0.001)),
+            " z=", sk.get_bone_global_pose(rif).basis.z.snapped(Vector3(0.001, 0.001, 0.001)))
+        # Vértices de la pistola en el frame del hueso del arma: ahí los ejes sí
+        # tienen significado conocido (ver el informe del barrido de ángulos).
+        var inv_pose := sk.get_bone_global_pose(rif).affine_inverse()
+        var en_hueso := PackedVector3Array()
+        for v in pv:
+            en_hueso.append(inv_pose * v)
+        var ch := _bounds_of(en_hueso)
+        print("SIGHTDIAG caja_en_hueso pos=", ch.position.snapped(Vector3(0.001, 0.001, 0.001)),
+            " tam=", ch.size.snapped(Vector3(0.001, 0.001, 0.001)))
+    if pmag >= 0 and rif >= 0:
+        var pm: Vector3 = sk.get_bone_global_pose(rif).affine_inverse() * sk.get_bone_global_pose(pmag).origin
+        print("SIGHTDIAG Pmag_en_Rif=", pm.snapped(Vector3(0.001, 0.001, 0.001)))
+    if w.sight_marker != null and w.gun_frame != null:
+        var a: Transform3D = sk.global_transform.affine_inverse() * (w.gun_frame as Node3D).global_transform
+        var m: Vector3 = a * (w.sight_marker as Node3D).position
+        print("SIGHTDIAG sight_marker_en_esqueleto=", m.snapped(Vector3(0.001, 0.001, 0.001)),
+            " dentro_de_caja=", caja.has_point(m))
+    print("SIGHTDIAG_DONE")
+    get_tree().quit()
+
+
+## Tabla de encuadre de los huesos de los brazos: por cada hueso, donde cae en
+## pantalla y con cuanto margen. Un margen negativo significa que el hueso queda
+## FUERA del viewport; "detras" significa que esta por detras del plano de la
+## camara. Esto es lo que decide si los hombros salen o no, sin discutirlo.
+func run_armdiag() -> void:
+    await get_tree().create_timer(0.8).timeout
+    _player.weapon.set_aim(false)
+    await _settle_pose()
+    _print_arm_frame("hip")
+    _player.weapon.set_aim(true)
+    await _settle_pose()
+    _print_arm_frame("ads")
+    _player.weapon.set_aim(false)
+    await _settle_pose()
+    _print_arm_screen_box("hip")
+    print("ARM_DIAG_DONE")
+    get_tree().quit()
+
+
+func _print_arm_frame(label: String) -> void:
+    var w = _player.weapon
+    var sk: Skeleton3D = w.arms_skeleton
+    var cam: Camera3D = _player.camera
+    if sk == null:
+        print("ARM ", label, " sin esqueleto de brazos")
+        return
+    var vp := get_viewport().get_visible_rect().size
+    var cam_t: Transform3D = cam.global_transform
+    print("ARM_FRAME ", label, " viewport=", vp)
+    for prefix in ARM_BONES:
+        var idx := -1
+        for b in range(sk.get_bone_count()):
+            if sk.get_bone_name(b).begins_with(prefix):
+                idx = b
+                break
+        if idx < 0:
+            continue
+        var world: Vector3 = sk.global_transform * sk.get_bone_global_pose(idx).origin
+        # Distancia a lo largo del eje de vision: negativa = delante de la camara.
+        var depth: float = (world - cam_t.origin).dot(-cam_t.basis.z)
+        var side: float = (world - cam_t.origin).dot(cam_t.basis.x)
+        var up: float = (world - cam_t.origin).dot(cam_t.basis.y)
+        var screen := cam.unproject_position(world)
+        var margin := minf(minf(screen.x, vp.x - screen.x), minf(screen.y, vp.y - screen.y))
+        print("ARM ", label, " ", prefix, " depth=", snappedf(depth, 0.001),
+            " side=", snappedf(side, 0.001), " up=", snappedf(up, 0.001),
+            " px=(", snappedf(screen.x, 1.0), ",", snappedf(screen.y, 1.0), ")",
+            " margen=", snappedf(margin, 1.0),
+            " ", ("DETRAS" if depth <= 0.0 else ("DENTRO" if margin > 0.0 else "FUERA")))
+    _print_bore(label)
+    _print_bone_axes(label)
+
+
+## Direccion real de la boca del arma respecto al eje de vision, y donde cae el
+## extremo de cada punta en pantalla. Es lo que decide si el arma "apunta hacia
+## arriba" o hacia abajo: la perspectiva sola enganya, porque el extremo lejano
+## sube hacia el horizonte aunque el arma este inclinada hacia el suelo.
+func _print_bore(label: String) -> void:
+    var w = _player.weapon
+    if w.muzzle == null or w.sight_marker == null:
+        return
+    var cam: Camera3D = _player.camera
+    var world_muzzle: Vector3 = (w.muzzle as Node3D).global_transform.origin
+    var world_sight: Vector3 = (w.sight_marker as Node3D).global_transform.origin
+    var dir := (world_muzzle - world_sight)
+    if dir.length() < 0.0001:
+        return
+    dir = dir.normalized()
+    var en_cam: Vector3 = cam.global_transform.basis.inverse() * dir
+    var elevacion := rad_to_deg(asin(clampf(en_cam.y, -1.0, 1.0)))
+    var y_mira := cam.unproject_position(world_sight).y
+    var y_boca := cam.unproject_position(world_muzzle).y
+    print("BORE ", label, " elevacion=", snappedf(elevacion, 0.1), " grados (positivo=arriba)",
+        " profundidad_boca=", snappedf((world_muzzle - cam.global_transform.origin).dot(-cam.global_transform.basis.z), 0.001),
+        " px_y_mira=", snappedf(y_mira, 1.0), " px_y_boca=", snappedf(y_boca, 1.0),
+        " ", ("BOCA_ARRIBA" if y_boca < y_mira else "BOCA_ABAJO"))
+
+
+## Caja en pantalla de cada malla de los brazos: dice si la masa grande (hombro)
+## asoma por algun borde, que es lo que se ve como "sale el hombro".
+func _print_arm_screen_box(label: String) -> void:
+    var w = _player.weapon
+    if w.arms_root == null:
+        return
+    var cam: Camera3D = _player.camera
+    var stack: Array = [w.arms_root]
+    var vp := get_viewport().get_visible_rect().size
+    while not stack.is_empty():
+        var n = stack.pop_back()
+        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
+            var mi := n as MeshInstance3D
+            var box := _screen_bbox(_bind_aabb(mi), mi.global_transform, cam)
+            var smin: Vector2 = box["min"]
+            var smax: Vector2 = box["max"]
+            var dentro := smax.x > 0.0 and smax.y > 0.0 and smin.x < vp.x and smin.y < vp.y
+            print("ARM_BOX ", label, " ", mi.name, " px_min=(", snappedf(smin.x, 1.0), ",", snappedf(smin.y, 1.0),
+                ") px_max=(", snappedf(smax.x, 1.0), ",", snappedf(smax.y, 1.0), ")",
+                " ", ("TOCA_ENCUADRE" if dentro else "FUERA_ENCUADRE"))
+        for c in n.get_children():
+            stack.append(c)
 
 
 func run_probe() -> void:

@@ -3,9 +3,9 @@ extends Node3D
 signal shot_fired
 signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 
-## Rig completo del pack "Fps Rig" (J-Toastie, CC-BY 3.0): el Glock y los
-## brazos comparten esqueleto y trae las animaciones Grip/Idle/Shoot/Reload.
-## La pose de agarre es la del autor: nada de IK propio deformando el skin.
+## El rig de J-Toastie conserva el esqueleto y la mecánica heredada del arma.
+## Los brazos visibles y sus animaciones vienen del rig de Cransh, instalado
+## despues junto a la OWK 19.
 const MODEL_PATH := "res://assets/models/fps_rig.glb"
 const MAG_SIZE := 17
 const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
@@ -13,6 +13,7 @@ const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
 const ADS_SIGHT_DROP := 0.0  # La mira va clavada en el centro: donde apunta, impacta.
 const HIP_POS := Vector3(0.0, 0.062, 0.0)  # Pose de lista: el arma va baja pero visible.
 const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
+const HAND_GRIP_RAISE := 0.024  # Ajuste del punto de muñeca medido en captura.
 # Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm) y un
 # impulso también real (4 m/s): el ciclo sale ~105 ms, el doble que los ~50 ms
 # de una Glock de verdad, porque por debajo de eso el ojo (y un frame a 60 FPS)
@@ -129,7 +130,7 @@ var model_units_per_meter := 0.241
 var bone_units_per_meter := 0.241  # calibrado en runtime
 var trigger_visual := 0.0
 var sight_marker: Node3D
-var ads_offset := Vector3(-0.17, 0.138, 0.105)
+var ads_offset := Vector3(0.0, 0.15, -0.24)
 # Base real del arma medida en runtime sobre la malla del GLB (ver _measure_mesh).
 var gun_frame_bind := Basis.IDENTITY
 var bind_in_skeleton := Transform3D.IDENTITY
@@ -288,6 +289,7 @@ func _process(delta: float) -> void:
     _update_recoil(delta)
     _update_reload(delta)
     _update_pose(delta)
+    _update_arms_mount()
     _apply_bone_poses()
 
     muzzle_timer = maxf(0.0, muzzle_timer - delta)
@@ -550,10 +552,19 @@ func _update_pose(delta: float) -> void:
     rot.x += sway.y * 0.5 + sin(idle_phase * 1.05) * 0.0025 * (1.0 - aim_blend * 0.6) - move_y * 0.008
     rot.y += sway.x * 0.5 + sin(idle_phase * 0.73 + 1.0) * 0.0020 * (1.0 - aim_blend * 0.6)
     rot.z += -move_x * 0.012 - sin(bob_phase) * 0.012 * sprint_blend
+    # El tope tiene que dejar pasar la pose de ADS: la pistola sube desde la
+    # postura baja de descanso hasta la mira sin quedar recortada.
+    # El limite sigue existiendo para el balanceo, el bob y el retroceso, que son
+    # los que podian desmadrar el arma.
     pos.x = clampf(pos.x, -0.30, 0.30)
-    pos.y = clampf(pos.y, -0.30, 0.18)
-    pos.z = clampf(pos.z, -0.20, 0.15)
-    rot.x = clampf(rot.x, -0.35, 0.35)
+    pos.y = clampf(pos.y, -0.30, maxf(0.18, ads_pos.y))
+    pos.z = clampf(pos.z, minf(-0.20, ads_pos.z), 0.15)
+    # El límite del balanceo no debe recortar una inclinación ADS elegida por
+    # captura: la pose de apuntado puede necesitar más de 20° para que el cañón
+    # quede apenas por debajo del frente, mientras hip y el retroceso conservan
+    # el límite corto.
+    var rot_limit := maxf(0.35, absf(ads_rot.x) + 0.015)
+    rot.x = clampf(rot.x, -rot_limit, rot_limit)
     rot.y = clampf(rot.y, -0.35, 0.35)
     rot.z = clampf(rot.z, -0.25, 0.25)
 
@@ -565,6 +576,18 @@ func _update_pose(delta: float) -> void:
     rot.z += reload_pose_blend * RELOAD_POSE_ROLL
     pose_root.position = pos
     pose_root.rotation = rot
+
+
+## Rehace el montaje de brazos segun el estado de punteria. Se actualiza por
+## frame porque cuelga del frame del arma, que se mueve con la pose.
+func _update_arms_mount() -> void:
+    if arms_mount == null or gun_frame == null:
+        return
+    var pitch := lerpf(arms_pitch_hip, arms_pitch_ads, aim_blend)
+    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(pitch))
+    var fijo := Basis.from_scale(Vector3(1.0, 1.0, arms_stretch)) * inclinacion * arms_fix
+    var esc := Vector3(arms_escala, arms_escala, arms_escala)
+    arms_mount.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fijo.scaled(esc), arms_delta)
 
 
 func _spawn_shell() -> void:
@@ -695,8 +718,7 @@ func _build_model() -> void:
     _install_pistol()
 
 
-## Sustituye la malla de arma del rig viejo por la pistola de alta fidelidad,
-## conservando brazos, esqueleto y animaciones.
+## Sustituye la malla de arma del rig viejo por la pistola de alta fidelidad.
 ##
 ## La OWK 19 es ya el arma por defecto. Se gano el puesto comparando con la
 ## misma camara: en ADS y con la corredera atras se leen las estrias de la
@@ -705,8 +727,8 @@ func _build_model() -> void:
 ## boca/mira/puerto se miden sobre su propia geometria y sus texturas ocupan 38 MB
 ## en vez de 208.
 ##
-## La malla vieja sigue en el GLB porque es de donde salen los BRAZOS y las cuatro
-## animaciones, y se puede recuperar entera con --oldgun para seguir comparando.
+## La malla vieja sigue en el GLB porque la logica mecanica usa su esqueleto y
+## sus marcadores internos; no es el viewmodel visible.
 func _install_pistol() -> void:
     if OS.get_cmdline_user_args().has("--oldgun"):
         print("GLOCK arma=rig_viejo (--oldgun)")
@@ -1157,9 +1179,6 @@ func _bounds(verts: PackedVector3Array) -> AABB:
         mx = mx.max(v)
     return AABB(mn, mx - mn)
 
-
-## Centroide de los vértices dentro de una banda de la caja: `z0`/`z1` y `y0`/`y1`
-## son fracciones de la longitud (boca -> culata) y de la altura (abajo -> arriba).
 func _band_centroid(verts: PackedVector3Array, box: AABB, z0: float, z1: float, y0: float, y1: float) -> Vector3:
     var z_min := box.position.z + box.size.z * z0
     var z_max := box.position.z + box.size.z * z1
@@ -1540,9 +1559,7 @@ func _apply_pistol_materials(root: Node3D) -> void:
 ## Brazos del rig de Cransh.
 ##
 ## Este rig trae las animaciones CON los brazos, asi que no hay retargeting: se
-## sustituye el conjunto entero. Se alinea anclando su hueso de camara
-## (`Head_Cam_014`) a la camara del juego, que es un punto que el propio autor
-## puso donde va el ojo: en vez de suponer escala y orientacion, se mide.
+## sustituye el conjunto entero y se ancla por su hueso de arma medido.
 ##
 ## Solo se usa la malla de brazos. El GLB trae ademas una pistola propia
 ## (`xd_frame`, 17 818 tris) que no se dibuja porque el arma de FlowFire es la
@@ -1550,19 +1567,56 @@ func _apply_pistol_materials(root: Node3D) -> void:
 ## ---------------------------------------------------------------------------
 const ARMS_PATH := "res://assets/models/fps_pistol_arms.glb"
 
+## Colocacion de la pose de ADS ajustada mirando capturas. Los argumentos siguen
+## disponibles para repetir una iteracion visual sin cambiar la geometria medida.
+func _ads_tuning() -> Dictionary:
+    # Ajuste visual fijado comparando capturas: la mira cae en el centro, la
+    # boca queda apenas por debajo y el arma conserva escala de mano en ADS.
+    var t := {"side": 0.0, "up": 0.15, "fwd": -0.24, "pitch": 0.0, "yaw": 0.0, "roll": 0.0}
+    for arg in OS.get_cmdline_user_args():
+        if not arg.begins_with("--ads"):
+            continue
+        var parts := arg.split("=", true, 1)
+        if parts.size() == 2 and t.has(parts[0].substr(5)):
+            t[parts[0].substr(5)] = float(parts[1])
+    return t
+
+
+## Piezas del montaje de brazos que se rehacen por frame para seguir al arma.
+## La inclinacion validada en capturas se conserva en hip y ADS para no separar
+## las dos manos de la empuñadura.
+var arms_mount: Node3D
+var arms_fix := Basis.IDENTITY
+var arms_delta := Vector3.ZERO
+var arms_escala := 1.0
+var arms_stretch := 1.0
+var arms_pitch_hip := -62.0
+var arms_pitch_ads := -62.0  # mantiene el agarre de dos manos en ADS
+
 var arms_root: Node3D
 var arms_skeleton: Skeleton3D
 var arms_player: AnimationPlayer
 var arms_ok := false
 
+## Ajuste fino del encuadre de los brazos, decidido comparando capturas.
+## `pitch` baja la pose de descanso y `stretch` retira los hombros del encuadre.
+func _arm_tuning() -> Dictionary:
+    var t := {"pitch": -62.0, "stretch": 3.0, "depth": -0.024}
+    for arg in OS.get_cmdline_user_args():
+        if not arg.begins_with("--arm"):
+            continue
+        var parts := arg.split("=", true, 1)
+        if parts.size() != 2 or not t.has(parts[0].substr(5)):
+            continue
+        t[parts[0].substr(5)] = float(parts[1])
+    return t
+
+
 func _install_arms() -> void:
-    # Los brazos del autor son los que se usan. El rig viejo queda accesible con
-    # --oldarms para poder comparar los dos con el mismo banco, pero deja de ser
-    # el camino por defecto: tener el asset nuevo detras de una bandera hacia que
-    # cada verificacion se hiciera sobre el viejo.
-    if OS.get_cmdline_user_args().has("--oldarms"):
-        print("GLOCK brazos=rig_viejo (--oldarms)")
-        return
+    # Hay una sola combinacion de primera persona: OWK 19 con los brazos de
+    # Cransh. El rig viejo queda solo como soporte interno de la mecanica.
+    if arms_mesh != null:
+        arms_mesh.visible = false
     var packed := load(ARMS_PATH) as PackedScene
     if packed == null:
         push_warning("No se pudieron cargar los brazos nuevos: " + ARMS_PATH)
@@ -1585,14 +1639,13 @@ func _install_arms() -> void:
     recoil_node.add_child(holder)
     holder.add_child(arms_root)
 
-    # Fuera la pistola que trae el asset: el arma es la OWK 19. Los nombres que
-    # Ocultar la pistola que trae el asset. NO se puede filtrar por nombre: el
-    # importador renombra las mallas a Object_N y el filtro por "xd_frame" no
-    # casaba con ninguna, asi que la pistola del autor se seguia dibujando
+    # Se oculta la pistola que trae el asset: el arma visible es la OWK 19. No
+    # se puede filtrar por nombre porque el importador renombra las mallas a
+    # Object_N y el filtro por "xd_frame" no casaba con ninguna, asi que la
+    # pistola del autor se seguia dibujando
     # encima de la OWK 19. Se identifica la malla de brazos por ser la que mas
     # vertices tiene (14 852 tris frente a 8 139, 4 697 y 4 982) y se oculta el
     # resto: asi el criterio no depende de como nombre el importador.
-    var usar_owk := OS.get_cmdline_user_args().has("--owk")
     var mallas: Array = []
     var stack: Array = [arms_root]
     while not stack.is_empty():
@@ -1610,33 +1663,20 @@ func _install_arms() -> void:
         if verts > mayor:
             mayor = verts
             brazos = m
-    # DOS MODOS, para poder decidir viendo imagenes en vez de describiendolas:
-    #
-    #   --newarms            brazos del autor + pistola del autor (paquete
-    #                        coherente: el mismo rig trae arma, manos y
-    #                        animaciones, asi que encajan por construccion)
-    #   --newarms --owk      brazos del autor + OWK 19 (mezcla: la pose de mano
-    #                        esta horneada para la empuñadura del autor)
-    var ocultas := 0
+    var mallas_auxiliares_ocultas := 0
     for m in mallas:
-        if m != brazos and usar_owk:
+        if m != brazos:
             (m as MeshInstance3D).visible = false
-            ocultas += 1
-    if usar_owk and pistol_holder != null:
+            mallas_auxiliares_ocultas += 1
+    if pistol_holder != null:
         pistol_holder.visible = true
-    elif not usar_owk and pistol_holder != null:
-        # Paquete coherente: se oculta la OWK y se deja la pistola del autor.
-        pistol_holder.visible = false
-        if glock_mesh != null:
-            glock_mesh.visible = false
     _play_arms_anim("FPS_Pistol_Idle", true)
     print("ARMS_MALLAS total=", mallas.size(), " brazos=", (brazos.name if brazos != null else "?"),
-        " vertices_brazos=", mayor, " pistol_autor_oculta=", ocultas, " modo=", ("owk" if usar_owk else "paquete_autor"))
+        " vertices_brazos=", mayor, " auxiliares_ocultas=", mallas_auxiliares_ocultas)
 
     # Anclaje por el hueso del ARMA (`Rif_059`), no por el de camara: el arma es
     # el punto cuya posicion fija la mecanica de FlowFire, y las manos vienen a
-    # ella por la animacion, no al reves. Ver el aviso de arriba sobre por que
-    # `Head_Cam_014` no vale.
+    # ella por la animacion, no al reves.
     var rif_bone := -1
     for b in range(arms_skeleton.get_bone_count()):
         if arms_skeleton.get_bone_name(b).begins_with("Rif"):
@@ -1647,6 +1687,7 @@ func _install_arms() -> void:
         holder.queue_free()
         arms_root = null
         return
+
     # La orientacion se corrige con el giro de 90 sobre X ya validado (la caja
     # pasa a 0.664 x 0.323 x 0.678, la forma de unos brazos extendidos) y se
     # toma la del frame del arma como referencia, no la base del hueso: una base
@@ -1657,28 +1698,33 @@ func _install_arms() -> void:
     #  - 180 grados sobre el eje de vision: con solo lo anterior los codos
     #    salian por ARRIBA en vez de por abajo.
     var fix := Basis(Vector3.BACK, PI) * Basis(Vector3.RIGHT, PI * 0.5)
-    var rif_rest: Transform3D = arms_skeleton.get_bone_global_rest(rif_bone)
     # ESCALA: las manos del rig estan modeladas alrededor de la pistola del autor
     # (`xd_frame`), que mide 42 x 180 x 206 mm; la OWK 19 mide 34 x 130 x 186, o
     # sea 1.38x mas baja. Por eso el guante envolvia la pistola entera. Se escala
     # el conjunto de brazos a la pistola REAL en vez de agrandar el arma, que ya
     # esta verificada contra las cotas de una Glock 19 (33 x 127 x 186 reales).
-    # La escala solo se aplica en el modo OWK: alli las manos hay que llevarlas a
-    # una pistola mas pequena que la del autor. En el paquete coherente NO se
-    # escala nada -- el autor modelo arma, manos y animaciones juntas y ya
-    # encajan; aplicar el factor ahi encogia tambien SU pistola (206 mm -> 149)
-    # y falseaba el tamano en pantalla.
-    var escala_manos := (130.0 / 180.0) if usar_owk else 1.0
+    # Las manos estan modeladas alrededor de una pistola mayor que la OWK 19;
+    # se escala el conjunto para que ambas manos caigan sobre la empuñadura real.
+    var escala_manos := 130.0 / 180.0
+    var ajuste := _arm_tuning()
     # Inclinacion del conjunto: sin ella el arma apunta hacia ARRIBA en vez de
     # quedar baja, que es la postura de lista. Se gira sobre el eje X del frame
     # del arma (el transversal), que es el que baja la boca.
-    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(-78.0))
+    var inclinacion := Basis(Vector3.RIGHT, deg_to_rad(float(ajuste["pitch"])))
     # ESTIRADO a lo largo del eje de vision. Los hombros seguian entrando en
     # cuadro por abajo: son la masa grande de las esquinas. Alargar los brazos en
     # Z aleja esa masa por detras de la camara mientras las manos y el arma, que
     # estan en el origen del montaje, se quedan donde estan.
-    var estirar := Basis.from_scale(Vector3(1.0, 1.0, 1.12))
+    var estirar := Basis.from_scale(Vector3(1.0, 1.0, float(ajuste["stretch"])))
     var fijo := estirar * inclinacion * fix
+    arms_mount = holder
+    arms_fix = fix
+    arms_escala = escala_manos
+    arms_stretch = float(ajuste["stretch"])
+    arms_pitch_hip = float(ajuste["pitch"])
+    for arg in OS.get_cmdline_user_args():
+        if arg.begins_with("--adsmountpitch="):
+            arms_pitch_ads = float(arg.split("=", true, 1)[1])
     holder.global_transform = (gun_frame as Node3D).global_transform * Transform3D(fijo.scaled(Vector3(escala_manos, escala_manos, escala_manos)), Vector3.ZERO)
     force_update_transform()
     arms_skeleton.force_update_transform()
@@ -1701,75 +1747,49 @@ func _install_arms() -> void:
         return
     var mano_l: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(hl)).origin
     var mano_r: Vector3 = (arms_skeleton.global_transform * arms_skeleton.get_bone_global_rest(hr)).origin
-    if usar_owk:
-        # Solo en el modo OWK: alli hay que llevar las manos a la empuñadura de
-        # OTRA pistola. En el paquete coherente esto desplazaba las manos de
-        # sitio, porque la empuñadura que se usaba como destino era la de la OWK
-        # y el rig del autor ya viene agarrando la suya.
-        var agarre: Vector3 = mano_l.lerp(mano_r, 0.5)
-        var empunadura: Vector3 = (gun_frame as Node3D).global_transform * pistol_grip_local
-        holder.global_transform.origin += empunadura - agarre
-    else:
-        # Paquete coherente: colocar por CAJA, como se hizo con el rig viejo. Se
-        # mide la caja de la pistola del autor en el frame del arma y se deja
-        # centrada en X y Z con la corona de la corredera en GUN_TOP_OVER_ORIGIN.
-        var cv := PackedVector3Array()
-        for m in mallas:
-            if m == brazos:
-                continue
-            var mi2 := m as MeshInstance3D
-            var xf2: Transform3D = (gun_frame as Node3D).global_transform.affine_inverse() * mi2.global_transform
-            for si2 in range(mi2.mesh.get_surface_count()):
-                for v2 in mi2.mesh.surface_get_arrays(si2)[Mesh.ARRAY_VERTEX]:
-                    cv.append(xf2 * v2)
-        if cv.size() > 8:
-            var cb := _bounds(cv)
-            var centro := cb.position + cb.size * 0.5
-            # Ajuste fino de encuadre del conjunto: retrasarlo (+Z) y bajarlo
-            # (-Y). Sin esto se veia demasiado adelantado y alto. Son los dos
-            # unicos grados de libertad que se tocan a mano; el resto de la
-            # colocacion sale de medir la caja.
-            # El problema de encuadre no era la posicion del arma sino que se veia
-            # DEMASIADO brazo: la masa de los hombros y las bocas de las mangas
-            # entraban en cuadro. Retrasando el conjunto esa masa queda detras de
-            # la camara y solo se ven antebrazos, manos y arma.
-            var RETRASO := 0.130
-            var BAJADA := 0.265
-            var delta := Vector3(-centro.x, GUN_TOP_OVER_ORIGIN - (cb.position.y + cb.size.y) - BAJADA, -centro.z + RETRASO)
-            holder.global_transform.origin += (gun_frame as Node3D).global_transform.basis * delta
-            # La mira se mide en el espacio del RIG, no en el frame del arma. En
-            # el frame del arma el conjunto esta girado 46 grados, asi que su caja
-            # envolvente alineada a los ejes NO corresponde al arma y las bandas
-            # "20% trasero x 10% superior" salian vacias: el marcador caia en el
-            # origen y `aimtest` pasaba comprobando un punto que no era la mira.
-            # En el espacio del rig la pistola esta en su orientacion natural.
-            var pv_r := PackedVector3Array()
-            for m in mallas:
-                if m == brazos:
-                    continue
-                var miR := m as MeshInstance3D
-                var xfR: Transform3D = _local_chain(miR, arms_root)
-                for siR in range(miR.mesh.get_surface_count()):
-                    for vR in miR.mesh.surface_get_arrays(siR)[Mesh.ARRAY_VERTEX]:
-                        pv_r.append(xfR * vR)
-            if pv_r.size() > 8:
-                var bR := _bounds(pv_r)
-                var a_arma: Transform3D = (gun_frame as Node3D).global_transform.affine_inverse() * arms_root.global_transform
-                sight_marker.position = a_arma * _band_centroid(pv_r, bR, 0.80, 1.0, 0.90, 1.0)
-                muzzle.position = a_arma * _band_centroid(pv_r, bR, 0.0, 0.04, 0.0, 1.0)
-                _compute_ads_offset()
-                print("ARMS_MARCADORES caja_rig=", bR.size.snapped(Vector3(0.001, 0.001, 0.001)),
-                    " mira=", sight_marker.position.snapped(Vector3(0.001, 0.001, 0.001)),
-                    " ads_offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)))
+    var agarre: Vector3 = mano_l.lerp(mano_r, 0.5)
+    var empunadura: Vector3 = (gun_frame as Node3D).global_transform * (pistol_grip_local + Vector3.UP * HAND_GRIP_RAISE)
+    # `_update_arms_mount()` reconstruye el transform cada frame para interpolar
+    # la inclinacion hip/ADS. La correccion queda en el espacio local del frame.
+    arms_delta = (gun_frame as Node3D).global_transform.basis.inverse() * (empunadura - agarre)
+    arms_delta.z += float(ajuste["depth"])
+    var ads := _ads_tuning()
+    # Pose de ADS colocada mirando capturas: el arma queda de canto, con las dos
+    # manos, y la mira cerca del centro.
+    #
+    # NO se usa `_compute_ads_offset` aqui. Ese calculo lleva la mira al eje
+    # partiendo de un marcador medido sobre el esqueleto, y esa medida NO coincide
+    # con lo que Godot dibuja: con la formula estandar de piel (`pose * inverse_bind`)
+    # la pistola proyecta ~0.3 m por debajo de donde se ve, y el resultado era un
+    # ADS con los brazos comiendose la pantalla y el arma fuera de cuadro. La
+    # colocacion se ajusta por imagen con --adsup/--adsfwd/--adsside/--adspitch.
+    ads_rot_extra = Vector3(deg_to_rad(float(ads.get("pitch", 0.0))),
+        deg_to_rad(float(ads.get("yaw", 0.0))), deg_to_rad(float(ads.get("roll", 0.0))))
+    ads_offset = Vector3(float(ads.get("side", 0.0)), float(ads.get("up", 0.02)), float(ads.get("fwd", -0.45)))
+    # El marcador de mira se CALIBRA desde la pose de ADS: es el punto del arma
+    # que esa pose deja sobre el eje de la camara. Se mide aplicando la pose,
+    # leyendo el punto del eje en el frame del arma y devolviendo la pose a su
+    # sitio, asi que `aimtest` sigue vigilando de verdad que el ADS no se mueva.
+    if sight_marker != null:
+        var guarda_pos := pose_root.position
+        var guarda_rot := pose_root.rotation
+        pose_root.position = ads_offset
+        pose_root.rotation = ads_rot_extra
+        pose_root.force_update_transform()
+        gun_frame.force_update_transform()
+        sight_marker.global_position = camera.global_transform * Vector3(0.0, 0.0, -ADS_SIGHT_DISTANCE)
+        sight_marker.position = (gun_frame as Node3D).global_transform.affine_inverse() * sight_marker.global_position
+        pose_root.position = guarda_pos
+        pose_root.rotation = guarda_rot
+        pose_root.force_update_transform()
+    print("ADS_POSE offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)),
+        " rot=", ads_rot_extra.snapped(Vector3(0.001, 0.001, 0.001)),
+        " mira=", sight_marker.position.snapped(Vector3(0.001, 0.001, 0.001)) if sight_marker != null else Vector3.ZERO)
 
-    if arms_mesh != null:
-        arms_mesh.visible = false
     arms_ok = true
     print("ARMS_CRANSH ok anclado_al_arma anim=", arms_player.get_animation_list() if arms_player != null else [])
 
 
-## Reproduce una animacion del rig de brazos por sufijo (el importador les pone
-## prefijo "Armature|"). Sin loop vuelve sola al idle al terminar.
 func _play_arms_anim(short_name: String, loop := false) -> bool:
     if not arms_ok or arms_player == null:
         return false

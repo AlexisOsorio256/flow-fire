@@ -10,7 +10,7 @@
 - El asset se obtuvo desde el pack "FPS pack" del repositorio `Hhk187/Zomopocalypse` (MIT), que conserva la declaración de licencia del asset de J-Toastie.
 - Huesos relevantes del arma: `Root`, `Slide`, `Trigger`, `Magazine`, `Barrel`, `SlideCatch`.
 - El rig trae orientación/origen no ideales para el juego; FlowFire mide y verifica su geometría en runtime en vez de asumir offsets fijos.
-- **Sigue siendo la autoridad de brazos y animaciones.** Su malla de arma se oculta cuando el arma de alta fidelidad está activa, pero el esqueleto y las animaciones se siguen usando.
+- Se conserva como soporte interno del esqueleto y de la mecánica heredada. Su malla de arma y sus brazos no se dibujan en el viewmodel activo.
 
 ## OWK 19 Pistol 9mm (G19) — OKgamedev
 
@@ -56,44 +56,14 @@
   GLB**: `asset.extras` conserva autor, licencia y fuente, así que la atribución
   viaja con el fichero y no depende sólo de este documento.
 - Contiene además una pistola propia (`xd_frame`, 17 818 tris) que **no se usa**:
-  FlowFire mantiene la OWK 19. Falta decidir si se poda del fichero.
-- **Pendiente de integrar.** Sustituirá a los brazos y las animaciones del rig de
-  J-Toastie, que entonces se podrá borrar junto con su crédito.
+  FlowFire mantiene la OWK 19 como arma visible.
+- **Integrado y activo:** este rig proporciona los brazos de dos manos y las
+  animaciones del viewmodel. El montaje se ajusta a la empuñadura medida de la
+  OWK 19 y su encuadre se valida mediante capturas.
 
-## Nota: estado de la busqueda de brazos realistas
-
-Los dos rigs de brazos que se probaron (`fps_arms.glb` de DJMaesen y
-`fps_arms_gameready.glb` de BAMEN) **se han borrado del repositorio**: no se
-integraron y pesaban 62 MB entre GLB y texturas. Ninguno servia por el mismo
-motivo topologico: el rig viejo mete corazon, anular y menique en una sola
-cadena (`DoubleFingers`), asi que de las cinco cadenas independientes que traen
-los dos candidatos solo se puede alimentar una y las otras dos se quedarian
-extendidas agarrando. Y ninguno de los dos traia animaciones propias.
-
-**Candidato encontrado y verificado** (pendiente de descarga e integracion):
-
-- **FPS pistol animations** — Cransh
-- Fuente: https://sketchfab.com/3d-models/fps-pistol-animations-0d7a343dcb6f401197a73c91aee93f6d
-- Licencia: **CC-BY** (uso comercial permitido con atribucion), verificada por la
-  API de Sketchfab, no por la ficha de la web.
-- **Descargable: si.** 32 670 triangulos y 16 607 vertices: unas cinco veces el
-  rig actual completo (6 837), o sea que no es low-poly.
-- 5 animaciones propias, y es de **pistola**, no de rifle, que es lo que encaja
-  con la mecanica de FlowFire.
-- Requiere cuenta gratuita de Sketchfab para descargar; no se puede bajar por
-  linea de comandos.
-
-Se comprobo tambien `Ayush-Mohanty/FPS-Arms-3D` (GitHub, repositorio MIT con
-animaciones idle/shoot/reload y listo para Godot). **Descartado por dos motivos
-concretos**: el modelo que trae dentro es un **AK-74M** de Cransh con licencia
-**CC-BY-4.0** propia -- el MIT del repositorio cubre su codigo, no el asset de
-terceros, que es justo el error que advierte este mismo archivo -- y sus
-animaciones son de rifle, no de pistola.
-
-Mientras no haya brazos nuevos, `fps_rig.glb` **no se puede borrar**: es la unica
-fuente de brazos y de las cuatro animaciones que funcionan (`Grip`, `Idle`,
-`Shoot`, `Reload`). Su malla de arma ya esta sustituida por la OWK 19; lo que
-queda de el son los brazos y la animacion.
+El viewmodel activo es, por tanto, la combinación única de `owk19_pistol.glb`
+con los brazos y animaciones de `fps_pistol_arms.glb`. `fps_rig.glb` sólo queda
+como soporte interno de la mecánica heredada.
 ---
 
 No documentar assets que ya no existan en el repo. Antes de sustituir o añadir un
