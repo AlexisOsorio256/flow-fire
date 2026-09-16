@@ -86,16 +86,18 @@ func _ready() -> void:
 
 func _print_measurements() -> void:
     var names: Array[String] = []
-    for part_name in gun.pistol_parts:
-        var node := gun.pistol_parts[part_name] as Node3D
-        var count := 0
-        var stack: Array = [node]
+    if gun.arms_root != null:
+        var stack: Array = [gun.arms_root]
         while not stack.is_empty():
             var n = stack.pop_back()
-            if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-                count += 1
+            if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
+                var tris := 0
+                for si in range((n as MeshInstance3D).mesh.get_surface_count()):
+                    var ar: Array = (n as MeshInstance3D).mesh.surface_get_arrays(si)
+                    if ar.size() > 0 and ar[Mesh.ARRAY_INDEX] != null:
+                        tris += (ar[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+                names.append("%s(%dtris)" % [n.name, tris])
             for c in n.get_children():
                 stack.append(c)
-        names.append("%s(%dm)" % [part_name, count])
     print("PREVIEW piezas: ", ", ".join(names))
     print("PREVIEW caja=", gun.gun_box.size, " usable=", gun.pistol_ok)

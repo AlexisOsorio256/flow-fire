@@ -45,10 +45,13 @@ const BENCH_VARIANTS := [
     # produccion: existen solo para saber que parte de sus milisegundos es
     # shader, que parte geometria y que parte script.
     {"id": "vm_std_mat", "label": "viewmodel_material_plano"},
-    {"id": "vm_gun_off", "label": "solo_brazos"},
-    {"id": "vm_arms_off", "label": "solo_arma"},
-    {"id": "vm_meshes_off", "label": "ambas_mallas_off"},
+    {"id": "vm_gun_off", "label": "pistola_off"},
+    {"id": "vm_arms_off", "label": "brazos_off"},
+    {"id": "vm_meshes_off", "label": "piel_off_esqueleto_animado"},
     {"id": "vm_static", "label": "viewmodel_sin_script"},
+    # Congela el AnimationPlayer del viewmodel en su pose actual: separa el
+    # coste de evaluar 928 huesos × ~400 pistas del coste de dibujar la piel.
+    {"id": "vm_anim_off", "label": "viewmodel_animacion_pausada"},
 ]
 const BENCH_DEFAULT_REPEATS := 2
 const BENCH_DEFAULT_WARMUP := 1.0
@@ -229,17 +232,20 @@ func _bench_bind_viewmodel_materials() -> void:
         _bench_vm_flat_mats[mi] = flat
 
 
-## Mallas visibles del viewmodel: cuerpo OWK + cargador + brazos.
+## Mallas visibles del viewmodel: pistola (Object_938/939/940) + brazos.
 func _viewmodel_meshes(w) -> Array:
+    return _gun_family_meshes(w, ["Object_938", "Object_939", "Object_940", "Object_8", "Object_7"])
+
+
+## Subconjunto de mallas del viewmodel por nombre de nodo.
+func _gun_family_meshes(w, names: Array) -> Array:
     var out: Array = []
-    var stack: Array = []
-    if w.pistol_holder != null:
-        stack.append(w.pistol_holder)
-    if w.arms_mount != null:
-        stack.append(w.arms_mount)
+    if w.arms_root == null:
+        return out
+    var stack: Array = [w.arms_root]
     while not stack.is_empty():
         var n = stack.pop_back()
-        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
+        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null and names.has(n.name):
             out.append(n)
         for c in n.get_children():
             stack.append(c)
@@ -278,11 +284,21 @@ func _bench_apply_variant(variant_id: String) -> void:
         var src: Array = _bench_vm_flat_mats[mesh_node] if flat else _bench_vm_orig_mats[mesh_node]
         for i in range(src.size()):
             mesh_node.set_surface_override_material(i, src[i])
-    if w.pistol_holder != null:
-        w.pistol_holder.visible = variant_id != "vm_gun_off" and variant_id != "vm_meshes_off"
-    if w.arms_mesh_visible != null:
-        w.arms_mesh_visible.visible = variant_id != "vm_arms_off" and variant_id != "vm_meshes_off"
+    # Familias de mallas del asset unico: pistola + manos + mangas.
+    var gun_meshes := _gun_family_meshes(w, ["Object_938", "Object_939", "Object_940"])
+    var arm_meshes := _gun_family_meshes(w, ["Object_8", "Object_7"])
+    for m in gun_meshes:
+        (m as MeshInstance3D).visible = variant_id != "vm_gun_off" and variant_id != "vm_meshes_off"
+    for m in arm_meshes:
+        (m as MeshInstance3D).visible = variant_id != "vm_arms_off" and variant_id != "vm_meshes_off"
+    # vm_meshes_off apaga las 5 mallas pero deja esqueleto+animacion: separa
+    # render de skinning/animacion. vm_anim_off (ver abajo) aisla la animacion.
     w.set_process(variant_id != "vm_static")
+    # Pausar la animación deja la última pose en pantalla: el delta contra base
+    # es el coste de evaluar el esqueleto cada frame, sin tocar ni meshes ni
+    # luces ni script de mecánica.
+    if w.arms_player != null:
+        w.arms_player.stream_paused = variant_id == "vm_anim_off"
 
 
 ## Guarda una captura del estado exacto de la variante, a la misma resolución
@@ -710,14 +726,17 @@ func _visual_apply_state(state: String) -> void:
 
 ## Coloca la animación del autor en un tiempo exacto y la deja ahí. Con
 ## time_scale 0 no avanza, así que la pose de brazos es la misma en cada corrida.
+## Los nombres son los del rig actual (full9mm 1Matzh): antes eran los del rig
+## viejo de Cransh ("FPS_Pistol_*") y el aparcamiento fallaba en silencio,
+## dejando la animación viva donde estuviera.
 func _visual_park_animation(anim_name: String, t: float) -> void:
     var w = _player.weapon
     if w.arms_player != null:
-        var arms_anim := "FPS_Pistol_Idle"
+        var arms_anim := "Idle"
         if anim_name == "Shoot":
-            arms_anim = "FPS_Pistol_Fire"
+            arms_anim = "Fire"
         elif anim_name == "Reload":
-            arms_anim = "FPS_Pistol_Reload_easy"
+            arms_anim = "Reload"
         if w._play_arms_anim(arms_anim, true):
             w.arms_player.seek(t, true)
 
@@ -1416,43 +1435,52 @@ func _force_reloadable_state() -> void:
     _player.weapon.reserve = 17
 
 
-## Posición viva de las piezas del arma (pose actual) en espacio de recoil.
+## Posición viva de los huesos del arma (pose actual) en espacio de recoil.
 func _print_live_bones(label: String) -> void:
     var w = _player.weapon
+    var sk: Skeleton3D = w.arms_skeleton
+    if sk == null:
+        return
     var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
-    for part_name in ["Slide", "Magazine", "Trigger", "Barrel"]:
-        if not w.pistol_parts.has(part_name):
+    for bone_name in ["Slidder_919", "Magazine_924", "Weapon_Trigger_921", "Barrel_920"]:
+        var bi := sk.find_bone(bone_name)
+        if bi < 0:
             continue
-        var live: Vector3 = recoil_inv * ((w.pistol_parts[part_name] as Node3D).global_position)
-        print("LIVE ", label, " ", part_name, " pose=", live.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        var live: Vector3 = recoil_inv * (sk.global_transform * sk.get_bone_global_pose(bi).origin)
+        print("LIVE ", label, " ", bone_name, " pose=", live.snapped(Vector3(0.0001, 0.0001, 0.0001)),
             " slide_pos=", snappedf(w.slide_pos, 0.0001))
 
 
-## Comprueba que la corredera viaja hacia atrás (+Z) en el marco del arma.
+## Comprueba que la corredera viaja hacia atrás (-Z local, hacia el tirador)
+## cuando la logica la mueve: el hueso Slidder lo escribe _apply_pistol_parts
+## desde slide_pos, asi que esto vigila la autoridad mecanica real.
 func _print_bone_travel() -> Dictionary:
     var w = _player.weapon
-    var holder_inv: Transform3D = (w.pistol_holder as Node3D).global_transform.affine_inverse()
-    var slide := w.pistol_parts["Slide"] as Node3D
-    var rest: Vector3 = holder_inv * slide.global_position
+    var sk: Skeleton3D = w.arms_skeleton
+    var rest: Vector3 = sk.get_bone_pose_position(w.slide_bone)
     w.slide_pos = w.SLIDE_TRAVEL
     w._apply_pistol_parts()
-    var posed: Vector3 = holder_inv * slide.global_position
+    var posed: Vector3 = sk.get_bone_pose_position(w.slide_bone)
     w.slide_pos = 0.0
     w._apply_pistol_parts()
-    var deltas := {"Slide": posed - rest}
-    print("TRAVEL Slide rest=", rest.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+    var delta: Vector3 = posed - rest
+    print("TRAVEL Slidder rest=", rest.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " posed=", posed.snapped(Vector3(0.0001, 0.0001, 0.0001)),
-        " delta=", (posed - rest).snapped(Vector3(0.0001, 0.0001, 0.0001)))
-    return deltas
+        " delta=", delta.snapped(Vector3(0.0001, 0.0001, 0.0001)))
+    return {"Slide": delta}
 
 
 ## Recorrido del cargador durante una recarga real, medido en vivo sobre su
-## malla: lo arrastra el hueso Pmag del autor, asi que se muestrea mientras
-## ocurre. El recorrido es el diametro de la nube de posiciones (sin referencia
-## de reposo: el hueso manda).
+## hueso: lo lleva la mano en la animacion de recarga, asi que se muestrea
+## mientras ocurre. El recorrido es el diametro de la nube de posiciones (sin
+## referencia de reposo: la animacion manda el gesto, la logica los cartuchos).
 func _measure_reload_mag() -> Dictionary:
     var w = _player.weapon
-    if w.pistol_mag_node == null:
+    var sk: Skeleton3D = w.arms_skeleton
+    if sk == null:
+        return {}
+    var mag_bone := sk.find_bone("Magazine_924")
+    if mag_bone < 0:
         return {}
     var samples: Array[Vector3] = []
     var on_screen := 0
@@ -1461,7 +1489,7 @@ func _measure_reload_mag() -> Dictionary:
     var cam: Camera3D = _player.camera
     for _i in range(26):
         await get_tree().create_timer(0.1).timeout
-        var world: Vector3 = (w.pistol_mag_node as Node3D).global_position
+        var world: Vector3 = sk.global_transform * sk.get_bone_global_pose(mag_bone).origin
         samples.append(world)
         # Lo que importa de verdad: que el cargador se VEA salir y entrar.
         if not cam.is_position_behind(world):
@@ -1482,13 +1510,13 @@ func _measure_reload_mag() -> Dictionary:
 func _print_geometry(label: String) -> void:
     var cam: Camera3D = _player.camera
     var w = _player.weapon
-    if w.pistol_holder == null:
+    if w.slide_attach == null:
         print("GEOMETRY ", label, " sin arma")
         return
     var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
-    # La geometria visible es la OWK bajo PBody: su caja en marco del arma
-    # proyectada por el global del cuerpo.
-    var bbox := _screen_bbox(w.gun_box, (w.pistol_holder as Node3D).global_transform, cam)
+    # La caja de la corredera real (SLIDE_BOX, en su espacio) proyectada por el
+    # global del attachment que la sigue.
+    var bbox := _screen_bbox(w.gun_box, (w.slide_attach as Node3D).global_transform, cam)
     var sight_screen: Vector2 = cam.unproject_position(w.get_sight_world_position())
     var muzzle_screen: Vector2 = cam.unproject_position(w.muzzle.global_position)
     var sight_cam: Vector3 = cam.global_transform.affine_inverse() * w.get_sight_world_position()
@@ -1504,13 +1532,12 @@ func _print_geometry(label: String) -> void:
         " size=", w.gun_box.size.snapped(Vector3(0.0001, 0.0001, 0.0001)))
     if w.arms_skeleton != null:
         var sk: Skeleton3D = w.arms_skeleton
-        for bone_prefix in ["PBody", "Pmag", "Rif_", "Hand_R", "Hand_L"]:
-            for bi in range(sk.get_bone_count()):
-                if sk.get_bone_name(bi).begins_with(bone_prefix):
-                    var gp: Transform3D = sk.global_transform * sk.get_bone_global_rest(bi)
-                    var rel: Vector3 = recoil_inv * gp.origin
-                    print("BONE ", label, " ", sk.get_bone_name(bi), " rel=", rel.snapped(Vector3(0.0001, 0.0001, 0.0001)))
-                    break
+        for bone_name in ["Slidder_919", "Barrel_920", "Weapon_922", "Magazine_924", "DEF-hand.R_842"]:
+            var bi := sk.find_bone(bone_name)
+            if bi >= 0:
+                var gp: Vector3 = sk.global_transform * sk.get_bone_global_pose(bi).origin
+                var rel: Vector3 = recoil_inv * gp
+                print("BONE ", label, " ", bone_name, " rel=", rel.snapped(Vector3(0.0001, 0.0001, 0.0001)))
     print("AXES ", label,
         " sight_local=", ps.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " muzzle_local=", pm.snapped(Vector3(0.0001, 0.0001, 0.0001)),
@@ -1537,12 +1564,16 @@ func _measure_gun_exposure(label: String) -> Dictionary:
     Engine.time_scale = 0.0
     await get_tree().process_frame
     await get_tree().process_frame
-    # El objetivo es medir la OWK, no la tela que la rodea: en ADS los brazos
+    # El objetivo es medir la pistola, no la tela que la rodea: en ADS los brazos
     # ocupan la mayoría de los píxeles distintos del fondo y hundían el p90
     # aunque la corredera estuviese correctamente expuesta.
-    var arms_was_visible: bool = _player.weapon.arms_root.visible if _player.weapon.arms_root != null else false
-    if _player.weapon.arms_root != null:
-        _player.weapon.arms_root.visible = false
+    # Se aisla la pistola apagando solo las mallas de brazos (manos+mangas):
+    # antes se apagaba arms_root entero y la pistola se iba con el.
+    var arm_meshes := _gun_family_meshes(_player.weapon, ["Object_8", "Object_7"])
+    var arms_was: Array = []
+    for m in arm_meshes:
+        arms_was.append((m as MeshInstance3D).visible)
+        (m as MeshInstance3D).visible = false
     await get_tree().process_frame
     var with_gun := await _capture_image()
     _player.weapon.visible = false
@@ -1550,8 +1581,8 @@ func _measure_gun_exposure(label: String) -> Dictionary:
     await get_tree().process_frame
     var without := await _capture_image()
     _player.weapon.visible = true
-    if _player.weapon.arms_root != null:
-        _player.weapon.arms_root.visible = arms_was_visible
+    for i in range(arm_meshes.size()):
+        (arm_meshes[i] as MeshInstance3D).visible = arms_was[i]
     Engine.time_scale = 1.0
     if with_gun == null or without == null:
         print("EXPOSURE ", label, " sin captura")
@@ -1697,12 +1728,15 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionar
     var viewport := get_viewport().get_visible_rect().size
     var low_res_headless := viewport.x < 256.0 or viewport.y < 256.0
     if not w.pistol_ok:
-        failures.append("la OWK no quedo utilizable")
+        failures.append("los huesos mecanicos no quedaron utilizables")
+    # Caja de la corredera real (SLIDE_BOX del asset: 29.4 x 42.4 x 176.3 mm).
     var size: Vector3 = w.gun_box.size
-    if absf(size.x - 0.034) > 0.005 or absf(size.y - 0.13) > 0.006 or absf(size.z - 0.186) > 0.004:
-        failures.append("caja del arma %s (esperado ~0.034 x 0.13 x 0.186)" % size)
+    if absf(size.x - 0.0294) > 0.004 or absf(size.y - 0.0424) > 0.004 or absf(size.z - 0.1763) > 0.004:
+        failures.append("caja del arma %s (esperado ~0.029 x 0.042 x 0.176)" % size)
+    # La corredera viaja hacia atras en su espacio local (-Z): con el recorrido
+    # logico completo son -33.6 mm en el asset.
     var slide: Vector3 = travel.get("Slide", Vector3.ZERO)
-    if slide.z < 0.02:
+    if slide.z > -0.02:
         failures.append("la corredera no viaja hacia atrás (delta %s)" % slide)
     if float(mag.get("travel", 0.0)) < 0.08:
         failures.append("el cargador casi no se separa del arma al recargar (%.3f m)" % float(mag.get("travel", 0.0)))
@@ -1851,30 +1885,20 @@ func _slowmo_shot() -> void:
 
 
 
-## Caja del cargador en pantalla, medida sobre su GEOMETRIA viva: el cargador
-## cuelga del hueso Pmag, asi que su caja mundial ya esta donde se ve.
+## Caja del cargador en pantalla: el cargador lo lleva la mano (hueso
+## Magazine_924 del asset), asi que su caja es la del hueso en el mundo. El
+## tamano es el del cargador medido en el asset (25.5 x 120 x 75 mm en su
+## espacio). Aproximacion honesta para el slowmo, no geometria por vertice.
 func _mag_screen_box() -> Dictionary:
     var w = _player.weapon
-    if w.pistol_mag_node == null:
+    var sk: Skeleton3D = w.arms_skeleton
+    if sk == null:
         return {}
-    var posed := AABB()
-    var first := true
-    var stack: Array = [w.pistol_mag_node]
-    while not stack.is_empty():
-        var n = stack.pop_back()
-        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
-            var mi := n as MeshInstance3D
-            var local := _bind_aabb(mi)
-            var world := _transform_aabb(local, mi.global_transform)
-            if first:
-                posed = world
-                first = false
-            else:
-                posed = posed.merge(world)
-        for c in n.get_children():
-            stack.append(c)
-    if first:
+    var mag_bone := sk.find_bone("Magazine_924")
+    if mag_bone < 0:
         return {}
+    var bone_xf: Transform3D = sk.global_transform * sk.get_bone_global_pose(mag_bone)
+    var posed := _transform_aabb(AABB(Vector3(-0.013, -0.05, -0.038), Vector3(0.026, 0.12, 0.076)), bone_xf)
     var cam: Camera3D = _player.camera
     var sbox := Rect2()
     var started := false
@@ -2002,3 +2026,226 @@ func _save_wav(buffer: PackedVector2Array, path: String) -> void:
     wav.mix_rate = int(AudioServer.get_mix_rate())
     wav.data = data
     wav.save_to_wav(path)
+
+
+## ---------------------------------------------------------------------------
+## Diagnóstico del arma real del viewmodel (rig full9mm de 1Matzh).
+##
+## Los marcadores de Glock (SightMarker/FrontMarker/Muzzle) son hijos fijos de
+## un soporte y NO describen la pistola visible, que vive dentro del esqueleto
+## animado. Este instrumento mide la pistola de verdad de dos formas
+## independientes que deben coincidir:
+##   1) huesos: Slidder_919 (corredera), Barrel_920, Weapon_922, gatillo y
+##      cargador, con los puntos de mira derivados OFFLINE de la geometría de
+##      la corredera (ver GUNDIAG_SIGHT_*);
+##   2) piel: AABB de las mallas del arma (Object_938/939/940) frente a manos
+##      (Object_8) y antebrazos (Object_7), en el MISMO espacio (esqueleto),
+##      la MISMA pose (Idle aparcada) y la MISMA escala.
+## FUENTE de cada número: MEDIDO EN ESTE ASSET salvo que se diga lo contrario.
+## ---------------------------------------------------------------------------
+# Puntos de mira en espacio local del hueso Slidder_919 (metros del asset).
+# Extraídos offline de la malla de corredera (1486 verts): alza = centroide del
+# 15% superior dentro del 10% trasero; punto = idem en el 8% delantero; boca =
+# centroide del 10% delantero del cañón expresado en la corredera. Línea de
+# mira resultante (0, -0.004, 1.0), radio 158.3 mm, altura sobre el eje 13.6 mm
+# (una G19 real anda por 160 mm y ~13 mm: el asset es dimensionalmente honesto).
+const GUNDIAG_REAR := Vector3(-0.0037, 0.01081, -0.0538)
+const GUNDIAG_FRONT := Vector3(-0.0037, 0.01022, 0.10447)
+const GUNDIAG_MUZZLE_SLIDE := Vector3(-0.0037, -0.00283, 0.11336)
+
+const GUNDIAG_GUN_BONES := ["Slidder_919", "Barrel_920", "Weapon_922",
+    "Weapon_Trigger_921", "Magazine_924"]
+
+
+func run_gundiag() -> void:
+    await get_tree().create_timer(0.8).timeout
+    var w = _player.weapon
+    var sk: Skeleton3D = w.arms_skeleton
+    if sk == null or w.arms_root == null:
+        print("GUNDIAG sin esqueleto")
+        get_tree().quit(1)
+        return
+    print("GUNDIAG huesos=", sk.get_bone_count(),
+        " anims=", w.arms_player.get_animation_list() if w.arms_player != null else [])
+    if w.arms_player != null:
+        for an in w.arms_player.get_animation_list():
+            var a: Animation = w.arms_player.get_animation(an)
+            print("GUNDIAG anim=", an, " dur=", snappedf(a.length, 0.001),
+                "s pistas=", a.get_track_count())
+        var af: Animation = w.arms_player.get_animation(w.arms_player.get_animation_list()[1])
+        for ti in range(af.get_track_count()):
+            var tp := str(af.track_get_path(ti))
+            if "lidder" in tp or "rigger" in tp or "agazine" in tp or "eapon" in tp or "arrel" in tp or "ullet" in tp:
+                print("GUNDIAG pista Fire ", ti, " ", tp)
+    _gundiag_mount(w)
+    for pose in ["hip", "ads"]:
+        w.set_aim(pose == "ads")
+        await _settle_pose()
+        if w.arms_player != null:
+            w.arms_player.play(w._resolve_arms_idle())
+            w.arms_player.seek(0.0, true)
+        await get_tree().process_frame
+        await get_tree().process_frame
+        _gundiag_bones(w, pose)
+        _gundiag_skin(w, pose)
+        _gundiag_sight(w, pose)
+    w.set_aim(false)
+    await _settle_pose()
+    _gundiag_idle_drift(w)
+    _gundiag_wrist(w)
+    print("GUNDIAG_DONE")
+    get_tree().quit()
+
+
+func _gun_bone(w, bone_name: String) -> int:
+    var sk: Skeleton3D = w.arms_skeleton
+    for b in range(sk.get_bone_count()):
+        if sk.get_bone_name(b) == bone_name:
+            return b
+    return -1
+
+
+## Cómo está montado el conjunto bajo la cámara: escala y giro totales.
+func _gundiag_mount(w) -> void:
+    var m: Transform3D = (w.arms_mount as Node3D).transform
+    var s := m.basis.get_scale()
+    var e := m.basis.get_rotation_quaternion().get_euler()
+    print("GUNDIAG montaje escala=", s.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        " rot_deg=", (e * 180.0 / PI).snapped(Vector3(0.1, 0.1, 0.1)),
+        " pos=", m.origin.snapped(Vector3(0.0001, 0.0001, 0.0001)))
+
+
+## Ejes de los huesos del arma en espacio de CÁMARA (x=derecha, y=arriba,
+## z=hacia atrás): aquí "corredera vertical" y "cañón al frente" se leen
+## sin ambigüedad.
+func _gundiag_bones(w, label: String) -> void:
+    var sk: Skeleton3D = w.arms_skeleton
+    var cam: Camera3D = _player.camera
+    var inv_cam := cam.global_transform.basis.inverse()
+    for bn in GUNDIAG_GUN_BONES:
+        var idx := _gun_bone(w, bn)
+        if idx < 0:
+            print("GUNDIAG hueso ", bn, " AUSENTE")
+            continue
+        var world_b: Basis = sk.global_transform.basis * sk.get_bone_global_pose(idx).basis
+        var cb: Basis = inv_cam * world_b
+        var org: Vector3 = sk.global_transform * sk.get_bone_global_pose(idx).origin
+        var rel: Vector3 = cam.global_transform.affine_inverse() * org
+        print("GUNDIAG hueso ", label, " ", bn,
+            " x=", cb.x.snapped(Vector3(0.001, 0.001, 0.001)),
+            " y=", cb.y.snapped(Vector3(0.001, 0.001, 0.001)),
+            " z=", cb.z.snapped(Vector3(0.001, 0.001, 0.001)),
+            " pos_cam=", rel.snapped(Vector3(0.001, 0.001, 0.001)))
+
+
+## AABB de piel por familia de malla, en espacio del ESQUELETO (misma pose,
+## misma escala, mismos transforms): la única comparación de tamaños honesta.
+func _gundiag_skin(w, label: String) -> void:
+    var sk: Skeleton3D = w.arms_skeleton
+    var fams := {"arma": [], "manos": [], "antebrazos": []}
+    var stack: Array = [w.arms_root]
+    while not stack.is_empty():
+        var n = stack.pop_back()
+        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
+            var key := ""
+            if n.name in ["Object_938", "Object_939", "Object_940"]:
+                key = "arma"
+            elif n.name == "Object_8":
+                key = "manos"
+            elif n.name == "Object_7":
+                key = "antebrazos"
+            if key != "":
+                fams[key].append(n)
+        for c in n.get_children():
+            stack.append(c)
+    for key in ["arma", "manos", "antebrazos"]:
+        var pts := PackedVector3Array()
+        for m in fams[key]:
+            pts.append_array(_skinned_verts(m, sk, w.arms_root))
+        # _skinned_verts devuelve en espacio del esqueleto: es el marco común.
+        var box := _bounds_of(pts)
+        print("GUNDIAG piel ", label, " ", key, " verts=", pts.size(),
+            " tam=", box.size.snapped(Vector3(0.001, 0.001, 0.001)),
+            " ancho_mm=", snappedf(box.size.x * 1000.0, 0.1))
+    # El cociente que importa, medido en el mismo marco:
+    var pa := PackedVector3Array()
+    var pm := PackedVector3Array()
+    for m in fams["arma"]:
+        pa.append_array(_skinned_verts(m, sk, w.arms_root))
+    for m in fams["manos"]:
+        pm.append_array(_skinned_verts(m, sk, w.arms_root))
+    if not pa.is_empty() and not pm.is_empty():
+        var ba := _bounds_of(pa)
+        var bm := _bounds_of(pm)
+        print("GUNDIAG cociente manos/arma ancho=",
+            snappedf(bm.size.x / maxf(ba.size.x, 0.0001), 0.01), "x",
+            " (mismo espacio, misma pose)")
+
+
+## Línea de mira real (hueso corredera + puntos offline) frente al eje óptico:
+## desvío en mm/mrad y canto de la corredera. Es lo que el ADS debe anular.
+func _gundiag_sight(w, label: String) -> void:
+    var sk: Skeleton3D = w.arms_skeleton
+    var cam: Camera3D = _player.camera
+    var idx := _gun_bone(w, "Slidder_919")
+    if idx < 0:
+        return
+    var slide_xf: Transform3D = sk.global_transform * sk.get_bone_global_pose(idx)
+    var rear: Vector3 = slide_xf * GUNDIAG_REAR
+    var front: Vector3 = slide_xf * GUNDIAG_FRONT
+    var muzzle: Vector3 = slide_xf * GUNDIAG_MUZZLE_SLIDE
+    var eye: Vector3 = cam.global_position
+    var fwd: Vector3 = -cam.global_transform.basis.z.normalized()
+    for entry in [["trasera", rear], ["delantera", front]]:
+        var to: Vector3 = (entry[1] as Vector3) - eye
+        var mrad: float = acos(clampf(to.normalized().dot(fwd), -1.0, 1.0)) * 1000.0
+        var mm: float = tan(mrad * 0.001) * to.length() * 1000.0
+        print("GUNDIAG mira ", label, " ", entry[0], " desvio_mm=", snappedf(mm, 0.1),
+            " mrad=", snappedf(mrad, 0.01), " dist_ojo=", snappedf(to.length(), 0.003))
+    var bore: Vector3 = (muzzle - rear).normalized()
+    var en_cam: Vector3 = cam.global_transform.basis.inverse() * bore
+    var elev := rad_to_deg(asin(clampf(en_cam.y, -1.0, 1.0)))
+    # Canto: eje X de la corredera (su anchura) contra la horizontal de cámara.
+    var slide_x: Vector3 = (cam.global_transform.basis.inverse()
+        * (sk.global_transform.basis * sk.get_bone_global_pose(idx).basis).x).normalized()
+    var cant := rad_to_deg(asin(clampf(slide_x.y, -1.0, 1.0)))
+    print("GUNDIAG linea ", label, " elevacion_bore=", snappedf(elev, 0.1),
+        " canto_corredera=", snappedf(cant, 0.1),
+        " boca_delante=", snappedf((muzzle - eye).dot(fwd), 0.003))
+
+
+## Cuánto se mueve el alza trasera a lo largo del Idle (4.167 s): si la deriva
+## supera el criterio del aimtest, la pose de ADS no puede resolverse en un
+## instante y olvidarse; hay que saberlo antes de prometer 6 mm.
+func _gundiag_idle_drift(w) -> void:
+    var sk: Skeleton3D = w.arms_skeleton
+    var idx := _gun_bone(w, "Slidder_919")
+    if idx < 0 or w.arms_player == null:
+        return
+    w.arms_player.play(w._resolve_arms_idle())
+    var pts: Array[Vector3] = []
+    for t in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]:
+        w.arms_player.seek(t, true)
+        sk.force_update_all_bone_transforms()
+        pts.append(sk.global_transform * sk.get_bone_global_pose(idx).origin)
+    var diam := 0.0
+    for a in pts:
+        for b in pts:
+            diam = maxf(diam, a.distance_to(b))
+    print("GUNDIAG deriva_idle hueso_corredera diametro=",
+        snappedf(diam * 1000.0, 0.1), "mm muestras=", pts.size())
+
+
+## Dónde está la muñeca que sostiene el arma, en espacio de recoil_node: es el
+## punto físicamente razonable para el pivote del retroceso procedural.
+func _gundiag_wrist(w) -> void:
+    var sk: Skeleton3D = w.arms_skeleton
+    var inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
+    for bn in ["DEF-hand.R_842", "hand_ik.R_871", "DEF-forearm.R_844", "Weapon_922"]:
+        var idx := _gun_bone(w, bn)
+        if idx < 0:
+            print("GUNDIAG muneca ", bn, " AUSENTE")
+            continue
+        var p: Vector3 = inv * (sk.global_transform * sk.get_bone_global_pose(idx).origin)
+        print("GUNDIAG muneca ", bn, " en_recoil=",
+            p.snapped(Vector3(0.0001, 0.0001, 0.0001)))

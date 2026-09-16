@@ -52,6 +52,8 @@ func _run_dev_tools() -> void:
         tools.run_armdiag()
     if args.has("--sightdiag"):
         tools.run_sightdiag()
+    if args.has("--gundiag"):
+        tools.run_gundiag()
     if args.has("--timeline"):
         tools.run_timeline()
     if args.has("--slowmo"):
@@ -273,10 +275,10 @@ func _run_aimtest() -> void:
     await get_tree().create_timer(0.7).timeout
     player.weapon.set_aim(true)
     await get_tree().create_timer(1.0).timeout
-    # La autoridad es la mira visible: alza trasera Y delantera de la OWK sobre
-    # el eje optico. Los marcadores se fijan desde la geometria (nunca desde la
-    # pose), asi que este test vigila el producto real: si alguien mueve el
-    # arma, los marcadores o la pose de ADS, falla.
+    # La autoridad es la mira visible: alza trasera Y delantera de la corredera
+    # real (hijas del hueso Slidder) sobre el eje optico. La mira manda y la
+    # pose de ADS la sigue (ver _solve_ads), asi que este test vigila el
+    # producto real: si alguien mueve el arma, la mira o la pose de ADS, falla.
     var eye: Vector3 = player.camera.global_position
     var forward: Vector3 = -player.camera.global_transform.basis.z.normalized()
     var worst_mm := 0.0
