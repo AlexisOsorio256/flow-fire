@@ -15,7 +15,6 @@ var _player: CharacterBody3D
 var _hud: CanvasLayer
 var _timeline_fired := 0
 var _hip_bbox := Rect2()          # caja del arma en pantalla con la pose de lista
-var _mag_rest_box := AABB()       # caja del cargador en reposo, frame de arma
 var _exposure_hip := {}           # exposición medida del arma en hip
 var _exposure_ads := {}           # exposición medida del arma en ADS
 
@@ -195,42 +194,56 @@ func _bench_bind_nodes() -> void:
     _bench_bind_viewmodel_materials()
 
 
-## Prepara una version plana (StandardMaterial3D) de los materiales del arma,
-## con el mismo color/metal/rugosidad base pero sin el ruido procedural del
-## shader. Comparar `base` contra `vm_std_mat` dice cuanto del coste del
-## viewmodel es el shader y cuanto la geometria que hay debajo: si el material
-## plano no ahorra nada, el problema no es el shader.
-## Es un instrumento de medida, no una alternativa de produccion.
+## Prepara una version plana (StandardMaterial3D) de los materiales del
+## viewmodel, con el mismo color/metal/rugosidad base. Comparar `base` contra
+## `vm_std_mat` dice cuanto del coste del viewmodel es material y cuanto la
+## geometria que hay debajo. Es un instrumento de medida, no una alternativa.
 func _bench_bind_viewmodel_materials() -> void:
     _bench_vm_orig_mats.clear()
     _bench_vm_flat_mats.clear()
     var w = _player.weapon
     if w == null:
         return
-    for mesh_node in [w.glock_mesh, w.arms_mesh]:
-        if mesh_node == null or mesh_node.mesh == null:
+    for mesh_node in _viewmodel_meshes(w):
+        var mi := mesh_node as MeshInstance3D
+        if mi == null or mi.mesh == null:
             continue
         var orig: Array = []
         var flat: Array = []
-        for i in range(mesh_node.mesh.get_surface_count()):
-            var m: Material = mesh_node.get_surface_override_material(i)
+        for i in range(mi.mesh.get_surface_count()):
+            var m: Material = mi.get_surface_override_material(i)
             if m == null:
-                m = mesh_node.mesh.surface_get_material(i)
+                m = mi.mesh.surface_get_material(i)
             orig.append(m)
             var std := StandardMaterial3D.new()
             if m is ShaderMaterial:
                 std.albedo_color = m.get_shader_parameter("base_color")
                 std.metallic = float(m.get_shader_parameter("metallic"))
                 std.roughness = float(m.get_shader_parameter("roughness"))
-                var em: Variant = m.get_shader_parameter("emission_color")
-                var ee: Variant = m.get_shader_parameter("emission_energy")
-                if em != null and ee != null and float(ee) > 0.0:
-                    std.emission_enabled = true
-                    std.emission = em
-                    std.emission_energy_multiplier = float(ee)
+            elif m is StandardMaterial3D:
+                std.albedo_color = (m as StandardMaterial3D).albedo_color
+                std.metallic = (m as StandardMaterial3D).metallic
+                std.roughness = (m as StandardMaterial3D).roughness
             flat.append(std)
-        _bench_vm_orig_mats[mesh_node] = orig
-        _bench_vm_flat_mats[mesh_node] = flat
+        _bench_vm_orig_mats[mi] = orig
+        _bench_vm_flat_mats[mi] = flat
+
+
+## Mallas visibles del viewmodel: cuerpo OWK + cargador + brazos.
+func _viewmodel_meshes(w) -> Array:
+    var out: Array = []
+    var stack: Array = []
+    if w.pistol_holder != null:
+        stack.append(w.pistol_holder)
+    if w.arms_mount != null:
+        stack.append(w.arms_mount)
+    while not stack.is_empty():
+        var n = stack.pop_back()
+        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
+            out.append(n)
+        for c in n.get_children():
+            stack.append(c)
+    return out
 
 
 ## Deja SIEMPRE todos los subsistemas en estado baseline y apaga sólo la
@@ -265,10 +278,10 @@ func _bench_apply_variant(variant_id: String) -> void:
         var src: Array = _bench_vm_flat_mats[mesh_node] if flat else _bench_vm_orig_mats[mesh_node]
         for i in range(src.size()):
             mesh_node.set_surface_override_material(i, src[i])
-    if w.glock_mesh != null:
-        w.glock_mesh.visible = variant_id != "vm_gun_off" and variant_id != "vm_meshes_off"
-    if w.arms_mesh != null:
-        w.arms_mesh.visible = variant_id != "vm_arms_off" and variant_id != "vm_meshes_off"
+    if w.pistol_holder != null:
+        w.pistol_holder.visible = variant_id != "vm_gun_off" and variant_id != "vm_meshes_off"
+    if w.arms_mesh_visible != null:
+        w.arms_mesh_visible.visible = variant_id != "vm_arms_off" and variant_id != "vm_meshes_off"
     w.set_process(variant_id != "vm_static")
 
 
@@ -702,11 +715,6 @@ func _visual_apply_state(state: String) -> void:
 ## time_scale 0 no avanza, así que la pose de brazos es la misma en cada corrida.
 func _visual_park_animation(anim_name: String, t: float) -> void:
     var w = _player.weapon
-    if w.animation_player != null:
-        var resolved: String = w._resolve_animation(anim_name)
-        if resolved != "":
-            w.animation_player.play(resolved)
-            w.animation_player.seek(t, true)
     if w.arms_player != null:
         var arms_anim := "FPS_Pistol_Idle"
         if anim_name == "Shoot":
@@ -979,8 +987,8 @@ func run_sightdiag() -> void:
     if pmag >= 0 and rif >= 0:
         var pm: Vector3 = sk.get_bone_global_pose(rif).affine_inverse() * sk.get_bone_global_pose(pmag).origin
         print("SIGHTDIAG Pmag_en_Rif=", pm.snapped(Vector3(0.001, 0.001, 0.001)))
-    if w.sight_marker != null and w.gun_frame != null:
-        var a: Transform3D = sk.global_transform.affine_inverse() * (w.gun_frame as Node3D).global_transform
+    if w.sight_marker != null and w.pistol_holder != null:
+        var a: Transform3D = sk.global_transform.affine_inverse() * (w.pistol_holder as Node3D).global_transform
         var m: Vector3 = a * (w.sight_marker as Node3D).position
         print("SIGHTDIAG sight_marker_en_esqueleto=", m.snapped(Vector3(0.001, 0.001, 0.001)),
             " dentro_de_caja=", caja.has_point(m))
@@ -1032,7 +1040,7 @@ func _print_arm_frame(label: String) -> void:
         var up: float = (world - cam_t.origin).dot(cam_t.basis.y)
         var screen := cam.unproject_position(world)
         var margin := minf(minf(screen.x, vp.x - screen.x), minf(screen.y, vp.y - screen.y))
-        print("ARM ", label, " ", prefix, " depth=", snappedf(depth, 0.001),
+        print("ARM ", label, " ", prefix, " #", idx, " depth=", snappedf(depth, 0.001),
             " side=", snappedf(side, 0.001), " up=", snappedf(up, 0.001),
             " px=(", snappedf(screen.x, 1.0), ",", snappedf(screen.y, 1.0), ")",
             " margen=", snappedf(margin, 1.0),
@@ -1174,9 +1182,7 @@ func _print_timeline_metrics(index: int, t: float) -> void:
     var center := get_viewport().get_visible_rect().size * 0.5
     var sight_px := cam.unproject_position(w.get_sight_world_position())
     var muzzle_px := cam.unproject_position(w.muzzle.global_position)
-    var world_from_bind: Transform3D = (w.recoil_node as Node3D).global_transform * (w.mesh_to_weapon as Transform3D)
-    var box := _bind_aabb(w.glock_mesh)
-    var bbox := _screen_bbox(box, world_from_bind, cam)
+    var bbox := _screen_bbox(w.gun_box, (w.pistol_holder as Node3D).global_transform, cam)
     print("TL %03d t=%.1f aim=%.2f mag=%.0f cham=%.0f sight=(%.0f,%.0f) dy_sight=%.0f muzzle=(%.0f,%.0f) gun_top=%.0f gun_bottom=%.0f gun_h=%.0f slide=%.3f reload=%s" % [
         index, t, w.aim_blend, w.mag, w.chamber,
         sight_px.x, sight_px.y, sight_px.y - center.y,
@@ -1245,97 +1251,79 @@ func _force_reloadable_state() -> void:
     _player.weapon.reserve = 17
 
 
-## Posición viva de los huesos (pose actual, no la de reposo) en frame de arma.
-
-
+## Posición viva de las piezas del arma (pose actual) en espacio de recoil.
 func _print_live_bones(label: String) -> void:
     var w = _player.weapon
     var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
-    var skeleton_node: Skeleton3D = w.skeleton
-    for bone_name in ["Slide", "Magazine", "Trigger", "Barrel"]:
-        var idx: int = skeleton_node.find_bone(bone_name)
-        if idx < 0:
+    for part_name in ["Slide", "Magazine", "Trigger", "Barrel"]:
+        if not w.pistol_parts.has(part_name):
             continue
-        var live: Vector3 = recoil_inv * (skeleton_node.global_transform * skeleton_node.get_bone_global_pose(idx).origin)
-        print("LIVE ", label, " ", bone_name, " pose=", live.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        var live: Vector3 = recoil_inv * ((w.pistol_parts[part_name] as Node3D).global_position)
+        print("LIVE ", label, " ", part_name, " pose=", live.snapped(Vector3(0.0001, 0.0001, 0.0001)),
             " slide_pos=", snappedf(w.slide_pos, 0.0001))
 
 
-## Comprueba que la corredera y el cargador viajan en la dirección medida: la
-## corredera hacia atrás (+Z) y el cargador hacia abajo (-Y), en frame de arma.
-
-
+## Comprueba que la corredera viaja hacia atrás (+Z) en el marco del arma.
 func _print_bone_travel() -> Dictionary:
     var w = _player.weapon
-    var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
+    var holder_inv: Transform3D = (w.pistol_holder as Node3D).global_transform.affine_inverse()
+    var slide := w.pistol_parts["Slide"] as Node3D
+    var rest: Vector3 = holder_inv * slide.global_position
     w.slide_pos = w.SLIDE_TRAVEL
-    w._apply_bone_poses()
-    var deltas := {}
-    for bone_name in ["Slide"]:
-        var idx: int = (w.skeleton as Skeleton3D).find_bone(bone_name)
-        if idx < 0:
-            continue
-        var posed: Vector3 = recoil_inv * ((w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_pose(idx).origin)
-        var rest: Vector3 = recoil_inv * ((w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_rest(idx).origin)
-        deltas[bone_name] = posed - rest
-        print("TRAVEL ", bone_name, " rest=", rest.snapped(Vector3(0.0001, 0.0001, 0.0001)),
-            " posed=", posed.snapped(Vector3(0.0001, 0.0001, 0.0001)),
-            " delta=", (posed - rest).snapped(Vector3(0.0001, 0.0001, 0.0001)))
+    w._apply_pistol_parts()
+    var posed: Vector3 = holder_inv * slide.global_position
     w.slide_pos = 0.0
-    w._apply_bone_poses()
+    w._apply_pistol_parts()
+    var deltas := {"Slide": posed - rest}
+    print("TRAVEL Slide rest=", rest.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        " posed=", posed.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        " delta=", (posed - rest).snapped(Vector3(0.0001, 0.0001, 0.0001)))
     return deltas
 
 
-## Recorrido máximo del cargador durante una recarga real, medido en vivo: lo
-## mueve la animación del autor, así que hay que muestrear mientras ocurre.
+## Recorrido del cargador durante una recarga real, medido en vivo sobre su
+## malla: lo arrastra el hueso Pmag del autor, asi que se muestrea mientras
+## ocurre. El recorrido es el diametro de la nube de posiciones (sin referencia
+## de reposo: el hueso manda).
 func _measure_reload_mag() -> Dictionary:
     var w = _player.weapon
-    var bone: int = (w.skeleton as Skeleton3D).find_bone("Magazine")
-    if bone < 0:
+    if w.pistol_mag_node == null:
         return {}
-    var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
-    var rest: Vector3 = recoil_inv * ((w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_rest(bone).origin)
-    var max_travel := 0.0
-    var at := 0.0
+    var samples: Array[Vector3] = []
     var on_screen := 0
     var best_margin := -1e9
     var viewport := get_viewport().get_visible_rect().size
     var cam: Camera3D = _player.camera
     for _i in range(26):
         await get_tree().create_timer(0.1).timeout
-        var world: Vector3 = (w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_pose(bone).origin
-        var live: Vector3 = recoil_inv * world
-        var travel := (live - rest).length()
-        if travel > max_travel:
-            max_travel = travel
-            at = w.reload_elapsed
-        # Lo que importa de verdad: que el cargador se VEA salir y entrar. Se
-        # proyecta el hueso y se cuenta cuánto tiempo está dentro del encuadre.
+        var world: Vector3 = (w.pistol_mag_node as Node3D).global_position
+        samples.append(world)
+        # Lo que importa de verdad: que el cargador se VEA salir y entrar.
         if not cam.is_position_behind(world):
             var screen := cam.unproject_position(world)
             var margin := minf(minf(screen.x, viewport.x - screen.x), minf(screen.y, viewport.y - screen.y))
             best_margin = maxf(best_margin, margin)
             if margin > 20.0:
                 on_screen += 1
-    print("RELOAD_MAG recorrido_max=", snappedf(max_travel, 0.001), " m en t=", snappedf(at, 0.01),
-        " s muestras_en_pantalla=", on_screen, "/26 margen_max=", snappedf(best_margin, 0.1), "px")
+    var max_travel := 0.0
+    for a in samples:
+        for b in samples:
+            max_travel = maxf(max_travel, a.distance_to(b))
+    print("RELOAD_MAG recorrido_max=", snappedf(max_travel, 0.001),
+        " m muestras_en_pantalla=", on_screen, "/26 margen_max=", snappedf(best_margin, 0.1), "px")
     return {"travel": max_travel, "on_screen": on_screen}
 
 
 func _print_geometry(label: String) -> void:
     var cam: Camera3D = _player.camera
     var w = _player.weapon
-    var mesh: MeshInstance3D = w.glock_mesh
-    if mesh == null:
-        print("GEOMETRY ", label, " mesh=null")
+    if w.pistol_holder == null:
+        print("GEOMETRY ", label, " sin arma")
         return
     var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
-    # La geometría visible la coloca la cadena medida (mesh_to_weapon), no el
-    # transform del nodo de malla: el AABB de bind hay que pasarlo por ahí.
-    var world_from_bind: Transform3D = (w.recoil_node as Node3D).global_transform * (w.mesh_to_weapon as Transform3D)
-    var box := _bind_aabb(mesh)
-    var bbox := _screen_bbox(box, world_from_bind, cam)
-    var box_weapon := _transform_aabb(box, w.mesh_to_weapon)
+    # La geometria visible es la OWK bajo PBody: su caja en marco del arma
+    # proyectada por el global del cuerpo.
+    var bbox := _screen_bbox(w.gun_box, (w.pistol_holder as Node3D).global_transform, cam)
     var sight_screen: Vector2 = cam.unproject_position(w.get_sight_world_position())
     var muzzle_screen: Vector2 = cam.unproject_position(w.muzzle.global_position)
     var sight_cam: Vector3 = cam.global_transform.affine_inverse() * w.get_sight_world_position()
@@ -1343,21 +1331,21 @@ func _print_geometry(label: String) -> void:
     var pm: Vector3 = recoil_inv * (w.muzzle as Node3D).global_position
     var pe: Vector3 = recoil_inv * (w.ejection_port as Node3D).global_position
     var ps: Vector3 = recoil_inv * w.get_sight_world_position()
-    var frame: Basis = (w.gun_frame_bind as Basis).orthonormalized()
-    print("FRAME ", label, " bind_euler=", frame.get_euler().snapped(Vector3(0.001, 0.001, 0.001)),
-        " bind_det=", snappedf(frame.determinant(), 0.001),
-        " mesh_to_weapon=", (w.mesh_to_weapon as Transform3D).basis.orthonormalized().get_euler().snapped(Vector3(0.001, 0.001, 0.001)),
-        " escala=", (w.mesh_to_weapon as Transform3D).basis.get_scale().snapped(Vector3(0.001, 0.001, 0.001)))
+    print("MOUNT ", label, " escala_brazos=", snappedf(w.arms_scale, 0.0001),
+        " ads_offset=", w.ads_offset.snapped(Vector3(0.001, 0.001, 0.001)),
+        " ads_rot_deg=", (w.ads_rot * 180.0 / PI).snapped(Vector3(0.1, 0.1, 0.1)))
     print("GUNBOX ", label,
-        " min=", box_weapon.position.snapped(Vector3(0.0001, 0.0001, 0.0001)),
-        " size=", box_weapon.size.snapped(Vector3(0.0001, 0.0001, 0.0001)))
-    if w.skeleton != null:
-        for bone_name in ["Root", "Slide", "Trigger", "Magazine", "Barrel", "SlideCatch"]:
-            var bi: int = (w.skeleton as Skeleton3D).find_bone(bone_name)
-            if bi >= 0:
-                var gp: Transform3D = (w.skeleton as Skeleton3D).global_transform * (w.skeleton as Skeleton3D).get_bone_global_rest(bi)
-                var rel: Vector3 = recoil_inv * gp.origin
-                print("BONE ", label, " ", bone_name, " rel=", rel.snapped(Vector3(0.0001, 0.0001, 0.0001)))
+        " min=", w.gun_box.position.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        " size=", w.gun_box.size.snapped(Vector3(0.0001, 0.0001, 0.0001)))
+    if w.arms_skeleton != null:
+        var sk: Skeleton3D = w.arms_skeleton
+        for bone_prefix in ["PBody", "Pmag", "Rif_", "Hand_R", "Hand_L"]:
+            for bi in range(sk.get_bone_count()):
+                if sk.get_bone_name(bi).begins_with(bone_prefix):
+                    var gp: Transform3D = sk.global_transform * sk.get_bone_global_rest(bi)
+                    var rel: Vector3 = recoil_inv * gp.origin
+                    print("BONE ", label, " ", sk.get_bone_name(bi), " rel=", rel.snapped(Vector3(0.0001, 0.0001, 0.0001)))
+                    break
     print("AXES ", label,
         " sight_local=", ps.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " muzzle_local=", pm.snapped(Vector3(0.0001, 0.0001, 0.0001)),
@@ -1525,13 +1513,11 @@ func _transform_aabb(box: AABB, transform: Transform3D) -> AABB:
 func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionary) -> void:
     var w = _player.weapon
     var failures: Array[String] = []
-    if not w.alignment_ok:
-        failures.append("la alineación medida del arma no verifica")
-    if absf(w.measured_length_m - 0.186) > 0.002:
-        failures.append("largo medido %.4f m (esperado 0.186)" % w.measured_length_m)
+    if not w.pistol_ok:
+        failures.append("la OWK no quedo utilizable")
     var size: Vector3 = w.gun_box.size
-    if absf(size.x - 0.0296) > 0.003 or absf(size.y - 0.1286) > 0.004 or absf(size.z - 0.186) > 0.003:
-        failures.append("caja del arma %s (esperado ~0.0296 x 0.1286 x 0.186)" % size)
+    if absf(size.x - 0.034) > 0.005 or absf(size.y - 0.13) > 0.006 or absf(size.z - 0.186) > 0.004:
+        failures.append("caja del arma %s (esperado ~0.034 x 0.13 x 0.186)" % size)
     var slide: Vector3 = travel.get("Slide", Vector3.ZERO)
     if slide.z < 0.02:
         failures.append("la corredera no viaja hacia atrás (delta %s)" % slide)
@@ -1594,8 +1580,7 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionar
         "% del ancho, ancho=", snappedf(_hip_bbox.size.x / view.x * 100.0, 0.1), "%",
         " alto=", snappedf(_hip_bbox.size.y / view.y * 100.0, 0.1), "%",
         " borde_sup=", snappedf(_hip_bbox.position.y / view.y * 100.0, 0.1), "%")
-    print("GEOMETRYDEBUG passed=", passed, " largo_m=", snappedf(w.measured_length_m, 0.0001),
-        " caja=", size.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+    print("GEOMETRYDEBUG passed=", passed, " caja=", size.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " slide=", slide.snapped(Vector3(0.001, 0.001, 0.001)),
         " cargador=", snappedf(float(mag.get("travel", 0.0)), 0.001), " m visible=", int(mag.get("on_screen", 0)), "/26")
     if not passed:
@@ -1680,36 +1665,33 @@ func _slowmo_shot() -> void:
 
 
 
-## Caja del cargador en pantalla, medida sobre su GEOMETRÍA: se toma su caja de
-## reposo en frame de arma y se le aplica la transformación RELATIVA del hueso
-## Magazine, conjugada al frame del arma (el esqueleto y el arma no comparten
-## ejes: sin conjugar, la medida sale donde no está el cargador).
+## Caja del cargador en pantalla, medida sobre su GEOMETRIA viva: el cargador
+## cuelga del hueso Pmag, asi que su caja mundial ya esta donde se ve.
 func _mag_screen_box() -> Dictionary:
     var w = _player.weapon
-    var bone: int = (w.skeleton as Skeleton3D).find_bone("Magazine")
-    if bone < 0:
+    if w.pistol_mag_node == null:
         return {}
-    if _mag_rest_box.size == Vector3.ZERO:
-        var verts := PackedVector3Array()
-        var mesh: MeshInstance3D = w.glock_mesh
-        for i in range(mesh.mesh.get_surface_count()):
-            if mesh.mesh.surface_get_name(i) != "Magazine":
-                continue
-            for v in mesh.mesh.surface_get_arrays(i)[Mesh.ARRAY_VERTEX]:
-                verts.append((w.mesh_to_weapon as Transform3D) * v)
-        if verts.is_empty():
-            return {}
-        _mag_rest_box = _bounds_of(verts)
-    var skeleton_node: Skeleton3D = w.skeleton
-    var skel_from_weapon: Transform3D = ((w.model_root as Node3D).transform *
-        _chain_to(w.skeleton, w.model_root)).affine_inverse()
-    var weapon_from_skel: Transform3D = skel_from_weapon.affine_inverse()
-    var rel_skel: Transform3D = skeleton_node.get_bone_global_pose(bone) * skeleton_node.get_bone_global_rest(bone).affine_inverse()
-    var rel_weapon: Transform3D = weapon_from_skel * rel_skel * skel_from_weapon
-    var posed: AABB = _transform_aabb(_mag_rest_box, (w.recoil_node as Node3D).global_transform * rel_weapon)
+    var posed := AABB()
+    var first := true
+    var stack: Array = [w.pistol_mag_node]
+    while not stack.is_empty():
+        var n = stack.pop_back()
+        if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
+            var mi := n as MeshInstance3D
+            var local := _bind_aabb(mi)
+            var world := _transform_aabb(local, mi.global_transform)
+            if first:
+                posed = world
+                first = false
+            else:
+                posed = posed.merge(world)
+        for c in n.get_children():
+            stack.append(c)
+    if first:
+        return {}
     var cam: Camera3D = _player.camera
     var sbox := Rect2()
-    var first := true
+    var started := false
     var cmin := posed.position
     var cmax := posed.position + posed.size
     for xi in [0.0, 1.0]:
@@ -1719,9 +1701,9 @@ func _mag_screen_box() -> Dictionary:
                 if cam.is_position_behind(corner):
                     return {}
                 var sp := cam.unproject_position(corner)
-                if first:
+                if not started:
                     sbox = Rect2(sp, Vector2.ZERO)
-                    first = false
+                    started = true
                 else:
                     sbox = sbox.expand(sp)
     return {"box": sbox, "centro": cam.unproject_position(posed.position + posed.size * 0.5)}
@@ -1736,16 +1718,6 @@ func _bounds_of(verts: PackedVector3Array) -> AABB:
         mn = mn.min(v)
         mx = mx.max(v)
     return AABB(mn, mx - mn)
-
-
-func _chain_to(node: Node, ancestor: Node) -> Transform3D:
-    var result := Transform3D.IDENTITY
-    var current := node
-    while current != null and current != ancestor:
-        if current is Node3D:
-            result = (current as Node3D).transform * result
-        current = current.get_parent()
-    return result
 
 
 func _slowmo_reload() -> void:

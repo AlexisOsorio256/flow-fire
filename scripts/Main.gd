@@ -235,29 +235,41 @@ func _run_aimtest() -> void:
     await get_tree().create_timer(0.7).timeout
     player.weapon.set_aim(true)
     await get_tree().create_timer(1.0).timeout
+    # La autoridad es la mira visible: alza trasera Y delantera de la OWK sobre
+    # el eje optico. Los marcadores se fijan desde la geometria (nunca desde la
+    # pose), asi que este test vigila el producto real: si alguien mueve el
+    # arma, los marcadores o la pose de ADS, falla.
     var eye: Vector3 = player.camera.global_position
-    var sight: Vector3 = player.weapon.get_sight_world_position()
-    var screen_pos: Vector2 = player.camera.unproject_position(sight)
-    var center: Vector2 = get_viewport().get_visible_rect().size * 0.5
-    var delta: float = screen_pos.distance_to(center)
-    # En headless el viewport es diminuto (32x32) y delta_px pierde valor: el
-    # error angular no depende de la resolución y sí dice si la mira está centrada.
     var forward: Vector3 = -player.camera.global_transform.basis.z.normalized()
-    var angle_mrad: float = acos(clampf((sight - eye).normalized().dot(forward), -1.0, 1.0)) * 1000.0
-    var offset_mm: float = tan(angle_mrad * 0.001) * (sight - eye).length() * 1000.0
-    # La mira y el impacto tienen que coincidir: el arma se coloca con el ADS
-    # medido, así que el desvío debe ser de milímetros, no de un grado.
-    # La mira va en el centro de la pantalla porque es ahí donde va la bala:
-    # antes se dejaba 8 mm por debajo (1 grado de error) y el disparo no caía
-    # donde el jugador veía la mira.
+    var worst_mm := 0.0
+    var worst_mrad := 0.0
+    var idx := 0
+    for sight in [player.weapon.get_sight_world_position(), player.weapon.get_front_sight_world_position()]:
+        var to_sight: Vector3 = (sight - eye)
+        var angle_mrad: float = acos(clampf(to_sight.normalized().dot(forward), -1.0, 1.0)) * 1000.0
+        var offset_mm: float = tan(angle_mrad * 0.001) * to_sight.length() * 1000.0
+        var glock_inv: Transform3D = (player.weapon as Node3D).global_transform.affine_inverse()
+        var in_g: Vector3 = glock_inv * sight
+        var eye_g: Vector3 = glock_inv * eye
+        print("AIMTEST mira=", idx, " offset_mm=", snappedf(offset_mm, 0.1),
+            " mrad=", snappedf(angle_mrad, 0.01), " en_glock=", in_g.snapped(Vector3(0.001, 0.001, 0.001)),
+            " ojo_glock=", eye_g.snapped(Vector3(0.001, 0.001, 0.001)))
+        idx += 1
+        worst_mm = maxf(worst_mm, offset_mm)
+        worst_mrad = maxf(worst_mrad, angle_mrad)
+    # En headless el viewport es diminuto (32x32): el error angular no depende
+    # de la resolución y sí dice si la mira está centrada.
+    # La mira y el impacto tienen que coincidir: el desvío debe ser de
+    # milímetros, no de un grado. La mira va en el centro de la pantalla porque
+    # es ahí donde va la bala.
     const MAX_OFFSET_MM := 6.0
     const MAX_ANGLE_MRAD := 12.0
-    var passed: bool = offset_mm <= MAX_OFFSET_MM and angle_mrad <= MAX_ANGLE_MRAD and player.weapon.aim_blend > 0.99
-    print("AIMTEST sight_screen=", screen_pos, " center=", center, " delta_px=", delta,
-        " angle_mrad=", snappedf(angle_mrad, 0.01), " offset_mm=", snappedf(offset_mm, 0.1),
+    var passed: bool = worst_mm <= MAX_OFFSET_MM and worst_mrad <= MAX_ANGLE_MRAD and player.weapon.aim_blend > 0.99
+    print("AIMTEST peor_mira_mm=", snappedf(worst_mm, 0.1),
+        " peor_mrad=", snappedf(worst_mrad, 0.01),
         " aim_blend=", player.weapon.aim_blend, " passed=", passed)
     if not passed:
-        push_error("AIMTEST falló: la mira se desvía más de %d mm del centro" % int(MAX_OFFSET_MM))
+        push_error("AIMTEST falló: alguna mira se desvía más de %d mm del centro" % int(MAX_OFFSET_MM))
     get_tree().quit(0 if passed else 1)
 
 

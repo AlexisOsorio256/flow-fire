@@ -83,13 +83,17 @@ func _ready() -> void:
 
 
 func _print_measurements() -> void:
-    var mesh: MeshInstance3D = gun.glock_mesh
-    if mesh == null:
-        print("PREVIEW sin malla")
-        return
     var names: Array[String] = []
-    for i in range(mesh.mesh.get_surface_count()):
-        var mat := mesh.get_surface_override_material(i)
-        names.append("%s=%s" % [mesh.mesh.surface_get_name(i), "shader" if mat is ShaderMaterial else str(mat)])
-    print("PREVIEW materiales: ", ", ".join(names))
-    print("PREVIEW largo_m=", snappedf(gun.measured_length_m, 0.0001), " alineacion_ok=", gun.alignment_ok)
+    for part_name in gun.pistol_parts:
+        var node := gun.pistol_parts[part_name] as Node3D
+        var count := 0
+        var stack: Array = [node]
+        while not stack.is_empty():
+            var n = stack.pop_back()
+            if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+                count += 1
+            for c in n.get_children():
+                stack.append(c)
+        names.append("%s(%dm)" % [part_name, count])
+    print("PREVIEW piezas: ", ", ".join(names))
+    print("PREVIEW caja=", gun.gun_box.size, " usable=", gun.pistol_ok)
