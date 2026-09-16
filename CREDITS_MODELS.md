@@ -32,10 +32,42 @@
 
 ### Defectos geométricos medidos (motivo del reemplazo, además de la licencia)
 
-- **20 bucles de frontera, 1 502 aristas sin cara**: los antebrazos son una cáscara abierta. En ADS se mira el extremo del antebrazo de canto y se ve el corte.
-- **Manga corta en proporción al arma**: el tramo hombro→mano mide ~24 cm escalado, cuando un tirador real tiene el hombro a 45-55 cm de la empuñadura. Por eso el hombro entra en encuadre si se quiere que el arma domine.
-- La masa de las esquinas inferiores **no son los hombros**: son las cadenas de antebrazo y sus huesos de torsión (`BoneTwist_01.R_013`, 550 vértices, es la región más grande de la malla). Los huesos llamados `Forearm_L/R` sólo llevan ~180 vértices cada uno.
-- Reescribir el GLB en Blender para tapar los agujeros **rompe el rig** (la silueta cae a 0,0% y 6 071 vértices acaban detrás de la cámara): el round-trip de Blender 4.0 no conserva bien este asset. Vía descartada con evidencia.
+- **Los antebrazos se cortan demasiado cerca de la mano.** Medido en espacio de
+  cámara (ojo a 0,54 m del alza, pose Idle): las manos quedan a 0,58-0,66 m; la
+  manga del antebrazo sólo llega a 0,245-0,35 m y su anillo de corte mira al
+  objetivo a **0,31-0,33 m**. Es lo más cercano a la cámara en pantalla, así que
+  se proyecta enorme y se le ve el corte. Detalle importante medido después: la
+  malla tiene **20 bucles de frontera y 1 497 vértices de borde**, pero **95% de
+  esos vértices están entre 0,35 y 0,70 m**, o sea que son costuras interiores de
+  las piezas (los dedos van como cascaras sueltas), no un borde abierto. Los dos
+  anillos que sí se ven son dos bucles de 100 vértices (~300 mm) que **forman
+  parte del skin visible**.
+- **Manga corta en proporción al arma**: el tramo hombro→mano mide ~24 cm
+  escalado, cuando un tirador real tiene el hombro a 45-55 cm de la empuñadura.
+  Por eso el hombro entra en encuadre si se quiere que el arma domine.
+- La masa de las esquinas inferiores **no son los hombros**: son las cadenas de
+  antebrazo y sus huesos de torsión (`BoneTwist_01.R_013`, 550 vértices, es la
+  región más grande de la malla). Los huesos llamados `Forearm_L/R` sólo llevan
+  ~180 vértices cada uno.
+
+### Dos vías de arreglo descartadas con medición
+
+- **Round-trip por Blender: rompe el skinning.** El GLB reexportado deja la
+  silueta en 0,0% y manda 6 071 vértices detrás de la cámara. Causa: la jerarquía
+  de este GLB (`Armature` a escala 100 bajo un nodo a 0,01) hace que Blender
+  reconstruya el reposo de los huesos a 100x y las traslaciones de la animación
+  se disparen.
+- **Edición directa del buffer del GLB: conserva el rig pero no arregla la
+  vista.** Se escribió un editor de GLB en Python que añade los abanicos de
+  cierre conservando los 81 huesos, las 5 animaciones, los 4 mapas y la metadata
+  de licencia (verificado importando en Godot: 8199 vértices, misma silueta).
+  Resultado visual: **tapa plana gris** en el corte (la cara nueva no tiene UV
+  útil y su normal apunta al objetivo), y al hundir y reducir el anillo para que
+  el corte deje de mirar a la cámara el **cuero se arruga**, porque los vértices
+  del anillo son piel visible. Las dos variantes se revirtieron.
+
+Conclusión medida: **este defecto no se arregla parchando la malla, hace falta
+sustituirla.**
 
 ### Cómo se produjo este GLB (reproducible)
 
@@ -81,15 +113,32 @@ Notas de integración para el candidato 1 (el mejor situado): 10 animaciones, do
 manos enguantadas en agarre de pistola, y sus dos mallas de origen son CC-BY. Su
 punto débil es que el autor avisa de que *"the textures are not fully organized"*.
 
-**Ninguno se ha integrado todavía.** Bloqueo real: el endpoint de descarga de
-Sketchfab (`/v3/models/<uid>/download`) devuelve HTTP 401 sin cuenta autenticada,
-y este entorno no la tiene, así que no se ha podido descargar ni inspeccionar
-ninguno localmente. Según el criterio anti-alucinación del proyecto, un asset no
-se integra sin haber inspeccionado el archivo. La alternativa que sí estaba en
-disco (el GLB de pistola del addon *Godot FPS Hands*, del mismo DJMaesen,
-CC-BY 4.0) se descartó tras medirla: su malla de brazos carga **14 336 de sus
-pesos en el hueso del codo** y la pistola es un nodo rígido sin hueso de arma, así
-que no sirve para el montaje `PBody`/`Pmag` que el juego necesita.
+**Ninguno se ha integrado todavía.** Cómo conseguir uno, medido en este entorno:
+
+| vía | resultado |
+|---|---|
+| `api.sketchfab.com/v3/models/<uid>/download` | **HTTP 401** ("Authentication credentials were not provided"). El endpoint existe y el modelo es `isDownloadable: true`, pero exige cuenta. |
+| `/download/gltf`, `/download/glb`, `/download/source` | **HTTP 404**: no hay atajo por formato. |
+| Página HTML del modelo | Devuelve 202 con cuerpo vacío (protección anti-bot) y no expone la URL de descarga. |
+| `api.github.com/search/code` | **HTTP 401**: requiere token. |
+| Cuenta gratuita de Freesound (para el audio) | Mismo problema: las URLs de descarga redirigen a login. |
+
+Esto no es una suposición: son los códigos de respuesta de cada endpoint. **Para
+desbloquear el reemplazo hace falta una de estas dos cosas**: (a) que alguien con
+cuenta descargue el candidato y lo deje en el repo, o (b) un token de Sketchfab
+con permiso de descarga en el entorno. Mientras no exista ninguna de las dos, el
+asset NC sigue en runtime y el proyecto no es comercializable.
+
+La alternativa que sí estaba en disco (el GLB de pistola del addon *Godot FPS
+Hands*, del mismo DJMaesen, **CC-BY 4.0**, `asset.extras` lo confirma) se midió y
+se descartó: su malla de brazos carga **14 336 de sus pesos en el hueso del codo**
+y la pistola es un nodo rígido sin hueso de arma. Además trae **una sola pista de
+animación de 7,8 s** que el importador de Godot parte en tramos por `slice`
+(`fire` 0,300 s, `reload` 2,167 s, `idle` 0,833 s, medidos en su `.import`): para
+FlowFire habría que separarla en cuatro clips y volver a clavar los instantes
+mecánicos (`RELOAD_MAG_OUT_T`, `RELOAD_MAG_IN_T`, `RELOAD_SLIDE_T`), que hoy están
+medidos sobre las claves de las animaciones actuales. No compensa frente al
+candidato 1.
 
 ---
 

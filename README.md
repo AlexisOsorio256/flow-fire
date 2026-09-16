@@ -142,21 +142,40 @@ lee mejor que antes.
 brazo, pero la geometría del asset sigue teniendo dos defectos reales que no se
 arreglan con encuadre:
 
-1. Los antebrazos son una **cáscara abierta**: medido en Blender, la malla tiene
-   20 bucles de frontera (1 502 aristas sin cara). En ADS se mira el extremo del
-   antebrazo de canto y se ve el corte, no un brazo cerrado.
+1. Los antebrazos se **cortan demasiado cerca de la mano**. Medido en espacio de
+   cámara (ojo a 0,54 m del alza): las manos quedan a 0,58-0,66 m, pero la manga
+   del antebrazo sólo llega a 0,245-0,35 m, y su anillo de corte mira al objetivo
+   a **0,31-0,33 m**. Es el trozo de brazos más cercano a la cámara, así que se
+   proyecta enorme y se le ve el corte. No es un agujero de la malla: son dos
+   anillos de frontera de 100 vértices cada uno (~300 mm) que forman parte del
+   skin visible, no un borde suelto.
 2. La manga es **corta en proporción al arma**: el tramo hombro→mano mide ~24 cm
    escalado, cuando un tirador real tiene el hombro a 45-55 cm de la empuñadura.
-   Por eso, por mucho que se aleje el ojo, el hombro siempre entra en pantalla si
-   se quiere que el arma domine. Es geometría, no ajuste.
+   Por eso, por mucho que se aleje el ojo, el hombro entra en pantalla si se
+   quiere que el arma domine. Es geometría, no ajuste.
+
+**Dos intentos de arreglar (1) sin cambiar de asset, los dos descartados con
+medición:**
+
+- **Reescritura del GLB con Blender**: rompe el skinning. El asset reexportado
+  deja la silueta en 0,0% y manda 6 071 vértices detrás de la cámara. La jerarquía
+  de este GLB (`Armature` a escala 100 bajo un nodo a 0,01) hace que Blender
+  reconstruya el reposo a 100x y las traslaciones de la animación se disparen.
+- **Edición directa del buffer del GLB** (sin Blender, conservando los 81 huesos
+  y las 5 animaciones por construcción, verificado). Tapar los anillos con un
+  abanico al centroide sale como **una tapa plana gris**: la cara nueva no tiene
+  un UV útil y su normal apunta al objetivo. Reducir y hundir el anillo para que
+  el corte deje de mirar a la cámara **arruga el cuero** (los vértices del anillo
+  son piel visible, no un borde oculto). Los dos resultados se revirtieron.
+
+Ninguno de los dos se queda. La conclusión medida es que **este defecto no se
+arregla parchando la malla: hace falta sustituirla.** Un FOV más estrecho también
+lo taparía, pero está excluido explícitamente y además encogería el arma, que es
+justo lo contrario de lo que se pide.
 
 Los dos se resolverían sustituyendo la malla. Lo que lo bloquea no es criterio
 artístico sino **licencia** (ver siguiente apartado) y que no hay forma de
-descargar los candidatos limpios desde este entorno. Un intento de reescribir el
-GLB en Blender para tapar los agujeros rompió el rig (la silueta cayó a 0,0% y
-6 071 vértices acabaron detrás de la cámara): el round-trip de Blender no
-conserva bien este asset, así que esa vía queda descartada con evidencia, no por
-suposición.
+descargar los candidatos limpios desde este entorno.
 
 ### Licencia de los brazos: pendiente de sustituir
 
