@@ -866,7 +866,11 @@ func _skinned_verts(mi: MeshInstance3D, sk: Skeleton3D, space: Node3D) -> Packed
         inv_rest.append(sk.get_bone_global_rest(b).affine_inverse())
     for si in range(mi.mesh.get_surface_count()):
         var arrays := mi.mesh.surface_get_arrays(si)
+        if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
+            continue
         var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+        if arrays[Mesh.ARRAY_BONES] == null or arrays[Mesh.ARRAY_WEIGHTS] == null:
+            continue
         var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
         var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
         for i in range(verts.size()):
@@ -907,7 +911,11 @@ func run_sightdiag() -> void:
     var brazos: MeshInstance3D = null
     while not stack.is_empty():
         var n = stack.pop_back()
-        if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+        # Los soportes PBody/Pmag cuelgan la OWK (rígida) del esqueleto: no son
+        # la pistola del autor y sus mallas no tienen skin.
+        if n is BoneAttachment3D:
+            continue
+        if n is MeshInstance3D and (n as MeshInstance3D).mesh != null and (n as MeshInstance3D).skin != null:
             mallas.append(n)
             var vc := 0
             for si in range((n as MeshInstance3D).mesh.get_surface_count()):
