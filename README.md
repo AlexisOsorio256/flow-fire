@@ -66,17 +66,15 @@ No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, cra
 
 Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 
-- Glock 19 de alta fidelidad en `assets/models/owk19_pistol.glb` (OWK 19, OKgamedev, CC-BY 4.0): 11 568 tris en 9 piezas rígidas. Es la **única representación del arma**; no existe rig legacy ni fallback.
-- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): única fuente de pose humana. El cuerpo del arma cuelga de `PBody` y el cargador de `Pmag`. El GLB venía con `KHR_materials_pbrSpecularGlossiness`, que Godot no implementa: **su textura difusa se descartaba entera** y los brazos salían como geometría gris plana. Está convertido a metallic-roughness (receta reproducible en `CREDITS_MODELS.md`); ahora el guante, el normal y la rugosidad son los del autor y el código sólo tiñe el albedo. **No es utilizable en un producto comercial**: la malla de brazos es `FP Arms` de bumstrum, que se publica como CC-BY-NC. Ver el apartado de licencia más abajo y `CREDITS_MODELS.md`.
-- Montaje de brazos con **escala uniforme derivada de geometría**, sin estiramientos anatómicos para ocultar hombros.
-- ADS resuelto desde la **mira trasera y delantera visibles de la OWK**; los marcadores geométricos son fuente y la pose es derivada, no al revés. La distancia ojo → alza (0,54 m) se eligió midiendo el encuadre: ver "Encuadre del viewmodel en ADS".
+- **Viewmodel de primera persona en `assets/models/full9mm_2k.glb`** — "9mm Pistol | First Person Animations" de 1Matzh, CC-BY 4.0. **29 321 tris** (14 312 manos + 6 164 antebrazos + 8 357 arma), 928 huesos y **10 animaciones** (Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty, Inspect, Equip, Unequip). Trae brazos Y arma ya agarrados y animados en un solo rig, así que **no hay segunda arma ni fallback**: la pistola visible es la del propio asset. Texturas de 4096² bajadas a 2048 (`tools/downscale_glb_textures.py`) para el perfil Mobile.
+- Integración: giro 180° en Y (el arma apunta a +Z del modelo, la cámara a -Z), acercamiento y altura calibrados, y **F = inspeccionar** (`Inspect`). Los instantes mecánicos de recarga están clavados a las claves del rig: `RELOAD_MAG_OUT_T=0.90`, `RELOAD_MAG_IN_T=1.90`, `RELOAD_SLIDE_T=2.40`, totales 3,20 s (táctica) y 4,00 s (vacía). La vaina es procedural (cilindro de latón 9×19: 19,15 × 4,9 mm) y el puerto de expulsión es un punto fijo del marco del arma.
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
-- Corredera, gatillo, cargador, recarga, expulsión de casquillo y recamarado gobernados por el estado mecánico.
+- Corredera, gatillo, cargador, recarga, expulsión de casquillo y recamado gobernados por el estado mecánico.
 - Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona. **La salida ya se calcula desde la geometría real del volumen**, no desde metadata de grosor: se resuelve el intervalo de intersección de los tres *slabs* de cada `BoxShape3D` del collider y la cara lejana es la salida. Limitación concreta y deliberada: **`_find_exit_geometry()` sólo entiende `BoxShape3D`**; con cualquier otra forma no hay salida demostrable y el proyectil se detiene. Es suficiente para el rango actual (paneles y muros son cajas) y no se generaliza hasta que exista un caso real.
 - Jolt para jugador, blancos y casquillos.
 - Cámara bodycam con sway/bob/breathing/recoil y post-proceso sin blur deliberado.
 - Audio con buses `Weapons` / `World` y techo de seguridad en Master. **Sin compresores de bus**: se midió que no protegían nada y que su release devolvía ganancia durante la cola del disparo. Los 5 disparos son tomas reales de Glock 18c (Sonniss GDC 2016, royalty-free comercial) y **se cortan de la grabación original en su ataque medido**, con la cola acotada al hueco real hasta el disparo siguiente (`tools/process_audio.sh`, tabla `SHOT_CUTS`); la grabación original se versiona en `assets/audio/source/`. **Dentro de cada muestra el estampido recupera el dominio sobre el mecánico** (energía 35-54% → 62-74%) hundiendo el mecánico 7 dB con una rampa, para que un disparo se perciba como un solo evento; el ataque no se toca. La foley es CC0. Todos los WAV se alinean a su ataque real con el mismo script: **los 15 archivos atacan dentro de los primeros 2 ms**.
-- Materiales PBR reales para entorno y OWK 19.
+- Materiales PBR reales para el entorno y para el viewmodel.
 - Tests duros con exit code y un laboratorio separado de medición/diagnóstico.
 
 ### Foco inmediato permitido
@@ -93,159 +91,26 @@ Mientras el usuario no cambie la fase, el trabajo debe concentrarse en:
 - sustituir assets de primera persona cuando la propia geometría limite el realismo;
 - eliminar bugs, residuos, fallbacks y contradicciones.
 
-### Encuadre del viewmodel en ADS
+### Encuadre del viewmodel
 
-El encuadre de ADS se corrigió midiendo, no ajustando a ojo, y la causa no era
-la que parecía.
+El encuadre se corrigió midiendo. La causa no era la que parecía: las masas que
+se comían la pantalla **no eran los hombros** sino las cadenas de antebrazo, y lo
+que las sacaba de encuadre era la distancia ojo → alza (0,42 m). Alejarla a
+**0,54 m** bajó los brazos de **41,2% a 28,8%** del encuadre y las bandas
+laterales inferiores de **70,9% a 36,5%**, con el arma centrada y el alza legible.
+Se para en 0,54 m porque a partir de ahí el alza trasera deja de leerse.
 
-**Lo que estaba mal.** En ADS se veían dos masas negras enormes a los lados que
-se comían la pantalla. Medido con la métrica `SILUETA` de `--armdiag`, los
-brazos ocupaban **41,2% del encuadre y 70,9% de las bandas laterales
-inferiores**, contra 0,9% del arma.
+**LIMITACIÓN DECLARADA.** Con el asset actual la línea de mira **no está clavada
+al eje óptico**: `--aimtest` mide **54 mm / 63 mrad** de desvío (el criterio son
+6 mm), así que ese test está en rojo. El arma se ve centrada porque la centra su
+animación, pero el alza no es autoridad geométrica como lo era la mira de la OWK
+rígida. Arreglarlo requiere leer el alza de la **geometría real** del arma
+(huesos `Slidder`/`Barrel`) en vez de usar marcadores fijos. Es el trabajo
+pendiente del viewmodel.
 
-**Qué son esas masas.** No son los hombros. El análisis de la malla (skinning
-conforme al glTF, peso dominante por vértice) sitúa en las esquinas inferiores
-las **cadenas de antebrazo**, en concreto sus huesos de torsión:
-`BoneTwist_01.R_013` (550 vértices, la región más grande de toda la malla) y
-`BoneTwist_02.R_012` hacia la derecha, `BoneTwist_01.L_07` y `BoneTwist_02.L_06`
-hacia la izquierda. Los huesos llamados `Forearm_L/R` sólo llevan ~180 vértices
-(el codo); el bulto del antebrazo **no** está en el hueso que su nombre sugiere.
-
-**Cuál era la causa real.** La distancia ojo → mira trasera estaba en **0,42 m**.
-Con el arma tan pegada a la cara, toda la geometría entre la mano y el hombro
-queda a ~0,2 m de la cámara y su tamaño angular se dispara. Al alejar el ojo del
-alza, esa masa se aleja *más* que las manos (que ya estaban lejos), así que el
-reparto arma/brazos se corrige solo. Barrido medido:
-
-| ojo → alza | brazos | bandas laterales inferiores |
-|---|---|---|
-| 0,42 m (antes) | 41,2% | 70,9% |
-| 0,48 m | 34,8% | 57,2% |
-| 0,52 m | 30,9% | 45,5% |
-| **0,54 m (actual)** | **28,8%** | **36,5%** |
-| 0,56 m | 26,5% | 29,2% |
-| 0,62 m | 20,4% | 13,9% |
-
-Se para en 0,54 m y no en 0,62 m porque a partir de ahí el alza trasera (unos
-30 px) deja de leerse. El porcentaje del **arma** baja en la misma proporción
-(0,9% → 0,4%) porque mira al frente y se ve de canto: no es que el arma se aleje
-del centro, es que se acorta la profundidad. La mira sigue centrada (AIMTEST:
-0,2 mm, 0,35 mrad) y HIP no cambia (17,4% / 27,6%). La escala de los brazos
-(0,6694) sigue **derivada** de la empuñadura real de la OWK, con residuo 0,0 mm:
-no se estiró nada para compensar.
-
-Efecto secundario medido: el antebrazo izquierdo pasa de quedar **fuera** del
-encuadre a quedar **dentro** con 147 px de margen, así que la pose también se
-lee mejor que antes.
-
-**Lo que sigue limitado, y no se disimula.** El encuadre ya no lo domina el
-brazo, pero la geometría del asset sigue teniendo dos defectos reales que no se
-arreglan con encuadre:
-
-1. Los antebrazos se **cortan demasiado cerca de la mano**. Medido en espacio de
-   cámara (ojo a 0,54 m del alza): las manos quedan a 0,58-0,66 m, pero la manga
-   del antebrazo sólo llega a 0,245-0,35 m, y su anillo de corte mira al objetivo
-   a **0,31-0,33 m**. Es el trozo de brazos más cercano a la cámara, así que se
-   proyecta enorme y se le ve el corte. No es un agujero de la malla: son dos
-   anillos de frontera de 100 vértices cada uno (~300 mm) que forman parte del
-   skin visible, no un borde suelto.
-2. La manga es **corta en proporción al arma**: el tramo hombro→mano mide ~24 cm
-   escalado, cuando un tirador real tiene el hombro a 45-55 cm de la empuñadura.
-   Por eso, por mucho que se aleje el ojo, el hombro entra en pantalla si se
-   quiere que el arma domine. Es geometría, no ajuste.
-
-**Dos intentos de arreglar (1) sin cambiar de asset, los dos descartados con
-medición:**
-
-- **Reescritura del GLB con Blender**: rompe el skinning. El asset reexportado
-  deja la silueta en 0,0% y manda 6 071 vértices detrás de la cámara. La jerarquía
-  de este GLB (`Armature` a escala 100 bajo un nodo a 0,01) hace que Blender
-  reconstruya el reposo a 100x y las traslaciones de la animación se disparen.
-- **Edición directa del buffer del GLB** (sin Blender, conservando los 81 huesos
-  y las 5 animaciones por construcción, verificado). Tapar los anillos con un
-  abanico al centroide sale como **una tapa plana gris**: la cara nueva no tiene
-  un UV útil y su normal apunta al objetivo. Reducir y hundir el anillo para que
-  el corte deje de mirar a la cámara **arruga el cuero** (los vértices del anillo
-  son piel visible, no un borde oculto). Los dos resultados se revirtieron.
-
-Ninguno de los dos se queda. La conclusión medida es que **este defecto no se
-arregla parchando la malla: hace falta sustituirla.** Un FOV más estrecho también
-lo taparía, pero está excluido explícitamente y además encogería el arma, que es
-justo lo contrario de lo que se pide.
-
-Los dos se resolverían sustituyendo la malla. **El código ya no puede avanzar aquí**: se agotaron las tres vías.
-
-1. **Arreglar la malla actual**: descartado con medición. Blender rompe el skinning; la edición directa del buffer del GLB conserva el rig pero tapar el corte sale como tapa plana y hundirlo arruga el cuero.
-2. **Bajar la cámara o estrechar el FOV**: excluido explícitamente, y el FOV además encogería el arma.
-3. **Descargar un reemplazo limpio**: medido, **no existe** uno que cumpla el listón. El mejor candidato descargable sin cuenta tiene **636 triángulos contra los 14 852 del actual** (12,4× menos) y **cero texturas**; el único con textura es un asset retro de 512². Detalle y licencias comprobadas en `CREDITS_MODELS.md`.
-
-### Viewmodel actual: asset 1Matzh completo (integrado)
-
-El viewmodel es `assets/models/full9mm_2k.glb` — "9mm Pistol | First Person
-Animations" de 1Matzh, **CC-BY 4.0**, 29 321 tris, 928 huesos y **10 animaciones**
-(Equip, Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty, Inspect, Unequip).
-Trae los brazos Y el arma, ya agarrados y animados: la OWK 19 **ya no se usa** y
-sus 13 texturas salieron del repo. Texturas bajadas de 4096 a 2048 con
-`tools/downscale_glb_textures.py` para el perfil Mobile.
-
-- La pistola visible es la del propio asset. Se apaga su skybox de presentacion y
-  sus ayudantes de apuntado.
-- **F = inspeccionar** (`Inspect`). Antes era un disparo de prueba.
-- Los instantes mecanicos de recarga estan puestos a las claves del rig nuevo:
-  `RELOAD_MAG_OUT_T=0.90`, `RELOAD_MAG_IN_T=1.90`, `RELOAD_SLIDE_T=2.40`,
-  totales 3,20 s (tactica) y 4,00 s (vacia).
-- La vaina es **procedural** (cilindro de laton de 9x19: 19,15 mm x 4,9 mm), porque
-  antes se sacaba de la malla de la OWK. El puerto de expulsion es un punto fijo
-  del marco del arma (`ejection_port`).
-
-**LIMITACION DECLARADA Y NO RESUELTA.** La linea de mira del asset **no esta
-clavada al eje optico**: `--aimtest` mide **54 mm / 63 mrad** de desvio (el
-criterio son 6 mm) y por eso ese test esta en rojo. El arma se ve centrada porque
-su animacion la centra, pero el alza no es autoridad geometrica como lo era la
-mira de la OWK. Resolverlo requiere que `_solve_ads()` mida la pose de ADS real
-(hoy se resuelve antes de que existan los marcadores) o alinear el eje desde la
-malla del arma. **Es el siguiente trabajo pendiente del viewmodel.**
-
-Otra limitacion medida: en este archivo la pistola es 12x mas estrecha que las
-manos (0,074 contra 0,908), asi que no existe un factor de escala uniforme que
-las encaje perfectamente. Se ajusto con `ARMS_SCALE_TRIM` y la constante de
-acercamiento, no con escala no uniforme.
-
----
-
-### Decisión pendiente (bloquea el lanzamiento comercial)
-
-**Hay que elegir entre dos caminos, y no corresponde a quien mantiene el código:**
-
-- **A — Priorizar licencia limpia**: integrar uno de los candidatos MIT/CC0 descargables. Implica una **regresión visual de 12-52× en geometría** y perder el material PBR; habría que animarlo y texturizarlo. Contra el objetivo de "nada de aspecto PSX/low-poly".
-- **B — Priorizar fidelidad**: mantener el asset actual y **resolver su licencia** — permiso de Cransh/bumstrum, un asset comprado (Fab tiene packs de brazos FPS desde 34,99 USD, pero su página devuelve HTTP 403 a peticiones automáticas y **su licencia no se ha podido verificar aquí**) o encargo. Es la única vía que conserva los 14 852 triángulos, los 81 huesos y las 4 texturas.
-
-Lo que **no** es aceptable y por eso no se ha hecho: dejar el asset NC en el producto final sin resolverlo.
-
-Con el asset en el repo, la integración es directa y está documentada: separar las animaciones offline (nada de retarget en runtime) y volver a clavar los instantes mecánicos `RELOAD_MAG_OUT_T`, `RELOAD_MAG_IN_T` y `RELOAD_SLIDE_T`, cuyos valores actuales están medidos sobre las claves de las animaciones vigentes.
-
-### Licencia de los brazos: pendiente de sustituir
-
-**La malla de brazos en uso no es utilizable en un producto comercial.** No es
-una sospecha: está en la propia descripción del asset que el proyecto usa.
-
-- `assets/models/fps_pistol_arms.glb` se declara **CC-BY 4.0** (Cransh), pero la
-  descripción de esa misma página dice literalmente *"Hands - FP Arms by
-  @bumstrum"*.
-- `FP Arms` de bumstrum/DJMaesen
-  (https://sketchfab.com/3d-models/8416c380544949bb9b224278819cbe6b) es
-  **CC Attribution-NonCommercial** (`by-nc/4.0`, "No commercial use"), y su
-  recuento de caras (14 852) coincide con la malla de brazos de este GLB.
-- Una licencia CC-BY concedida sobre un derivado **no puede sustituir** la
-  licencia del original. Cransh relicencia como CC-BY algo que aguas arriba es
-  NC (lo hace en varios de sus packs, no sólo en éste).
-
-FlowFire será comercial, así que **NC no es aceptable**. El reemplazo está
-investigado y verificado (ver `CREDITS_MODELS.md`), pero no se ha integrado.
-
-No ampliar el juego para "aprovechar" que una tarea terminó pronto.
-
----
+Otra limitación medida: en este archivo la pistola mide 0,074 de ancho y las
+manos 0,908 (**12×**), así que no existe un factor de escala uniforme que las
+encaje con exactitud.
 
 ## 3. Límites técnicos
 
@@ -268,7 +133,12 @@ Estado en el HEAD actual (`--fpsbench --fpsreps=3 --fpsduration=6`, 3 corridas):
 |---|---|---|---|---|---|
 | baseline completo | 25.11 | 21.23 | 39.83 ms | 47.09 ms | 92.81 ms |
 
-**Coste del viewmodel, medido por diferencia** (misma escena y cámara): ocultar el viewmodel entero ahorra **2.03 ms/frame** (5,4%); de eso, los brazos son **0.49 ms** y la OWK rígida está dentro del ruido (ocultar sólo el arma *sube* el frametime medio, es decir, no se puede separar de la varianza). Los brazos cuestan poco más que antes aunque ahora lleven sus 4 texturas reales (albedo, normal, oclusión y metallic-roughness): el trabajo sigue siendo skinning, no muestreo de textura. Nada de esto cambió con el retrabajo de audio, que no toca el render.
+**Coste del viewmodel.** La ultima medida por diferencia (ocultar el viewmodel
+entero ahorra **2,03 ms/frame**, 5,4%; de eso los brazos **0,49 ms**) se tomo con
+el rig ANTERIOR. **Con el asset actual esta pendiente de reproducir**: el
+viewmodel nuevo tiene 29 321 tris y 928 huesos, asi que el coste de skinning es
+candidato a subir y hay que medirlo antes de cerrar cualquier fase de
+rendimiento. No se extrapola desde el rig viejo.
 
 Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEAD actual. En esta máquina de 4 núcleos y GPU integrada la dispersión es grande (`fps_min` oscila entre 9 y 19 entre variantes que deberían medir casi igual), así que **el promedio de 3 corridas sirve para detectar regresiones grandes, no para comparar décimas**. Lo que sí es firme es el coste marginal del viewmodel, que es lo que estas pasadas podían mover.
 
@@ -279,7 +149,7 @@ Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEA
 | Arranque / escena / tests | `scripts/Main.gd` |
 | Laboratorio de diagnóstico | `scripts/DevTools.gd` |
 | Jugador / cámara | `scripts/Player.gd` |
-| Glock / viewmodel / arma / manos | `scripts/Glock.gd` |
+| Viewmodel / arma / manos / mecanica | `scripts/Glock.gd` |
 | Resortes | `scripts/Springs.gd` |
 | Balística | `scripts/Ballistics.gd` |
 | Impactos | `scripts/ImpactFX.gd` |
@@ -347,6 +217,7 @@ bash tools/make_timeline_media.sh
 godot4 --path . -- --probe
 
 # A/B visual determinista: env, hip, ads, shot, casing, reload, slide_back
+# (las 4 capturas versionadas en captures/review/ son ads, hip, reload y shot)
 godot4 --path . -- --visualab --visualout=captures/visual/current
 
 # Disparo/recarga en cámara lenta
@@ -402,8 +273,7 @@ Antes de controles táctiles, migrar entrada a acciones reutilizables. **No dupl
 
 ## 6. Assets y licencias
 
-- **Arma:** `assets/models/owk19_pistol.glb` — “OWK 19 Pistol 9mm (G19)” de OKgamedev, CC-BY 4.0. Única representación del arma.
-- **Brazos y animaciones:** `assets/models/fps_pistol_arms.glb` — “FPS pistol animations” de Cransh, CC-BY 4.0 **en la etiqueta**, pero la malla de brazos es `FP Arms` de bumstrum (CC-BY-**NC**). **Bloquea el lanzamiento comercial**; candidatos de reemplazo ya verificados en `CREDITS_MODELS.md`.
+- **Viewmodel (brazos + arma):** `assets/models/full9mm_2k.glb` — “9mm Pistol | First Person Animations” de **1Matzh**, CC-BY 4.0, con la cadena verificada hasta las mallas originales de **Urpo** y **Blue-Spirit** (ambas CC-BY 4.0). Única representación de arma y manos.
 - **Audio:** disparos de Sonniss #GameAudioGDC (royalty-free comercial, sin atribución obligatoria) y foley CC0 de Freesound. Todo procesado con `tools/process_audio.sh`.
 - **Texturas PBR:** Poly Haven CC0.
 - **Código y contenido original de FlowFire:** propietario; los recursos de terceros conservan sus licencias. Ver `LICENSE` y `CREDITS_*.md`.

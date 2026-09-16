@@ -11,7 +11,8 @@ Thumbs.db
 *.swp
 
 # Capturas de diagnostico: se regeneran con --visualab/--timeline y no aportan
-# nada al repo. Solo se versiona la evidencia de auditoria de captures/review/.
+# nada al repo. Solo se versiona la evidencia de revision de captures/review/,
+# que son 4 estados (hip, ads, reload, shot) visibles para el revisor.
 captures/*
 !captures/review/
 !captures/review/**
