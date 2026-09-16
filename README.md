@@ -60,9 +60,9 @@ No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, cra
 
 Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 
-- Glock 19 de alta fidelidad en `assets/models/owk19_pistol.glb` (OWK 19, OKgamedev, CC-BY 4.0): 11 568 tris en 9 piezas rígidas, movidas por la mecánica existente. Se recupera el arma low-poly anterior con `--oldgun`.
-- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): es el viewmodel visible de dos manos. `assets/models/fps_rig.glb` se conserva como soporte interno de la mecánica heredada.
-- Arma medida en runtime: orientación, escala, boca, mira, puerto de expulsión y unidades de pose se verifican en vez de depender de offsets ciegos.
+- Glock 19 de alta fidelidad en `assets/models/owk19_pistol.glb` (OWK 19, OKgamedev, CC-BY 4.0): 11 568 tris en 9 piezas rígidas. Es la única arma: sin rig legacy, sin mallas ocultas, sin esqueletos de soporte.
+- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): el viewmodel visible de dos manos. El cuerpo del arma cuelga del hueso PBody y el cargador del hueso Pmag; la mira visible real define el ADS.
+- Arma medida en runtime: orientación, escala, boca, miras (trasera y delantera), puerto de expulsión y escala uniforme de brazos se derivan de la geometría, no de offsets ciegos.
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
 - Arma centrada en el encuadre en pose de lista y, al apuntar, vista desde detrás del arma con la mira clavada en el centro (donde impacta la bala).
 - Corredera, gatillo, cargador, cañón, recarga, expulsión de casquillo y recamarado.
@@ -152,8 +152,7 @@ ni un milisegundo— y el script de animación tampoco.
 | Arranque / escena / tests | `scripts/Main.gd` |
 | Herramientas de diagnóstico | `scripts/DevTools.gd` |
 | Jugador / cámara | `scripts/Player.gd` |
-| Glock / viewmodel / animación mecánica | `scripts/Glock.gd` |
-| Material del arma | `scripts/GunMaterials.gd` + `shaders/gun.gdshader` |
+| Glock / viewmodel / arma / manos | `scripts/Glock.gd` |
 | Resortes | `scripts/Springs.gd` |
 | Balística | `scripts/Ballistics.gd` |
 | Impactos | `scripts/ImpactFX.gd` |
@@ -272,8 +271,8 @@ Antes de controles táctiles, el input debe pasar por acciones reutilizables. **
 
 ## 6. Assets y licencias
 
-- **Arma:** `assets/models/owk19_pistol.glb` — “OWK 19 Pistol 9mm (G19)” de OKgamedev, CC-BY 4.0 (`--oldgun` recupera la anterior).
-- **Brazos y animaciones:** `assets/models/fps_pistol_arms.glb` — “FPS pistol animations” de Cransh, CC-BY 4.0. `fps_rig.glb` queda como soporte interno del esqueleto mecánico. Ver `CREDITS_MODELS.md`.
+- **Arma:** `assets/models/owk19_pistol.glb` — “OWK 19 Pistol 9mm (G19)” de OKgamedev, CC-BY 4.0. Única representación del arma.
+- **Brazos y animaciones:** `assets/models/fps_pistol_arms.glb` — “FPS pistol animations” de Cransh, CC-BY 4.0. Única fuente de pose humana. Ver `CREDITS_MODELS.md`.
 - **Audio:** Freesound CC0, procesado con `tools/process_audio.sh`. Ver `CREDITS_AUDIO.md`.
 - **Texturas PBR:** Poly Haven CC0. Ver `CREDITS_TEXTURES.md`.
 - **Código del proyecto:** MIT. Ver `LICENSE`.
