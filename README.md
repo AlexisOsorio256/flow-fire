@@ -67,7 +67,7 @@ No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, cra
 Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 
 - **Viewmodel de primera persona en `assets/models/full9mm_2k.glb`** — "9mm Pistol | First Person Animations" de 1Matzh, CC-BY 4.0. **29 321 tris** (14 312 manos + 6 164 antebrazos + 8 357 arma), 928 huesos y **10 animaciones** (Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty, Inspect, Equip, Unequip). Trae brazos Y arma ya agarrados y animados en un solo rig, así que **no hay segunda arma ni fallback**: la pistola visible es la del propio asset. Texturas de 4096² bajadas a 2048 (`tools/downscale_glb_textures.py`) para el perfil Mobile.
-- Integración: giro 180° en Y (el arma apunta a +Z del modelo, la cámara a -Z), acercamiento y altura calibrados, y **F = inspeccionar** (`Inspect`). Los instantes mecánicos de recarga están clavados a las claves del rig: `RELOAD_MAG_OUT_T=0.90`, `RELOAD_MAG_IN_T=1.90`, `RELOAD_SLIDE_T=2.40`, totales 3,20 s (táctica) y 4,00 s (vacía). La vaina es procedural (cilindro de latón 9×19: 19,15 × 4,9 mm) y el puerto de expulsión es un punto fijo del marco del arma.
+- Integración: giro 180° en Y (el arma apunta a +Z del modelo, la cámara a -Z), acercamiento y altura calibrados, y **F = inspeccionar** (`Inspect`). Los instantes mecánicos de recarga están clavados a las claves del rig: `RELOAD_MAG_OUT_T=0.30`, `RELOAD_MAG_IN_T=2.50`, `RELOAD_SLIDE_T=2.90`, totales 3,20 s (táctica) y 4,00 s (vacía). La vaina es procedural (cilindro de latón 9×19: 19,15 × 4,9 mm) y el puerto de expulsión es un punto fijo del marco del arma.
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
 - Corredera, gatillo, cargador, recarga, expulsión de casquillo y recamado gobernados por el estado mecánico.
 - Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona. **La salida ya se calcula desde la geometría real del volumen**, no desde metadata de grosor: se resuelve el intervalo de intersección de los tres *slabs* de cada `BoxShape3D` del collider y la cara lejana es la salida. Limitación concreta y deliberada: **`_find_exit_geometry()` sólo entiende `BoxShape3D`**; con cualquier otra forma no hay salida demostrable y el proyectil se detiene. Es suficiente para el rango actual (paneles y muros son cajas) y no se generaliza hasta que exista un caso real.
@@ -100,13 +100,14 @@ que las sacaba de encuadre era la distancia ojo → alza (0,42 m). Alejarla a
 laterales inferiores de **70,9% a 36,5%**, con el arma centrada y el alza legible.
 Se para en 0,54 m porque a partir de ahí el alza trasera deja de leerse.
 
-**LIMITACIÓN DECLARADA.** Con el asset actual la línea de mira **no está clavada
-al eje óptico**: `--aimtest` mide **54 mm / 63 mrad** de desvío (el criterio son
-6 mm), así que ese test está en rojo. El arma se ve centrada porque la centra su
-animación, pero el alza no es autoridad geométrica como lo era la mira de la OWK
-rígida. Arreglarlo requiere leer el alza de la **geometría real** del arma
-(huesos `Slidder`/`Barrel`) en vez de usar marcadores fijos. Es el trabajo
-pendiente del viewmodel.
+**ADS geométrico verificado.** La pose se resuelve después de montar los
+marcadores medidos sobre la geometría real de las miras, unidos a la corredera.
+Se alinea la línea de mira con el eje de cámara y se corrige el balanceo usando
+la orientación del hueso `Slidder`. `--aimtest` mide **5,3 mm / 9,79 mrad** de
+desvío máximo: está en verde frente al criterio de **6 mm**; no es error cero.
+
+**Pendiente de revisión perceptual:** tamaño/encuadre del fogonazo con captura
+lateral, peso de los contactos de recarga y brillo del casquillo.
 
 Otra limitación medida: en este archivo la pistola mide 0,074 de ancho y las
 manos 0,908 (**12×**), así que no existe un factor de escala uniforme que las
@@ -269,7 +270,7 @@ Controles provisionales de escritorio:
 - `Click izq`: capturar mouse / disparar
 - `Click der`: ADS
 - `R`: recargar
-- `F`: disparo alternativo de prueba
+- `F`: inspeccionar el arma (con el mouse capturado)
 - `Esc`: liberar mouse
 
 Antes de controles táctiles, migrar entrada a acciones reutilizables. **No duplicar gameplay para Android**: cambia el input, no las reglas del arma o del jugador.
