@@ -18,26 +18,38 @@ const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
 const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
 const HIP_POS := Vector3(0.0, 0.062, 0.0)  # Pose de lista: el arma va baja pero visible.
 const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
-# Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm). La
-# pareja resorte/amortiguador está calibrada contra captura de alta velocidad de
-# una pistola 9 mm comparable: el ciclo visible completo queda cerca de 60 ms,
-# no ralentizado artificialmente para que el jugador lo pueda seguir.
+# Ciclo mecánico de la corredera. El recorrido de 39 mm es el real de una
+# Glock 19 y está confirmado con la geometría del arma.
+#
+# Sobre el TIEMPO: no existe una medición pública verificable del ciclo completo
+# de una Glock 19 que se haya podido citar aquí, así que el valor no se presenta
+# como dato de ese modelo. Lo que sí está documentado en captura de alta
+# velocidad (50 924 fps, Sight Picture Media) es que la corredera EMPIEZA a
+# moverse en el momento del ignicionado y que puede recorrer 2-3 mm antes de que
+# el proyectil salga del cañón; eso justifica que el impulso se aplique en
+# _fire() y no después. El ciclo que sale de esta pareja k/c es de ~59 ms
+# medidos con --geometrydebug (SLIDECYCLE): dentro del rango de una pistola de
+# servicio 9 mm y validado a ojo en cámara lenta. Es un valor CALIBRADO, no una
+# medición de Glock 19.
 const SLIDE_TRAVEL := 0.039
 const SLIDE_K := 4000.0        # rigidez equivalente del muelle recuperador
 const SLIDE_C := 80.0          # amortiguación (zeta 0.632)
-const SLIDE_IMPULSE := 5.45    # impulso calibrado para 39 mm en ~60 ms
+const SLIDE_IMPULSE := 5.45    # impulso calibrado para 39 mm de recorrido
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto
-# Tiempos de la animación "Reload" del autor (medidos sobre sus claves): el
-# cargador sale a los 0.40 s, vuelve a su sitio a los 1.10 s y la corredera se
-# libera a los 1.70 s. La lógica usa esos mismos instantes, así que las manos
-# y la mecánica no pueden contradecirse.
+# Instantes de la recarga, MEDIDOS sobre las claves de las dos animaciones del
+# autor (no elegidos): el cargador sale a 0.40 s y vuelve a asentar a 1.10 s en
+# las dos. La única diferencia es el gesto de corredera, que sólo existe en
+# Reload_full: la mano de apoyo sube a la corredera a 1.20 s, el latigazo de
+# muñeca que la agarra es a 1.22 s y la suelta hacia 1.26 s. Ahí es donde la
+# corredera se libera. Reload_easy termina a 1.317 s y Reload_full a 1.650 s:
+# los totales son esas duraciones más la mezcla al idle. La lógica y las manos
+# no pueden contradecirse porque comparten los mismos instantes.
 const RELOAD_MAG_OUT_T := 0.40
 const RELOAD_MAG_IN_T := 1.10
-const RELOAD_SLIDE_T := 1.70
-const RELOAD_TACTICAL_END := 1.62  # corta antes de la liberación de corredera
-const RELOAD_EMPTY_TOTAL := 2.11   # animación completa (2.042) + mezcla al idle
-const RELOAD_TACTICAL_TOTAL := 1.80
+const RELOAD_SLIDE_T := 1.26
+const RELOAD_EMPTY_TOTAL := 1.70    # Reload_full (1.650) + mezcla al idle
+const RELOAD_TACTICAL_TOTAL := 1.38  # Reload_easy (1.317) + mezcla al idle
 # Pose de recarga: el tirador sube el arma y la gira para ver el brocal del
 # cargador (es lo que hace de verdad). Sin esto la empuñadura queda por debajo
 # del borde de la pantalla y el cargador sale del encuadre sin verse nunca.
@@ -56,7 +68,6 @@ var muzzle_flash_2: MeshInstance3D
 var muzzle_light: OmniLight3D
 var viewmodel_light: OmniLight3D
 
-var brass_mat: StandardMaterial3D
 var flash_mat: ShaderMaterial
 var flash_core_mat: ShaderMaterial
 
@@ -108,7 +119,6 @@ var reload_total := 0.0
 var reload_empty := false
 var reload_slide_released := false
 var reload_mag_seated := false
-var reload_anim_cut := false
 var mag_sound_out := false
 
 var player_speed := 0.0
@@ -228,13 +238,13 @@ func start_reload() -> bool:
     # cargada pero sin cartucho listo (mag=17, chamber=0).
     reload_empty = chamber <= 0
     # La animación del autor se reproduce a velocidad 1 (es su cadencia, y con
-    # ella las claves caen donde él las puso). La recarga táctica conserva la
-    # recámara, así que se corta antes de la liberación de corredera: la
-    # animación nunca enseña algo que la mecánica no esté haciendo.
+    # ella las claves caen donde él las puso). Cada estado mecánico tiene ya su
+    # clip: Reload_easy no contiene ningún gesto de corredera, así que la
+    # recarga táctica no necesita cortar nada para no enseñar algo que la
+    # mecánica no hace.
     reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TACTICAL_TOTAL
     reload_slide_released = false
     reload_mag_seated = false
-    reload_anim_cut = false
     aim = false
     trigger_held = false
     # `_play_reload_animation()` resuelve una sola vez la animación que
@@ -326,14 +336,17 @@ func _fire() -> void:
     slide_vel += SLIDE_IMPULSE
     shot_pulse = 1.0
 
-    # 2) arma en la mano: la animacion Fire del autor ya aporta el latigazo
-    # grueso (medido: 24 grados y 5 cm en 0.23 s). La capa procedural solo
-    # añade el punch rapido sobre el mismo conjunto (brazos+arma juntos, ya que
-    # el arma cuelga de la mano): se deja a ~1/3 de su valor anterior para no
-    # duplicar el gesto.
+    # 2) arma en la mano. La animacion Fire del autor ya aporta el latigazo
+    # grueso, medido sobre sus claves: 24 grados de rotacion con pico a 33 ms y
+    # 42 mm de retroceso con pico a 50 ms, casi extinguido a los 100 ms. Esta
+    # capa procedural es DELIBERADAMENTE pequeña (~1.5 grados de pico a 41 ms):
+    # no repite el gesto, solo mete variacion disparo a disparo, que es lo unico
+    # que una animacion fija no puede dar.
     recoil_vel += Vector3((randf() - 0.5) * 0.02, 0.035, 0.22 + randf() * 0.02)
     recoil_rot_vel += Vector3(1.6 + randf() * 0.25, (randf() - 0.5) * 0.2, (randf() - 0.5) * 0.3)
-    # 3) brazos: el mismo disparo, pero el hombro absorbe en otra escala (k=90).
+    # 3) brazos: el hombro absorbe mas lento y mas blando que la muñeca
+    # (k=90 -> pico a ~113 ms). Es la capa que da la sensacion de masa del
+    # brazo, no un segundo latigazo.
     arm_recoil_vel += Vector3((randf() - 0.5) * 0.03, 0.05, 0.20 + randf() * 0.03)
     arm_recoil_rot_vel += Vector3(0.47 + randf() * 0.12, 0.0, (randf() - 0.5) * 0.16)
 
@@ -431,10 +444,22 @@ func _update_recoil(delta: float) -> void:
     recoil_rot_vel = rot[1]
     recoil_pos = Vector3(clampf(recoil_pos.x, -0.03, 0.03), clampf(recoil_pos.y, -0.03, 0.03), clampf(recoil_pos.z, -0.03, 0.045))
     recoil_rot = Vector3(clampf(recoil_rot.x, -0.16, 0.16), clampf(recoil_rot.y, -0.08, 0.08), clampf(recoil_rot.z, -0.1, 0.1))
-    recoil_node.position = -wrist_local + recoil_pos
-    recoil_node.rotation = recoil_rot
-    wrist_pivot.position = wrist_local
+    # El pivote de muñeca es el UNICO nodo que rota. Antes el mismo `recoil_rot`
+    # se escribia tambien en recoil_node, que es su hijo, asi que la jerarquia
+    # componia el giro DOS veces: el angulo que llegaba al arma era el doble del
+    # pedido. Ahora cada nodo tiene una sola responsabilidad y la composicion es
+    # exacta: p -> R(rot)·(p - muñeca) + muñeca + pos.
+    #   wrist_pivot -> la capa de retroceso completa (rotacion sobre la muñeca
+    #                  + traslacion, las dos en el marco del arma)
+    #   recoil_node  -> desplazamiento fijo que lleva el origen al punto de la
+    #                  muñeca, para que la rotacion ocurra ahi
+    # Con rot=0 y pos=0 los dos se cancelan y el conjunto queda exactamente en el
+    # origen de pose_root, que es lo que asume la pose de ADS resuelta una vez en
+    # _solve_ads(). (Escribir solo `recoil_pos` aqui desplazaba el arma 12 cm.)
+    wrist_pivot.position = wrist_local + recoil_pos
     wrist_pivot.rotation = recoil_rot
+    recoil_node.position = -wrist_local
+    recoil_node.rotation = Vector3.ZERO
 
     # Capa 3: brazos y viewmodel entero, más lento y blando.
     var arm_pos := Springs.vector(arm_recoil_pos, arm_recoil_vel, 90.0, 15.2, delta)
@@ -475,12 +500,6 @@ func _update_reload(delta: float) -> void:
     var up_t := clampf((reload_elapsed - 0.05) / 0.25, 0.0, 1.0)
     var down_t := clampf((reload_elapsed - RELOAD_MAG_IN_T) / 0.35, 0.0, 1.0)
     reload_pose_blend = _smooth(up_t) * (1.0 - _smooth(down_t))
-
-    # Recarga táctica: la recámara conserva su cartucho, así que no se toca la
-    # corredera y la animación se corta antes de ese gesto.
-    if not reload_empty and not reload_anim_cut and reload_elapsed >= RELOAD_TACTICAL_END:
-        reload_anim_cut = true
-        _blend_to_idle(0.16)
 
     if reload_elapsed >= reload_total:
         _finish_reload()
@@ -574,6 +593,64 @@ func _update_pose(delta: float) -> void:
     pose_root.rotation = rot
 
 
+## Construye el visual de la vaina desde la malla `Shell` de la OWK.
+##
+## El asset la trae colocada dentro de la recámara y con los ejes del modelo, así
+## que aquí se hacen las dos únicas correcciones que necesita para vivir como
+## cuerpo físico suelto: se recentra el pivote en su propio centro y se lleva su
+## eje largo (el del cañón) a Z, que es el avance del arma. Nada más: la malla,
+## el material de latón y las medidas son los del asset.
+func _build_casing_visual() -> Dictionary:
+    if not pistol_ok or not pistol_parts.has("Shell"):
+        return {}
+    var part: Node3D = pistol_parts["Shell"]
+    var meshes := _collect_meshes(part)
+    if meshes.is_empty():
+        return {}
+    var src: MeshInstance3D = meshes[0]
+    # Todo se mide en el MARCO DEL ARMA (el holder), que es el unico que esta en
+    # metros: el espacio local del nodo `Shell` conserva las unidades del modelo
+    # y alli la vaina mide 2,3 unidades, no 20 mm. El cuerpo de la vaina nace con
+    # el triedro del puerto de expulsion, que es el marco del arma.
+    var verts := _part_verts(pistol_holder, part, [])
+    if verts.is_empty():
+        return {}
+    var box := _bounds(verts)
+    var centre := box.position + box.size * 0.5
+    var chain := _local_chain(src, pistol_holder)
+    var align := _basis_long_axis_to_z(box)
+    var node := MeshInstance3D.new()
+    node.mesh = src.mesh
+    node.transform = Transform3D(align * chain.basis, align * (chain.origin - centre))
+    node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    var order := [0, 1, 2]
+    order.sort_custom(func(a, b): return box.size[a] > box.size[b])
+    var length: float = box.size[order[0]]
+    var radius: float = (box.size[order[1]] + box.size[order[2]]) * 0.25
+    print("CASING_OWK largo=", snappedf(length * 1000.0, 0.1), "mm radio=",
+        snappedf(radius * 1000.0, 0.1), "mm ejes=", order)
+    return {"node": node, "length": length, "radius": radius}
+
+
+## Rotación propia que lleva el eje más largo de `box` a Z y el mediano a Y.
+## Se deriva de la caja medida, no se elige a mano: si el asset cambiara de ejes
+## la vaina seguiría saliendo tumbada a lo largo del cañón.
+func _basis_long_axis_to_z(box: AABB) -> Basis:
+    var order := [0, 1, 2]
+    order.sort_custom(func(a, b): return box.size[a] > box.size[b])
+    var x := Vector3.ZERO
+    var y := Vector3.ZERO
+    var z := Vector3.ZERO
+    x[order[2]] = 1.0
+    y[order[1]] = 1.0
+    z[order[0]] = 1.0
+    var basis := Basis(x, y, z)
+    if basis.determinant() < 0.0:
+        x = -x
+        basis = Basis(x, y, z)
+    return basis
+
+
 func _spawn_shell() -> void:
     if not is_instance_valid(get_tree().current_scene):
         return
@@ -583,28 +660,31 @@ func _spawn_shell() -> void:
     shell.collision_mask = 1
     shell.continuous_cd = true
 
-    # Vaina del 9x19 real: 19,15 mm de largo y 9,6 mm de culote. Nada de
-    # agrandarla para que se vea: la hace visible su brillo, su giro y el sitio
-    # por donde sale, no el tamaño.
-    var cylinder := CylinderMesh.new()
-    cylinder.height = 0.01915
-    cylinder.top_radius = 0.0048
-    cylinder.bottom_radius = 0.0048
-    cylinder.radial_segments = 12
-    cylinder.material = brass_mat
-    var shell_mesh := MeshInstance3D.new()
-    shell_mesh.mesh = cylinder
-    # El cilindro nace con el eje en Y: la vaina sale tumbada, con el eje a lo
-    # largo del cañón (la boca hacia delante y el culote donde la sujeta el
-    # extractor). Antes salía de pie, atravesada.
-    shell_mesh.rotation.x = deg_to_rad(-90.0)
-    shell.add_child(shell_mesh)
+    # Vaina: la malla `Shell` de la propia OWK, no un cilindro procedural.
+    # Medida sobre el asset, es un 9x19 a escala real (20,3 x 10,5 mm, 432
+    # vértices) con el material de latón que ya trae el arma, y viene orientada
+    # con el eje en el cañón: no hay que rotarla ni agrandarla para que se vea.
+    # El asset la tiene colocada DENTRO de la recámara, así que el pivote se
+    # recentra una sola vez aquí (centro de su caja, en el espacio de su nodo) y
+    # se compensa en el hijo; el asset no se toca.
+    var casing_pivot := Node3D.new()
+    casing_pivot.name = "Casing"
+    var casing := _build_casing_visual()
+    if casing == null:
+        push_warning("La OWK no tiene malla de vaina utilizable")
+        return
+    casing_pivot.add_child(casing["node"])
+    shell.add_child(casing_pivot)
 
+    # La colisión no necesita seguir la malla: un cilindro del tamaño medido de
+    # la vaina es más barato y más estable que un convex hull de 432 vértices.
     var shape := CylinderShape3D.new()
-    shape.height = 0.01915
-    shape.radius = 0.0048
+    shape.height = casing["length"]
+    shape.radius = casing["radius"]
     var collider := CollisionShape3D.new()
     collider.shape = shape
+    # El cilindro nace con el eje en Y y la vaina va tumbada a lo largo del
+    # cañón, que en el marco del arma es Z.
     collider.rotation.x = deg_to_rad(-90.0)
     shell.add_child(collider)
 
@@ -642,15 +722,8 @@ func _smooth(t: float) -> float:
 
 
 func _build_materials() -> void:
-    # Solo el laton de los casquillos y el material del fogonazo. El arma
-    # (OWK) y los brazos (Cransh) usan sus materiales PBR de origen.
-    # Latón pulido: albedo de metal real y sin emisión (una vaina caliente no
-    # brilla; la hacía visible el brillo del entorno, no un truco).
-    brass_mat = StandardMaterial3D.new()
-    brass_mat.albedo_color = Color(0.86, 0.68, 0.30)
-    brass_mat.metallic = 0.95
-    brass_mat.roughness = 0.24
-
+    # Solo el material del fogonazo. El arma (OWK), los brazos (Cransh) y la
+    # vaina (malla `Shell` de la OWK) usan sus materiales PBR de origen.
     # El sprite anterior era una estrella radial perfecta. Este shader mínimo
     # conserva la economía de un quad, pero da un núcleo irregular y dos
     # lenguas orientadas: no parece un decal pegado a la boca del arma.
@@ -1467,9 +1540,16 @@ func _reparent_keep(node: Node3D, attach: BoneAttachment3D, attach_in_recoil: Tr
     node.transform = attach_in_recoil.affine_inverse() * node_in_recoil
 
 
-## Guantes y mangas a negro de referencia: se conserva la textura del autor
-## (detalle, normal, rugosidad) y solo baja el albedo. Sin esto el conjunto
-## canta en caqui frente a la referencia de guante negro.
+## Guantes negros conservando el material del autor.
+##
+## El asset trae una difusa real de 1024 px (costuras, nudillos, pliegues de
+## tejido) y su propio metallic-roughness. Godot la importaba en BLANCO porque
+## el GLB declaraba KHR_materials_pbrSpecularGlossiness, una extensión que Godot
+## no implementa: caía al bloque pbrMetallicRoughness vacío (albedo blanco,
+## metallic 1.0) y la difusa se descartaba entera. El GLB ya está convertido a
+## metallic-roughness (ver CREDITS_MODELS.md), así que no hay material que
+## reconstruir: sólo se tiñe el albedo, porque el guante del autor es caqui y la
+## referencia es negra. El detalle, el normal y la rugosidad son los del autor.
 func _darken_arms() -> void:
     if arms_mesh_visible == null or arms_mesh_visible.mesh == null:
         return
@@ -1480,30 +1560,17 @@ func _darken_arms() -> void:
         if m is StandardMaterial3D:
             var src := m as StandardMaterial3D
             var dark := src.duplicate() as StandardMaterial3D
-            dark.albedo_color = Color(0.20, 0.20, 0.21, 1.0)
-            # La textura/normal del asset se conserva, pero el guante es
-            # tela/cuero y no una superficie metálica. Hacer explícita esta
-            # respuesta evita que el pulso de boca produzca reflejos dorados.
+            # Tinte, no material nuevo: `albedo_color` multiplica la difusa del
+            # autor, así que el tejido y las costuras siguen ahí.
+            dark.albedo_color = Color(0.30, 0.30, 0.32, 1.0)
             dark.metallic = 0.0
-            # El GLB trae un mapa packed metallic-roughness con el canal
-            # metálico a 1.0. La rugosidad se mantiene abajo; este canal no
-            # puede seguir gobernando la respuesta del guante.
-            dark.metallic_texture = null
             dark.roughness = 1.0
-            # El mapa de rugosidad del GLB también tiene zonas de cuero muy
-            # pulido. En la referencia el guante es tela negra mate: conservar
-            # ese mapa producía reflejos amarillos durante el flash, aunque el
-            # canal metálico ya estuviese corregido.
-            dark.roughness_texture = null
-            dark.metallic_specular = 0.16
             arms_mesh_visible.set_surface_override_material(si, dark)
-            print("ARMS_GUANTE superficie ", si, " albedo_origen=", src.albedo_color,
-                " metallic=", src.metallic, " roughness=", src.roughness,
-                " metallic_tex=", src.metallic_texture != null,
-                " roughness_tex=", src.roughness_texture != null,
+            print("ARMS_GUANTE superficie ", si,
+                " albedo_tex=", src.albedo_texture != null,
+                " mr_tex=", src.metallic_texture != null,
                 " normal_tex=", src.normal_texture != null,
-                " -> metallic=", dark.metallic, " roughness=", dark.roughness,
-                " roughness_tex=", dark.roughness_texture != null)
+                " metallic_origen=", src.metallic, " -> tinte=", dark.albedo_color)
 
 
 func _play_arms_anim(short_name: String, loop := false) -> bool:

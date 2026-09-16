@@ -39,11 +39,9 @@ var bob_roll := 0.0
 var recoil_pitch := 0.0
 var recoil_yaw := 0.0
 var recoil_roll := 0.0
-var recoil_kick := 0.0
 var recoil_pitch_vel := 0.0
 var recoil_yaw_vel := 0.0
 var recoil_roll_vel := 0.0
-var recoil_kick_vel := 0.0
 
 var _last_local_move := Vector2.ZERO
 
@@ -252,8 +250,8 @@ func _process(delta: float) -> void:
 
     camera.position = Vector3(
         body_lag.x + bob_x,
-        cam_y + bob_y + recoil_kick * 0.02,
-        body_lag.z + recoil_kick * 0.08
+        cam_y + bob_y,
+        body_lag.z
     )
     camera.rotation = Vector3(
         pitch + breath_pitch - current_move_norm * 0.006 + recoil_pitch,
@@ -267,8 +265,11 @@ func _process(delta: float) -> void:
 
 func _update_camera_recoil(delta: float) -> void:
     # Resortes estables (Springs): un hitch de frame no debe volcar la cámara.
-    var k := 150.0
-    var c := 16.0
+    # k/c dan zeta 0.85: la cabeza sube y BAJA sin rebotar, con el pico a
+    # ~111 ms y recuperación de ~450 ms. Es la capa más lenta de las cuatro y
+    # la que da la masa: no repite el latigazo del arma, lo sigue.
+    var k := 90.0
+    var c := 16.1
     var pitch := Springs.scalar(recoil_pitch, recoil_pitch_vel, k, c, delta)
     recoil_pitch = pitch.x
     recoil_pitch_vel = pitch.y
@@ -278,21 +279,19 @@ func _update_camera_recoil(delta: float) -> void:
     var roll := Springs.scalar(recoil_roll, recoil_roll_vel, k, c, delta)
     recoil_roll = roll.x
     recoil_roll_vel = roll.y
-    var kick := Springs.scalar(recoil_kick, recoil_kick_vel, k, c, delta)
-    recoil_kick = kick.x
-    recoil_kick_vel = kick.y
 
     # Clamps: la cámara nunca debe quedarse mirando a otro sitio.
     recoil_pitch = clampf(recoil_pitch, -0.30, 0.30)
     recoil_yaw = clampf(recoil_yaw, -0.25, 0.25)
     recoil_roll = clampf(recoil_roll, -0.25, 0.25)
-    recoil_kick = clampf(recoil_kick, -0.05, 0.12)
 
 
 func _on_shot_fired() -> void:
-    # La cámara (la cabeza del operador) sube menos que el arma: el pico medido
-    # es de ~2.5 grados y vuelve en ~0.35 s.
-    recoil_pitch_vel += randf_range(0.95, 1.25)
+    # La cámara (la cabeza del operador) sube menos que el arma y tarda más:
+    # pico de ~2.5-3.0 grados a ~111 ms con recuperación de ~450 ms. Sólo
+    # rotación: un desplazamiento de cámara de unos milímetros no se ve (el
+    # viewmodel cuelga de ella y se mueve con ella), así que simular "masa"
+    # moviéndola de sitio sería decorativo.
+    recoil_pitch_vel += randf_range(1.00, 1.20)
     recoil_yaw_vel += randf_range(-0.20, 0.20)
     recoil_roll_vel += randf_range(-0.35, 0.35)
-    recoil_kick_vel += randf_range(0.040, 0.075)
