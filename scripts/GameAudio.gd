@@ -26,18 +26,24 @@ const BUS_WORLD := "World"
 # Tabla única de sonidos: archivo + nivel base en dB. Los one-shots del arma se
 # piden con `play_2d`, los del mundo con `play_3d`; el segundo argumento de
 # ambos es un *ajuste* en dB sobre este nivel base.
+# `slide_rear` y `slide_battery` son los DOS golpes de la corredera, que son dos
+# eventos fisicos distintos (tope trasero a ~12 ms y vuelta a bateria a ~54 ms) y
+# por eso son dos grabaciones distintas:
 #
-# `slide` es el único nivel que no es de familia: su archivo es un chasquido
-# metálico con el 63% de su energía entre 2,5 y 16 kHz (medido), mientras que el
-# estampido la tiene en 800-2500 Hz. Al mismo nivel que el disparo el chasquido
-# no se oye "debajo" del blast: se oye AL LADO, y como entra a 12,7 ms del
-# estampido (el tope trasero real de la corredera, calculado del resorte de
-# Glock.gd) suena a un segundo golpe. Medido en el mix: a -10 dB el chasquido
-# doblaba la energía relativa en agudos de la ventana 13-40 ms (0,17 -> 0,43);
-# a -18 dB aporta profundidad mecánica sin competir con el blast.
+#   slide_rear     Glock 19 real. Pico -0.85 dBFS y 85% de su energia por encima
+#                  de 2,5 kHz: chasquido de acero, sin cuerpo.
+#   slide_battery  Sig P229 real. Pico -9,82 dBFS y 75% de su energia por debajo
+#                  de 800 Hz (centroide 774 Hz): golpe sordo y pesado.
+#
+# Antes los dos usaban el mismo `slide.wav` con distinto volumen y pitch, y eso
+# es lo que se percibia como "BANG + otro golpe": el mismo transitorio dos veces
+# separado 42 ms. El trasero va 4 dB por encima del de bateria porque su energia
+# esta en agudos (donde el estampido ya no compite) y el de bateria en graves
+# (donde si compite con la cola del estampido).
 const SOUNDS := {
     "empty": {"stream": preload("res://assets/audio/empty_b.wav"), "db": -8.0, "bus": BUS_WEAPONS},
-    "slide": {"stream": preload("res://assets/audio/slide.wav"), "db": -18.0, "bus": BUS_WEAPONS},
+    "slide_rear": {"stream": preload("res://assets/audio/slide_rear.wav"), "db": -14.0, "bus": BUS_WEAPONS},
+    "slide_battery": {"stream": preload("res://assets/audio/slide_battery.wav"), "db": -18.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},

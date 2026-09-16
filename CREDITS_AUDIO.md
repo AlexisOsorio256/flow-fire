@@ -40,20 +40,31 @@ estampido. La grabación original se versiona en
 `assets/audio/source/sonniss_gdc2016_glock18c_1m.wav` (md5
 `692d47763d6af32ee551312f24868b38`) para que el corte sea reproducible.
 
-### Causa 2 — la capa mecánica sintética competía
+### Causa 2 — la capa mecánica usaba el MISMO archivo dos veces
 
-`slide.wav` es un chasquido con el **63% de su energía entre 2,5 y 16 kHz**,
-mientras que el estampido la tiene en 800-2500 Hz. Entra a **12,7 ms** del
-disparo (el tope trasero real de la corredera, calculado del resorte de
-`Glock.gd`: k=4000, c=80, v0=5,45 m/s, recorrido 39 mm). Al mismo nivel que el
-disparo no se oía *debajo* del blast, se oía **al lado**. Medido en el mix,
-energía relativa en agudos de la ventana 13-40 ms: 0,17 sin capa mecánica,
-**0,43 a -10 dB**, 0,22 a -20 dB. Ahora está en **-18 dB**.
+Los dos golpes de la corredera son dos eventos físicos distintos: el **tope
+trasero** a ~12 ms (medido con `--slowmo`: la corredera toca 38-39 mm) y la
+**vuelta a batería** a ~54 ms. Los dos usaban el mismo `slide.wav` —un chasquido
+con el 63% de su energía entre 2,5 y 16 kHz— con distinto volumen y pitch, así
+que el oído recibía el mismo transitorio dos veces separado 42 ms: exactamente
+lo que se percibe como "BANG + otro golpe".
 
-A ese nivel su aporte medido al mix es de sólo **0,13-0,17 dB** en su ventana,
-así que hoy es prácticamente inaudible: se conserva porque **ancla el sonido al
-evento físico** (el tope trasero de la corredera), que es el principio que rige
-este mix, no porque se oiga.
+**Corrección.** Cada evento tiene ahora su propia grabación real, y de armas
+distintas para que no puedan confundirse:
+
+| muestra | evento | fuente | pico | centroide | reparto espectral |
+|---|---|---|---|---|---|
+| `slide_rear.wav` | tope trasero (~12 ms) | Glock 19 real | −0,85 dBFS | 7221 Hz | 85% >2,5 kHz |
+| `slide_battery.wav` | vuelta a batería (~54 ms) | Sig P229 real | −9,82 dBFS | 774 Hz | 75% <800 Hz |
+
+El trasero va a **−14 dB** y el de batería a **−18 dB** (4 dB por debajo): la
+energía del primero vive en agudos, donde el estampido ya no compite, y la del
+segundo en graves, donde sí compite con la cola del estampido. Medido en la
+captura real (`--audiocapture`), en la ventana 26-45 ms el centroide sube a
+**2700-3000 Hz** con el 34-43% de la energía por encima de 2,5 kHz, que es
+exactamente la huella del tope trasero, y el estampido conserva el dominio (su
+ataque sigue 6-9 dB por encima de la mecánica). Antes de este cambio la capa
+mecánica aportaba sólo 0,13-0,17 dB a su ventana: era inaudible.
 
 ### Causa 3 — dentro de la muestra, el mecánico pesaba tanto como el estampido
 
@@ -108,7 +119,7 @@ detector no veía nada — el fallo exacto de `shot_2.wav`.
 | archivo | retraso del ataque antes | ahora |
 |---|---|---|
 | `magin.wav` | 464 ms | 1 ms |
-| `slide.wav` | 10 ms | 0 ms |
+| `slide_rear.wav`, `slide_battery.wav` | 10 ms | 0 ms |
 | `magout.wav` | 11 ms | 10 ms |
 | `impact_concrete.wav` | 91 ms | 91 ms |
 | `empty_b.wav` | 26 ms | 26 ms |
@@ -133,7 +144,9 @@ No se usa `astats` con `reset` pequeño: su reset se queda en el tamaño de fram
 - Tras sustituir cualquier WAV hay que **reimportar** el proyecto (`godot4 --headless --path . --editor --quit`) antes de ejecutarlo: un `.wav` sin importar rompe el autoload de audio entero (el juego se queda sin sonido), porque el `preload` de la tabla de sonidos falla.
 
 - `empty_b.wav`: "9mm Handgun Being Dry Fired" por serøutōnin--deprivəd — https://freesound.org/s/674568/ — CC0 (Freesound).
-- `slide.wav`: "glock.wav" por hiramjustus — https://freesound.org/s/55340/ — CC0 (Freesound). Se alinea a su pico (su golpe bueno está a 0,4 s dentro del archivo original) y se reproduce a **-18 dB**: es la única fuente del arma que no está a nivel de familia, y el motivo está medido arriba (su energía vive en 2,5-16 kHz, donde el estampido no tiene nada). **Es el candidato número uno a sustituir si algún día se quiere más cuerpo mecánico**: las tomas de corredera de Freesound que lo mejorarían ("Sig Sauer P229 Handgun slide rack" de nikkolaus, https://freesound.org/s/442560/, CC0; "Taurus G2c Slide Racking" de NoonerBear, https://freesound.org/s/589849/, CC0, 27 eventos para variación) requieren cuenta gratuita en Freesound para descargar, y este entorno no la tiene.
+- `slide_rear.wav`: **tope trasero de la corredera**, cortado del evento de 10,972 s de "Glock 19 Handgun Pistol Slide Cocking Sounds" por jackthemurray — https://freesound.org/s/393734/ — CC0 (Freesound). Es el pico más agudo y limpio de la toma (85% de energía >2,5 kHz, 0 muestras recortadas). Se corta en su ataque real y se alinea por transitorio con `tools/process_audio.sh`.
+- `slide_battery.wav`: **vuelta a batería**, cortado del evento de 4,016 s de "Sig Sauer P229 Handgun slide rack.wav" por nikkolaus — https://freesound.org/s/442560/ — CC0 (Freesound). Es el golpe más sordo y con más cuerpo disponible (75% de energía <800 Hz, centroide 774 Hz, 0 muestras recortadas): el contrapunto exacto del tope trasero. Las dos muestras vienen ya recortadas a su ataque desde el origen, así que la primera pasada del script no tiene que buscar nada.
+- `slide.wav` (retirado): era "glock.wav" por hiramjustus — https://freesound.org/s/55340/ — CC0 (Freesound). Se eliminó al sustituirse por los dos eventos reales de arriba: usar la misma muestra para el tope trasero y para la batería era la causa medida del "BANG + otro golpe". No se conserva como variante.
 - `magout.wav`: "Magazine Removal" por brianhanson2nd — https://freesound.org/s/171208/ — CC0 (Freesound).
 - `magin.wav`: "Magazine Insert" por brianhanson2nd — https://freesound.org/s/171209/ — CC0 (Freesound).
 - `ricochet.wav`: "bullet ricochet.wav" por aust_paul — https://freesound.org/s/30932/ — CC0 (Freesound).

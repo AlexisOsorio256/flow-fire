@@ -75,6 +75,12 @@ const SLIDE_IMPULSE := 5.90    # impulso CALIBRADO para tocar el tope trasero
 # --slowmo: la corredera toca 37+ mm entre frames y los eventos suenan)
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto (~8 ms)
+# Impulso de cabeceo del ARMA en el disparo (rad/s). Es la unica fuente del
+# latigazo visible desde que el clip Fire no mueve el hueso del arma: MEDIDO con
+# --firecurve, la animacion daba 0.24 grados en los primeros 40 ms y subia en
+# rampa hasta 180 ms, que es lo que hacia que la vaina pareciese moverse mas que
+# la pistola. Con 4.2 rad/s la boca sube ~8 grados con pico a ~50 ms.
+const MAIN_RECOIL_KICK := 4.2
 # Recorrido VISUAL de la corredera en el asset: la animacion Fire mueve el
 # hueso Slidder 33.6 mm (MEDIDO EN ESTE ASSET, pico a 0.167 s). La logica sigue
 # en metros reales (39 mm de G19) y aqui se mapea linealmente, asi que la
@@ -129,6 +135,7 @@ var recoil_node: Node3D
 var muzzle: Node3D
 var flash_anchor: Node3D
 var ejection_port: Node3D
+var flash_mesh: MeshInstance3D
 var muzzle_light: OmniLight3D
 var viewmodel_light: OmniLight3D
 
@@ -183,6 +190,7 @@ var reload_slide_released := false
 var reload_mag_seated := false
 var mag_sound_out := false
 
+var last_delta := 0.0  # TEMPORAL: lo lee --recoilprobe
 var player_speed := 0.0
 var look_delta := Vector2.ZERO
 var bob_phase := 0.0
@@ -354,6 +362,7 @@ func _can_fire() -> bool:
 
 
 func _process(delta: float) -> void:
+	last_delta = delta
 	_update_trigger(delta)
 	_update_slide(delta)
 	_update_recoil(delta)
@@ -365,6 +374,8 @@ func _process(delta: float) -> void:
 	shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
 
 	var flash_visible := muzzle_timer > 0.0
+	if flash_mesh != null and flash_mesh.visible != flash_visible:
+		flash_mesh.visible = flash_visible
 	if muzzle_light != null:
 		# Pulso corto sobre el entorno, no una segunda fuente de iluminación
 		# amarilla que convierta tela y piel en metal dorado.
@@ -408,22 +419,28 @@ func _fire() -> void:
 	slide_vel += SLIDE_IMPULSE
 	shot_pulse = 1.0
 
-	# 2) arma en la mano. La animacion Fire del asset ya aporta el latigazo
-	# grueso, MEDIDO EN ESTE ASSET sobre sus claves: 26.9 grados de rotacion con
-	# pico a 167 ms y 81 mm de traslacion con pico a 167 ms, extinguido hacia
-	# 292 ms. Esta capa procedural es DELIBERADAMENTE pequeña (~1.5 grados de
-	# pico a 41 ms): no repite el gesto, solo mete variacion disparo a disparo,
-	# que es lo unico que una animacion fija no puede dar.
+	# 2) EL ARMA. El clip Fire ya no mueve el hueso del arma (ver
+	# _strip_mechanical_tracks): su latigazo es este, y es fisica, no amplitud
+	# gratis. Tres escalas de tiempo para que se lea como masa:
+	#   ~10 ms  muneca: el golpe del disparo llega antes de que la mano pueda
+	#           hacer nada (pico de ~1 grado, casi un tic).
+	#   ~50 ms  arma: la boca sube porque gira sobre la muneca (k=520 -> ~8
+	#           grados) y vuelve controlada hacia los 250 ms. Este es el golpe
+	#           que antes no existia: MEDIDO, la animacion daba 0.2 grados en
+	#           los primeros 40 ms.
+	#   mas      brazos y camara: absorben despues, con menos amplitud.
+	# La direccion x (cabeceo) es la que sube la boca; el retroceso trasero va
+	# en z, que en el marco del arma es hacia el tirador.
 	recoil_vel += Vector3((randf() - 0.5) * 0.02, 0.035, 0.22 + randf() * 0.02)
-	recoil_rot_vel += Vector3(1.6 + randf() * 0.25, (randf() - 0.5) * 0.2, (randf() - 0.5) * 0.3)
-	# 3) brazos: el hombro absorbe mas lento y mas blando que la muñeca
-	# (k=90 -> pico a ~113 ms). Es la capa que da la sensacion de masa del
-	# brazo, no un segundo latigazo.
-	arm_recoil_vel += Vector3((randf() - 0.5) * 0.03, 0.05, 0.20 + randf() * 0.03)
-	arm_recoil_rot_vel += Vector3(0.47 + randf() * 0.12, 0.0, (randf() - 0.5) * 0.16)
+	recoil_rot_vel += Vector3(MAIN_RECOIL_KICK + randf() * 0.35, (randf() - 0.5) * 0.2, (randf() - 0.5) * 0.3)
+	# 3) brazos: el hombro absorbe mas lento y mas blando que la muneca.
+	# Es la capa que da la sensacion de masa del brazo, no un segundo latigazo.
+	arm_recoil_vel += Vector3((randf() - 0.5) * 0.03, 0.05, 0.22 + randf() * 0.03)
+	arm_recoil_rot_vel += Vector3(0.8 + randf() * 0.16, 0.0, (randf() - 0.5) * 0.16)
 
 	muzzle_timer = 0.04
 	_anchor_flash()
+	_pop_flash()
 
 	GameAudio.play_shot()
 	_play_arms_anim("Fire")
@@ -486,7 +503,10 @@ func _update_slide(delta: float) -> void:
 			# disparo, porque va 4 dB por debajo del trasero y grave (pitch 0.7).
 			if slide_open and not slide_battery_emitted and slide_pos <= 0.004 and slide_vel <= 0.0:
 				slide_battery_emitted = true
-				GameAudio.play_2d("slide", -4.0, 0.7)
+				# Transitorio de bateria (golpe sordo, 75% de energia <800 Hz).
+				# Otra grabacion distinta de la del tope trasero: es el segundo
+				# evento fisico del ciclo, no el primero repetido.
+				GameAudio.play_2d("slide_battery", 0.0, randf_range(0.97, 1.03))
 			if slide_open and slide_pos <= 0.001 and chamber <= 0 and mag > 0:
 				slide_open = false
 				mag -= 1
@@ -504,7 +524,9 @@ func _emit_slide_rear_event() -> void:
 	if slide_rear_sound_emitted:
 		return
 	slide_rear_sound_emitted = true
-	GameAudio.play_2d("slide", 0.0, randf_range(0.98, 1.06))
+	# Tope trasero: chasquido de acero (85% de energia >2,5 kHz) a ~12 ms del
+	# estampido. Nivel base de la tabla; el de bateria va 4 dB por debajo.
+	GameAudio.play_2d("slide_rear", 0.0, randf_range(0.98, 1.06))
 
 
 func _update_recoil(delta: float) -> void:
@@ -512,14 +534,17 @@ func _update_recoil(delta: float) -> void:
 	# debajo de la empuñadura (medido de la caja del arma), así que la boca sube
 	# mientras la empuñadura casi no se mueve: es lo que hace un retroceso real y
 	# lo que antes se sentía "forzado" (giro sobre el centro del arma).
-	var pos := Springs.vector(recoil_pos, recoil_vel, 700.0, 39.7, delta)
+	# k=520/c=18 (zeta 0.39): pico del cabeceo a ~50 ms y recuperación
+	# controlada hacia 250 ms. Con el resorte anterior (k=700, zeta 0.75) el
+	# arma volvía a casa en 150 ms y no llegaba a subir.
+	var pos := Springs.vector(recoil_pos, recoil_vel, 520.0, 18.0, delta)
 	recoil_pos = pos[0]
 	recoil_vel = pos[1]
-	var rot := Springs.vector(recoil_rot, recoil_rot_vel, 700.0, 39.7, delta)
+	var rot := Springs.vector(recoil_rot, recoil_rot_vel, 520.0, 18.0, delta)
 	recoil_rot = rot[0]
 	recoil_rot_vel = rot[1]
-	recoil_pos = Vector3(clampf(recoil_pos.x, -0.03, 0.03), clampf(recoil_pos.y, -0.03, 0.03), clampf(recoil_pos.z, -0.03, 0.045))
-	recoil_rot = Vector3(clampf(recoil_rot.x, -0.16, 0.16), clampf(recoil_rot.y, -0.08, 0.08), clampf(recoil_rot.z, -0.1, 0.1))
+	recoil_pos = Vector3(clampf(recoil_pos.x, -0.04, 0.04), clampf(recoil_pos.y, -0.03, 0.03), clampf(recoil_pos.z, -0.03, 0.055))
+	recoil_rot = Vector3(clampf(recoil_rot.x, -0.24, 0.24), clampf(recoil_rot.y, -0.08, 0.08), clampf(recoil_rot.z, -0.1, 0.1))
 	# El pivote de muñeca es el UNICO nodo que rota. Antes el mismo `recoil_rot`
 	# se escribia tambien en recoil_node, que es su hijo, asi que la jerarquia
 	# componia el giro DOS veces: el angulo que llegaba al arma era el doble del
@@ -569,7 +594,9 @@ func _update_reload(delta: float) -> void:
 		slide_locked = false
 		slide_pos = SLIDE_TRAVEL
 		slide_vel = -4.2
-		GameAudio.play_2d("slide", 1.0)
+		# La corredera volviendo a bateria: mismo evento fisico que el cierre
+		# del disparo, asi que usa su misma muestra.
+		GameAudio.play_2d("slide_battery", 1.0)
 
 	# La pose sube con la mano (0.05-0.30 s), se mantiene mientras está el
 	# cargador fuera y baja cuando ya está dentro.
@@ -771,14 +798,20 @@ func _build_viewmodel() -> void:
 
 
 func _build_flash() -> void:
-	# Fogonazo: solo luz + humo. Los quads con shader custom se eliminaron tras
-	# 20+ capturas A/B: en el renderer Mobile sobre Mesa/Intel de esta maquina
-	# su rasterizacion no es determinista (runs identicos pintan o no pintan,
-	# sin errores de compilacion; el patron observado apunta al fragmento, pero
-	# sin mecanismo confirmado no se deja codigo que a veces se ve y a veces
-	# no). La luz (pulso de 40 ms que aclara el entorno) y el humo de boca
-	# (ImpactFX) si funcionan siempre y venden el disparo. Reintroducir quads
-	# cuando el renderer cambie, con A/B en la primera captura.
+	# Fogonazo: geometria procedural minima + luz + humo.
+	#
+	# Los quads con SHADER CUSTOM se eliminaron tras 20+ capturas A/B: en el
+	# renderer Mobile sobre Mesa/Intel de esta maquina su rasterizacion no era
+	# determinista (runs identicos pintan o no pintan, sin errores de
+	# compilacion). Aqui no hay shader ni quad: son DOS octaedros cruzados en una
+	# sola ArrayMesh (12 triangulos, 1 sola llamada de dibujo) con un
+	# StandardMaterial3D emisivo sin sombreado. Eso es rasterizacion de malla
+	# normal, la misma que el resto del arma, asi que no depende del fragmento
+	# del shader.
+	#
+	# Escala real: 6-8 cm de largo sobre la boca, 2-3 cm de ancho. Dura lo mismo
+	# que la luz (40 ms) y en cada disparo cambia roll y escala: es un fogonazo
+	# irregular y breve, no una estrella amarilla fija.
 	flash_anchor = Node3D.new()
 	flash_anchor.name = "FlashAnchor"
 	pistol_holder.add_child(flash_anchor)
@@ -791,6 +824,66 @@ func _build_flash() -> void:
 	muzzle_light.omni_range = 1.6
 	muzzle_light.shadow_enabled = false
 	flash_anchor.add_child(muzzle_light)
+
+	flash_mesh = MeshInstance3D.new()
+	flash_mesh.name = "FlashMesh"
+	flash_mesh.mesh = _build_flash_mesh()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.86, 0.52)
+	mat.albedo_color = Color(1.0, 0.86, 0.52)
+	# Por encima del umbral de glow (1.25) para que florezca un instante, pero
+	# muy lejos de un blanco plano que se lea como sprite.
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.72, 0.30)
+	mat.emission_energy_multiplier = 2.4
+	mat.disable_receive_shadows = true
+	flash_mesh.material_override = mat
+	flash_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flash_mesh.visible = false
+	flash_anchor.add_child(flash_mesh)
+
+
+## Dos octaedros alargados en cruz dentro de una sola malla. Uno vertical corto
+## (el nucleo de la boca) y otro mas largo que sale hacia delante por el eje del
+## cañon. La irregularidad entre disparos la pone el roll aleatorio de _fire().
+func _build_flash_mesh() -> ArrayMesh:
+	var verts := PackedVector3Array()
+	var idx := PackedInt32Array()
+	_add_octahedron(verts, idx, Vector3(0.013, 0.017, 0.032), Vector3(0, 0, 0.028))
+	_add_octahedron(verts, idx, Vector3(0.006, 0.006, 0.048), Vector3(0.004, 0.0, 0.050))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Octaedro de 6 vertices en `center` con semiejes `half`. 8 caras.
+func _add_octahedron(verts: PackedVector3Array, idx: PackedInt32Array, half: Vector3, center: Vector3) -> void:
+	var base := verts.size()
+	verts.append(center + Vector3(0.0, half.y, 0.0))
+	verts.append(center + Vector3(half.x, 0.0, 0.0))
+	verts.append(center + Vector3(0.0, 0.0, half.z))
+	verts.append(center + Vector3(-half.x, 0.0, 0.0))
+	verts.append(center + Vector3(0.0, 0.0, -half.z))
+	verts.append(center + Vector3(0.0, -half.y, 0.0))
+	for tri in [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1], [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]]:
+		idx.append(base + tri[0])
+		idx.append(base + tri[1])
+		idx.append(base + tri[2])
+
+
+## Muestra el fogonazo con roll y tamaño irregulares. Se llama en cada disparo.
+func _pop_flash() -> void:
+	if flash_mesh == null:
+		return
+	flash_mesh.rotation = Vector3(0.0, 0.0, randf_range(0.0, TAU))
+	var s := randf_range(0.82, 1.25)
+	flash_mesh.scale = Vector3(s, randf_range(0.85, 1.15), randf_range(0.75, 1.1))
+	flash_mesh.visible = true
 
 
 ## Lleva el ancla de la luz a la boca real (en espacio del marco). Se llama al
@@ -1116,14 +1209,22 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 	return n
 
 
-## La logica es la unica autoridad de corredera y gatillo: las pistas que los
-## animaban (traslacion de Slidder_919 y de Weapon_Trigger_921 en Fire, Reload
-## y Reload_Empty) se eliminan al cargar. Sin esto habria dos correderas: la
-## simulada (slide_pos, 59 ms) y la animada (33.6 mm en 250 ms).
-## El arma entera (Weapon_922), el cargador y el canon siguen animados: son el
-## gesto humano que lleva el arma, no mecanica contable.
+## La logica es la unica autoridad de corredera, gatillo y RETROCESO DEL ARMA:
+## las pistas que los animaban se eliminan al cargar.
+##
+##  - Slidder_919 y Weapon_Trigger_921 en Fire, Reload y Reload_Empty: sin esto
+##    habria dos correderas, la simulada (slide_pos, 59 ms) y la animada
+##    (33.6 mm en 250 ms).
+##  - Weapon_922 SOLO en Fire (rotacion y traslacion): MEDIDO con --firecurve,
+##    la animacion del autor sube el arma 0.24 grados en los primeros 40 ms y
+##    luego la levanta en rampa casi lineal hasta 14 grados a 180 ms. Eso es un
+##    gesto dibujado, no un impulso: el arma se quedaba clavada justo cuando la
+##    corredera ya habia ido y vuelto, y por eso el casquillo parecia tener mas
+##    movimiento que la pistola. El arma visible pasa a moverse solo por la
+##    fisica (ver _update_recoil), con la animacion aportando el gesto humano
+##    (manos, munecas, brazos). Las pistas del cargador y del canon se quedan:
+##    son parte de ese gesto y no hay autoridad que las contradiga.
 func _strip_mechanical_tracks() -> void:
-	var targets := [SLIDE_BONE, TRIGGER_BONE]
 	var clips := ["Fire", "Reload", "Reload_Empty"]
 	for short_name in clips:
 		var resolved := ""
@@ -1134,6 +1235,9 @@ func _strip_mechanical_tracks() -> void:
 		if resolved == "":
 			continue
 		var anim: Animation = arms_player.get_animation(resolved)
+		var targets := [SLIDE_BONE, TRIGGER_BONE]
+		if short_name == "Fire":
+			targets.append(WEAPON_BONE)
 		var removed := 0
 		for ti in range(anim.get_track_count() - 1, -1, -1):
 			var tp := str(anim.track_get_path(ti))
@@ -1172,20 +1276,32 @@ func _park_arms(short_name: String, t: float) -> bool:
 			arms_skeleton.force_update_all_bone_transforms()
 			return true
 	return false
-## Guantes y mangas oscuros conservando el material del autor.
+## Guantes y mangas como TELA/CUERO, conservando las texturas del autor.
 ##
-## El asset trae difusas reales (costuras, nudillos, tejido) pero Godot importa
-## algunas superficies con metallic=1.0 y la tela sale blanca quemada bajo las
-## luces del viewmodel (MEDIDO: mangas a 255/255 en ADS). No se reconstruye
-## nada: se tine el albedo (multiplica la difusa, el detalle sigue ahi) y se
-## pone la tela como dielectrico (metallic=0, roughness=1), porque la tela no
-## es metal.
+## El asset trae difusas reales (costuras, nudillos, tejido) y una textura
+## ORM donde el canal metalico del guante esta a 0.99, con lo que el material
+## sale cromado: reflejaba las luces del viewmodel como plastico negro pulido.
+## La tela y el cuero son dielectricos, asi que el cambio minimo es el que se
+## hace aqui: se tine el albedo (multiplica la difusa; el detalle sigue) y se
+## fuerza un DIELECTRICO con specular bajo y el emisivo del autor apagado (el
+## guante trae emissiveFactor=1.0 con una textura casi negra: no aporta nada y
+## bajo el glow del bodycam solo puede ensuciar las costuras).
+##
+## No se toca ninguna luz de la escena: un material que no es metal no puede
+## arreglarse iluminando menos.
+const FABRIC_SPECULAR := 0.22  # dieléctrico de tela/cuero, no barniz
+const GLOVE_TINT := Color(0.52, 0.52, 0.55, 1.0)
+const SLEEVE_TINT := Color(0.40, 0.40, 0.43, 1.0)
+const GLOVE_ROUGHNESS := 0.95
+const SLEEVE_ROUGHNESS := 1.0
+
+
 func _darken_arms() -> void:
-	_darken_mesh(arms_mesh_visible, "ARMS_GUANTE", Color(0.30, 0.30, 0.32, 1.0))
-	_darken_mesh(arms_sleeve_visible, "ARMS_MANGA", Color(0.22, 0.22, 0.24, 1.0))
+	_darken_mesh(arms_mesh_visible, "ARMS_GUANTE", GLOVE_TINT, GLOVE_ROUGHNESS)
+	_darken_mesh(arms_sleeve_visible, "ARMS_MANGA", SLEEVE_TINT, SLEEVE_ROUGHNESS)
 
 
-func _darken_mesh(mi: MeshInstance3D, label: String, tint: Color) -> void:
+func _darken_mesh(mi: MeshInstance3D, label: String, tint: Color, roughness: float) -> void:
 	if mi == null or mi.mesh == null:
 		return
 	for si in range(mi.mesh.get_surface_count()):
@@ -1194,16 +1310,20 @@ func _darken_mesh(mi: MeshInstance3D, label: String, tint: Color) -> void:
 			m = mi.mesh.surface_get_material(si)
 		if m is StandardMaterial3D:
 			var src := m as StandardMaterial3D
-			var dark := src.duplicate() as StandardMaterial3D
-			dark.albedo_color = tint
-			dark.metallic = 0.0
-			dark.roughness = 1.0
-			mi.set_surface_override_material(si, dark)
+			var fabric := src.duplicate() as StandardMaterial3D
+			fabric.albedo_color = tint
+			# Dieléctrico: el canal metalico del ORM (0.99) no manda sobre la tela.
+			fabric.metallic = 0.0
+			fabric.metallic_specular = FABRIC_SPECULAR
+			fabric.roughness = roughness
+			fabric.emission_enabled = false
+			mi.set_surface_override_material(si, fabric)
 			print(label, " superficie ", si,
 				" albedo_tex=", src.albedo_texture != null,
 				" mr_tex=", src.metallic_texture != null,
 				" normal_tex=", src.normal_texture != null,
-				" metallic_origen=", src.metallic, " -> tinte=", tint)
+				" metallic_origen=", src.metallic,
+				" -> dielectrico rough=", roughness, " tinte=", tint)
 
 
 func _play_arms_anim(short_name: String, loop := false) -> bool:

@@ -347,8 +347,20 @@ echo "== Impactos =="
 for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 transient; done
 
 echo "== Mecánica del arma =="
-# slide.wav: su golpe bueno está a 0.4 s, así que se alinea al pico.
-process slide "$MECH_ATTACK_TARGET" 0.18 0.05 peak
+# Los dos golpes de la corredera son DOS eventos físicos distintos (tope trasero
+# a ~12 ms y vuelta a batería a ~54 ms) y suenan distinto: el trasero es un
+# chasquido de acero agudo y el de batería un golpe más sordo y con cuerpo. Antes
+# los dos usaban slide.wav con distinto volumen y pitch, que es lo que hacía que
+# el disparo se percibiera como BANG + otro golpe.
+#
+#   slide_rear.wav     Glock 19 real: pico -0.85 dBFS, 85% de energía >2,5 kHz.
+#   slide_battery.wav  Sig P229 real: pico -9,82 dBFS, 75% de energía <800 Hz.
+#
+# Los dos vienen ya recortados a su ataque (ver CREDITS_AUDIO.md), así que se
+# alinean por transitorio como el resto de la foley. Se igualan al mismo target
+# de familia porque su reparto DENTRO del disparo lo fija GameAudio
+# (slide_rear a nivel base y slide_battery 4 dB por debajo).
+for s in slide_rear slide_battery; do process "$s" "$MECH_ATTACK_TARGET" 0.12 0.05 transient; done
 for s in empty_b magin magout; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 transient; done
 
 echo "== Otros =="

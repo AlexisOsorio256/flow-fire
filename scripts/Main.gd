@@ -46,6 +46,10 @@ func _run_dev_tools() -> void:
         tools.run_visualab()
     if args.has("--probe"):
         tools.run_probe()
+    if args.has("--firecurve"):
+        tools.run_firecurve()
+    if args.has("--recoilprobe"):
+        tools.run_recoilprobe()
     if args.has("--geometrydebug"):
         tools.run_geometrydebug()
     if args.has("--armdiag"):

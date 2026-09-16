@@ -686,6 +686,8 @@ func _visual_apply_state(state: String) -> void:
             w.shot_pulse = 1.0
             w.slide_pos = 0.010
             w.trigger_visual = 1.0
+            w._anchor_flash()
+            w._pop_flash()
             _visual_park_animation("Shoot", 0.05)
         "casing":
             # Vaina en vuelo, puerto ya abierto: es el frame en el que el
@@ -1277,6 +1279,90 @@ func _print_arm_screen_box(label: String) -> void:
                 " ", ("TOCA_ENCUADRE" if dentro else "FUERA_ENCUADRE"))
         for c in n.get_children():
             stack.append(c)
+
+
+## TEMPORAL (se retira al cerrar el pulido del retroceso): mide, frame a frame y
+## a escala 1, cuanto gira y cuanto se desplaza el arma respecto a la camara
+## durante el primer instante de un disparo, y lo compara con lo que solo aporta
+## la capa procedural. Sirve para saber en que ms esta el pico y si el arma se
+## mueve o solo se mueve la vaina.
+func run_recoilprobe() -> void:
+    await get_tree().create_timer(0.8).timeout
+    var w = _player.weapon
+    w.set_aim(false)
+    await get_tree().create_timer(0.4).timeout
+    # A escala 1 el ciclo entero (60 ms) cabe en 1-2 frames de esta maquina, asi
+    # que se muestrea a 0.08: cada frame vale 1.3 ms de tiempo de juego y el
+    # reloj se acumula con el delta real, no con el reloj de pared.
+    _recoil_time = 0.0
+    var fwd0 := Vector3.ZERO
+    w.force_fire_once()
+    Engine.time_scale = 0.08
+    for i in range(46):
+        await get_tree().process_frame
+        _recoil_time += w.last_delta
+        var cam: Camera3D = _player.camera
+        var cam_inv := cam.global_transform.affine_inverse()
+        var gun_xf: Transform3D = w.arms_skeleton.global_transform * w.arms_skeleton.get_bone_global_pose(w.slide_bone)
+        var up: Vector3 = (cam_inv.basis * gun_xf.basis.y).normalized()
+        var fwd: Vector3 = (cam_inv.basis * gun_xf.basis.z).normalized()
+        if fwd0 == Vector3.ZERO:
+            fwd0 = fwd
+        var elev := rad_to_deg(asin(clampf(fwd.y, -1.0, 1.0)))
+        var azim := rad_to_deg(atan2(fwd.x, fwd.z))
+        var elev0 := rad_to_deg(asin(clampf(fwd0.y, -1.0, 1.0)))
+        var azim0 := rad_to_deg(atan2(fwd0.x, fwd0.z))
+        print("RECOIL %02d t=%5.1fms elev=%6.2f (d=%6.2f) azim=%6.2f (d=%6.2f) roll=%6.2f slide=%5.1fmm proc(wrist=%5.2f° arm=%5.2f°) cam=%5.2f°" % [
+            i, _recoil_time * 1000.0, elev, elev - elev0, azim, azim - azim0,
+            rad_to_deg(atan2(up.x, up.y)),
+            w.slide_pos * 1000.0, rad_to_deg(w.recoil_rot.x), rad_to_deg(w.arm_recoil_rot.x),
+            rad_to_deg(_player.recoil_pitch)])
+    Engine.time_scale = 1.0
+    print("RECOILPROBE_DONE")
+    get_tree().quit()
+
+
+var _recoil_time := 0.0
+
+
+## TEMPORAL: la misma medida que --recoilprobe pero SOLO con la animacion Fire
+## del autor (capas procedurales a cero). Dice cuanto y cuando sube el arma por
+## culpa de la animacion, que es lo que hay que complementar sin repetir.
+func run_firecurve() -> void:
+    await get_tree().create_timer(0.8).timeout
+    var w = _player.weapon
+    w.set_aim(false)
+    await get_tree().create_timer(0.4).timeout
+    _recoil_time = 0.0
+    var fwd0 := Vector3.ZERO
+    w.force_fire_once()
+    Engine.time_scale = 0.08
+    for i in range(46):
+        w.recoil_pos = Vector3.ZERO
+        w.recoil_vel = Vector3.ZERO
+        w.recoil_rot = Vector3.ZERO
+        w.recoil_rot_vel = Vector3.ZERO
+        w.arm_recoil_pos = Vector3.ZERO
+        w.arm_recoil_vel = Vector3.ZERO
+        w.arm_recoil_rot = Vector3.ZERO
+        w.arm_recoil_rot_vel = Vector3.ZERO
+        await get_tree().process_frame
+        _recoil_time += w.last_delta
+        var cam: Camera3D = _player.camera
+        var cam_inv := cam.global_transform.affine_inverse()
+        var gun_xf: Transform3D = w.arms_skeleton.global_transform * w.arms_skeleton.get_bone_global_pose(w.slide_bone)
+        var fwd: Vector3 = (cam_inv.basis * gun_xf.basis.z).normalized()
+        if fwd0 == Vector3.ZERO:
+            fwd0 = fwd
+        var elev := rad_to_deg(asin(clampf(fwd.y, -1.0, 1.0)))
+        var azim := rad_to_deg(atan2(fwd.x, fwd.z))
+        var elev0 := rad_to_deg(asin(clampf(fwd0.y, -1.0, 1.0)))
+        var azim0 := rad_to_deg(atan2(fwd0.x, fwd0.z))
+        print("FIRECURVE %02d t=%5.1fms elev_d=%6.2f azim_d=%6.2f" % [
+            i, _recoil_time * 1000.0, elev - elev0, azim - azim0])
+    Engine.time_scale = 1.0
+    print("FIRECURVE_DONE")
+    get_tree().quit()
 
 
 func run_probe() -> void:

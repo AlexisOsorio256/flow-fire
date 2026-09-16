@@ -223,6 +223,11 @@ godot4 --path . -- --visualab --visualout=captures/visual/current
 # Disparo/recarga en cámara lenta
 godot4 --path . -- --slowmo
 
+# Retroceso: perfil real del arma durante el primer disparo (pico y tiempo)
+# y curva de la animacion Fire sola (--firecurve)
+godot4 --path . -- --recoilprobe
+godot4 --path . -- --firecurve
+
 # Benchmark real; misma cámara/resolución/duración, vsync off
 godot4 --path . -- --fpsbench
 godot4 --path . -- --fpsbench --fpsvariant=glow_off,stage_omnis_off --fpsreps=3 --fpsduration=5
@@ -274,7 +279,7 @@ Antes de controles táctiles, migrar entrada a acciones reutilizables. **No dupl
 ## 6. Assets y licencias
 
 - **Viewmodel (brazos + arma):** `assets/models/full9mm_2k.glb` — “9mm Pistol | First Person Animations” de **1Matzh**, CC-BY 4.0, con la cadena verificada hasta las mallas originales de **Urpo** y **Blue-Spirit** (ambas CC-BY 4.0). Única representación de arma y manos.
-- **Audio:** disparos de Sonniss #GameAudioGDC (royalty-free comercial, sin atribución obligatoria) y foley CC0 de Freesound. Todo procesado con `tools/process_audio.sh`.
+- **Audio:** disparos de Sonniss #GameAudioGDC (royalty-free comercial, sin atribución obligatoria) y foley CC0 de Freesound. Todo procesado con `tools/process_audio.sh`. Los dos golpes de la corredera son dos grabaciones reales distintas (tope trasero de una Glock 19, vuelta a batería de una Sig P229): no se repite la misma muestra.
 - **Texturas PBR:** Poly Haven CC0.
 - **Código y contenido original de FlowFire:** propietario; los recursos de terceros conservan sus licencias. Ver `LICENSE` y `CREDITS_*.md`.
 
