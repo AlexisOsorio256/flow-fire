@@ -67,15 +67,15 @@ No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, cra
 Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 
 - Glock 19 de alta fidelidad en `assets/models/owk19_pistol.glb` (OWK 19, OKgamedev, CC-BY 4.0): 11 568 tris en 9 piezas rígidas. Es la **única representación del arma**; no existe rig legacy ni fallback.
-- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): única fuente de pose humana. El cuerpo del arma cuelga de `PBody` y el cargador de `Pmag`.
+- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): única fuente de pose humana. El cuerpo del arma cuelga de `PBody` y el cargador de `Pmag`. El GLB venía con `KHR_materials_pbrSpecularGlossiness`, que Godot no implementa: **su textura difusa se descartaba entera** y los brazos salían como geometría gris plana. Está convertido a metallic-roughness (receta reproducible en `CREDITS_MODELS.md`); ahora el guante, el normal y la rugosidad son los del autor y el código sólo tiñe el albedo. **Atribución pendiente de aclarar**: la malla parece ser "FP Arms" de bumstrum, que ese autor publica como CC-BY-NC; ver `CREDITS_MODELS.md` antes de un lanzamiento comercial.
 - Montaje de brazos con **escala uniforme derivada de geometría**, sin estiramientos anatómicos para ocultar hombros.
 - ADS resuelto desde la **mira trasera y delantera visibles de la OWK**; los marcadores geométricos son fuente y la pose es derivada, no al revés.
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
 - Corredera, gatillo, cargador, recarga, expulsión de casquillo y recamarado gobernados por el estado mecánico.
-- Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona. **La penetración actual todavía es una aproximación por metadata de grosor/factor; no debe confundirse con el objetivo final de salida geométrica real.**
+- Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona. **La salida ya se calcula desde la geometría real del volumen**, no desde metadata de grosor: se resuelve el intervalo de intersección de los tres *slabs* de cada `BoxShape3D` del collider y la cara lejana es la salida. Limitación concreta y deliberada: **`_find_exit_geometry()` sólo entiende `BoxShape3D`**; con cualquier otra forma no hay salida demostrable y el proyectil se detiene. Es suficiente para el rango actual (paneles y muros son cajas) y no se generaliza hasta que exista un caso real.
 - Jolt para jugador, blancos y casquillos.
 - Cámara bodycam con sway/bob/breathing/recoil y post-proceso sin blur deliberado.
-- Audio CC0 normalizado, buses `Weapons` / `World`, compresión por bus y techo de seguridad en Master.
+- Audio con buses `Weapons` / `World`, compresión por bus y techo de seguridad en Master. Los 5 disparos son tomas reales de Glock 18c (Sonniss GDC 2016, royalty-free comercial); la foley es CC0. Todos los WAV se alinean a su ataque real con `tools/process_audio.sh`: **los 15 archivos atacan dentro de los primeros 2 ms**, así que ningún evento suena tarde.
 - Materiales PBR reales para entorno y OWK 19.
 - Tests duros con exit code y un laboratorio separado de medición/diagnóstico.
 
@@ -92,6 +92,21 @@ Mientras el usuario no cambie la fase, el trabajo debe concentrarse en:
 - iluminación estática eficiente del rango;
 - sustituir assets de primera persona cuando la propia geometría limite el realismo;
 - eliminar bugs, residuos, fallbacks y contradicciones.
+
+### Limitación conocida del viewmodel
+
+El encuadre de **ADS no puede evitar que los hombros entren en pantalla** con este rig, y no es un problema de ajuste: es geometría medida con `--armdiag`.
+
+- En ADS el alza trasera queda a 0,42 m del ojo, y el hombro cae **21,6 cm por delante de la cámara y a la altura del ojo** (`UpArm_L depth=0.216 up=-0.006`).
+- El hombro está sólo **20,4 cm por detrás del alza** en el eje de visión. Un tirador real tiene el hombro a 55-65 cm por detrás de la mira.
+- Como el hombro está rígidamente unido al arma en el rig, **ninguna traslación ni rotación del conjunto puede bajarlo**: la única traslación libre es la profundidad, y para que el hombro saliera del encuadre el alza tendría que estar a ~0,20 m del ojo (el arma pegada a la cara).
+- La escala de los brazos (0,669) se deriva de la empuñadura y **no se toca**: subirla haría que la mano no envolviera la empuñadura real de la OWK.
+
+Medido con la métrica `SILUETA` de `--armdiag`: los brazos ocupan **41% del encuadre en ADS** (71% de las bandas laterales inferiores) contra 17% en hip. El arma, 0,9%.
+
+Lo que **sí** se corrigió en esta pasada es que esas masas se lean como brazos: la difusa real del autor las convierte en guantes de cuero con costuras y nudillos en vez de cilindros negros.
+
+La palanca que queda, si se quiere el encuadre de la referencia bodycam, es **bajar la cámara ~12 cm** (1,62 → 1,50 m), que es donde va montada una bodycam real: con eso el hombro cae por debajo del borde inferior. No se ha hecho porque cambia el nivel de ojos del jugador y el usuario lo excluyó explícitamente en esta tarea.
 
 No ampliar el juego para “aprovechar” que una tarea terminó pronto.
 
@@ -110,11 +125,17 @@ No ampliar el juego para “aprovechar” que una tarea terminó pronto.
 
 ### Rendimiento medido
 
-El último perfil completo del rango bajo Mobile en la HD 520, 1920×1080 y vsync off encontró como cuello dominante las **8 Omni interiores**, alrededor de **12.2 ms/frame**. Sombra direccional rondó 2.7 ms, bodycam ~1.9 ms, glow <1 ms y fog/ImpactFX fueron pequeños en el banco usado.
+Perfil completo del rango bajo Mobile en la HD 520, 1920×1080 y vsync off: el cuello dominante siguen siendo las **8 Omni interiores** (~13 ms/frame de las 38 totales; apagarlas sube de 26 a 38 FPS). Sombra direccional y glow son pequeños. Las Omni no se abarataron troceando la sala ni aislando el viewmodel por capas. La palanca pendiente con mayor potencial es dejar de iluminar una sala mayormente estática con ocho Omni dinámicas: evaluar **LightmapGI / horneado real** con captura A/B y benchmark, sin aplanar la imagen.
 
-La limpieza actual del viewmodel debe leerse con su medición propia: tras eliminar el rig legacy, el viewmodel quedó alrededor de **1.7 ms/frame** en la medición reportada; la OWK rígida sola ronda **0.08 ms** y el coste restante está dominado por el skinning de los brazos. Esta cifra no debe mezclarse con perfiles anteriores de 1.1 ms como si fueran el mismo estado. **Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEAD actual.**
+Estado en el HEAD actual (`--fpsbench --fpsreps=3 --fpsduration=6`, 3 corridas):
 
-Las Omni no se abarataron troceando la sala ni aislando el viewmodel por capas. La palanca pendiente con mayor potencial es dejar de iluminar una sala mayormente estática con ocho Omni dinámicas: evaluar **LightmapGI / horneado real** con captura A/B y benchmark, sin aplanar la imagen.
+| | fps avg | p1 | frametime avg | p95 | max |
+|---|---|---|---|---|---|
+| baseline completo | 26.06 | 22.32 | 38.37 ms | 44.81 ms | 48.09 ms |
+
+**Coste del viewmodel, medido por diferencia** (misma escena y cámara): ocultar el viewmodel entero ahorra **1.48 ms/frame** (4%); de eso, los brazos son **0.56 ms** y la OWK rígida ~0.05 ms, que está dentro del ruido. Los brazos cuestan poco más que antes aunque ahora lleven sus 4 texturas reales (albedo, normal, oclusión y metallic-roughness): el trabajo sigue siendo skinning, no muestreo de textura.
+
+Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEAD actual. La referencia de ~27 FPS de pasadas anteriores y estos 26.06 FPS no son una regresión: son la misma medida con distinto número de repeticiones en una máquina de 4 núcleos, y el orden de magnitud se mantiene. **Lo que sí es firme es el coste marginal del viewmodel, que es lo que esta pasada podía mover.**
 
 ### Autoridades existentes
 
@@ -164,7 +185,7 @@ godot4 --headless --path . -- --penetrationdiag
 godot4 --headless --path . -- --reloadtest
 ```
 
-Los cuatro tests deben devolver **exit code 0**. Un test verde no reemplaza inspección visual/física cuando el cambio modifica algo perceptual.
+Los cinco tests deben devolver **exit code 0**. Un test verde no reemplaza inspección visual/física cuando el cambio modifica algo perceptual.
 
 ### Herramientas del flujo IA
 
@@ -204,7 +225,7 @@ godot4 --path . --scene res://scenes/WeaponPreview.tscn
 
 **No pases `--rendering-driver vulkan` a secas.** En esta configuración puede forzar Forward+ y saltarse Mobile. Si necesitas forzar renderer, especifica también el método correspondiente.
 
-Las capturas y vídeos de diagnóstico se regeneran y están ignorados por Git. Eso evita basura en el repo; si un revisor remoto necesita juzgar una comparación, se le entregan explícitamente las capturas relevantes.
+Las capturas de diagnóstico (`captures/visual/`, `captures/shot/`, `captures/timeline/`) se regeneran y están ignoradas por Git. La única excepción versionada es **`captures/review/`**, la evidencia de auditoría que un revisor remoto necesita para juzgar el encuadre y el estado del viewmodel sin ejecutar el juego.
 
 ### Definition of Done
 

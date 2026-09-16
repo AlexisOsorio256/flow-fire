@@ -62,7 +62,7 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     particles.one_shot = true
     particles.explosiveness = 1.0
     particles.process_material = pm
-    particles.draw_pass_1 = _particle_quad(SOFT_TEXTURE, Color(0.6, 0.6, 0.58, 0.28), false, 0.055)
+    particles.draw_pass_1 = _particle_quad(SOFT_TEXTURE, Color(0.6, 0.6, 0.58, 0.28), false, Vector2(0.055, 0.055))
     particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(particles)
     particles.global_position = point
@@ -70,6 +70,7 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
 
 
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
+    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
     var size := 0.026
     match surface:
         "metal":
@@ -80,8 +81,10 @@ func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: St
             size = 0.024
         _:
             size = 0.026
+    # La salida no mide lo mismo en todos los materiales: el pladur revienta
+    # hacia fuera y el metal apenas deja marca.
     if is_exit:
-        size *= 1.35
+        size *= float(profile.get("exit_scale", 1.35))
 
     var quad := QuadMesh.new()
     quad.size = Vector2(size, size)
@@ -128,51 +131,92 @@ func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: St
             old.queue_free()
 
 
+## Respuesta por material. Cada entrada declara una o dos eyecciones DISTINTAS:
+##   dust   - lo que queda en el aire (polvo mineral, yeso, fibra fina)
+##   debris - lo que sale disparado y cae (esquirlas, astillas, chispas)
+## No son las mismas particulas con otro color: cambian cantidad, velocidad,
+## gravedad, tamano, duracion y textura. El papel casi no se mueve; el hormigon
+## levanta polvo y esquirlas; la madera, astillas alargadas; el metal, chispas
+## con luz. El impacto de salida usa la misma familia pero mas floja, salvo el
+## pladur, que revienta hacia fuera.
+const IMPACT_MATERIALS := {
+    "concrete": {
+        "dust": {"amount": 9, "color": Color(0.56, 0.55, 0.52, 0.60), "vel": [0.4, 1.6], "gravity": -2.0, "scale": [0.6, 2.4], "life": 0.85, "size": 0.050, "spread": 62.0},
+        "debris": {"amount": 6, "color": Color(0.34, 0.33, 0.31, 0.95), "vel": [2.6, 6.5], "gravity": -13.0, "scale": [0.18, 0.50], "life": 0.50, "size": 0.018, "spread": 70.0},
+        "exit_scale": 1.25,
+    },
+    "drywall": {
+        "dust": {"amount": 14, "color": Color(0.82, 0.80, 0.75, 0.72), "vel": [0.5, 2.0], "gravity": -1.4, "scale": [0.8, 3.0], "life": 1.05, "size": 0.058, "spread": 74.0},
+        "debris": {"amount": 4, "color": Color(0.72, 0.70, 0.64, 0.90), "vel": [1.8, 4.4], "gravity": -8.0, "scale": [0.30, 0.80], "life": 0.60, "size": 0.026, "spread": 66.0},
+        "exit_scale": 1.80,
+    },
+    "wood": {
+        "dust": {"amount": 7, "color": Color(0.46, 0.33, 0.18, 0.62), "vel": [0.5, 2.0], "gravity": -2.6, "scale": [0.5, 1.8], "life": 0.70, "size": 0.044, "spread": 60.0},
+        "debris": {"amount": 8, "color": Color(0.35, 0.22, 0.10, 0.98), "vel": [3.4, 8.0], "gravity": -12.0, "scale": [0.30, 0.85], "life": 0.60, "size": 0.030, "spread": 52.0, "stretch": 4.0},
+        "exit_scale": 1.50,
+    },
+    "metal": {
+        "debris": {"amount": 18, "color": Color(1.0, 0.72, 0.26, 1.0), "vel": [3.0, 8.0], "gravity": -11.0, "scale": [0.30, 1.10], "life": 0.34, "size": 0.018, "spread": 58.0, "spark": true},
+        "dust": {"amount": 5, "color": Color(0.50, 0.50, 0.52, 0.35), "vel": [0.4, 1.4], "gravity": -2.0, "scale": [0.40, 1.20], "life": 0.40, "size": 0.030, "spread": 50.0},
+        "exit_scale": 1.15,
+    },
+    "paper": {
+        "dust": {"amount": 4, "color": Color(0.84, 0.81, 0.74, 0.50), "vel": [0.2, 0.8], "gravity": -1.0, "scale": [0.30, 0.90], "life": 0.35, "size": 0.020, "spread": 44.0},
+        "exit_scale": 1.10,
+    },
+}
+
+
 func _spawn_particles(point: Vector3, normal: Vector3, surface: String, is_exit: bool) -> void:
-    var metal := surface == "metal"
+    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
+    var n := normal.normalized()
+    # En la salida el material ya viene roto: menos cantidad y mas lenta, salvo
+    # el pladur, que se deshace hacia fuera y por eso tiene su propio factor.
+    var strength := 0.55 if is_exit else 1.0
+    if is_exit and surface == "drywall":
+        strength = 1.30
+    for key in ["dust", "debris"]:
+        if profile.has(key):
+            _burst(point + n * 0.01, n, profile[key], strength)
+
+
+## Una eyeccion concreta. `strength` escala cantidad y velocidad sin cambiar el
+## caracter del material (que es lo que lo identifica).
+func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) -> void:
+    var spark: bool = spec.get("spark", false)
     var pm := ParticleProcessMaterial.new()
-    pm.direction = normal.normalized()
-    pm.spread = 58.0
-    if metal:
-        pm.gravity = Vector3(0, -11.0, 0)
-        pm.initial_velocity_min = 2.6
-        pm.initial_velocity_max = 7.0
-        pm.scale_min = 0.35
-        pm.scale_max = 1.25
-        pm.color = Color(1.0, 0.62, 0.18, 1.0)
+    pm.direction = normal
+    pm.spread = float(spec["spread"])
+    pm.gravity = Vector3(0, float(spec["gravity"]), 0)
+    pm.initial_velocity_min = float(spec["vel"][0]) * strength
+    pm.initial_velocity_max = float(spec["vel"][1]) * strength
+    pm.scale_min = float(spec["scale"][0])
+    pm.scale_max = float(spec["scale"][1])
+    pm.color = spec["color"]
+    if spark:
         pm.damping_min = 0.4
         pm.damping_max = 0.9
     else:
-        pm.gravity = Vector3(0, -2.2, 0)
-        pm.initial_velocity_min = 0.4
-        pm.initial_velocity_max = 2.0
-        pm.scale_min = 0.55
-        pm.scale_max = 2.4
-        pm.damping_min = 1.0
-        pm.damping_max = 2.2
-        match surface:
-            "wood":
-                pm.color = Color(0.42, 0.28, 0.14, 0.75)
-            "paper":
-                pm.color = Color(0.82, 0.79, 0.72, 0.55)
-            "drywall":
-                pm.color = Color(0.78, 0.76, 0.71, 0.70)
-            _:
-                pm.color = Color(0.53, 0.52, 0.50, 0.65)
+        pm.damping_min = 0.9
+        pm.damping_max = 2.0
 
     var particles := GPUParticles3D.new()
-    particles.amount = 5 if (surface == "paper" or is_exit) else (16 if metal else 12)
-    particles.lifetime = 0.32 if metal else 0.75
+    var amount := float(spec["amount"])
+    particles.amount = maxi(1, int(round(amount * (1.0 if strength >= 1.0 else 0.7 + 0.3 * strength))))
+    particles.lifetime = float(spec["life"])
     particles.one_shot = true
     particles.explosiveness = 1.0
     particles.process_material = pm
-    if metal:
-        particles.draw_pass_1 = _particle_quad(SPARK_TEXTURE, Color(1.0, 0.7, 0.25, 1.0), true, 0.018)
-    else:
-        particles.draw_pass_1 = _particle_quad(SOFT_TEXTURE, pm.color, false, 0.045)
+    # La astilla de madera es un sliver alargado, no un quad cuadrado: es lo que
+    # la distingue de una particula de polvo a la misma distancia.
+    var stretch := float(spec.get("stretch", 1.0))
+    var size := float(spec["size"])
+    particles.draw_pass_1 = _particle_quad(
+        SPARK_TEXTURE if spark else SOFT_TEXTURE,
+        spec["color"], spark, Vector2(size * stretch, size / maxf(stretch, 1.0)))
     particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(particles)
-    particles.global_position = point + normal.normalized() * 0.01
+    particles.global_position = point
     get_tree().create_timer(particles.lifetime + 0.5).timeout.connect(particles.queue_free)
 
 
@@ -194,9 +238,9 @@ func _spawn_light(point: Vector3, surface: String) -> void:
     tween.finished.connect(light.queue_free)
 
 
-func _particle_quad(texture: Texture2D, color: Color, additive: bool, size: float) -> QuadMesh:
+func _particle_quad(texture: Texture2D, color: Color, additive: bool, size: Vector2) -> QuadMesh:
     var quad := QuadMesh.new()
-    quad.size = Vector2(size, size)
+    quad.size = size
     var mat := StandardMaterial3D.new()
     mat.albedo_texture = texture
     mat.albedo_color = color
