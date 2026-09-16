@@ -173,20 +173,22 @@ arregla parchando la malla: hace falta sustituirla.** Un FOV más estrecho tambi
 lo taparía, pero está excluido explícitamente y además encogería el arma, que es
 justo lo contrario de lo que se pide.
 
-Los dos se resolverían sustituyendo la malla. Lo que lo bloquea **no es sólo la
-licencia**: se buscaron y descargaron las alternativas de licencia limpia que no
-requieren cuenta, y **todas son una regresión de fidelidad medida**. El mejor
-candidato descargable tiene **636 triángulos contra los 14 852 del actual** (12,4×
-menos) y **cero texturas**; el único con textura es un asset retro de 512². Con 0
-imágenes el material sale plano, que es el estado del que este proyecto ya salió
-cuando recuperó la difusa real del guante. Detalle completo, con las licencias
-comprobadas en el propio fichero, en `CREDITS_MODELS.md`.
+Los dos se resolverían sustituyendo la malla. **El código ya no puede avanzar aquí**: se agotaron las tres vías.
 
-Así que la decisión queda entre dos caminos que no puede tomar quien mantiene el
-código: **aceptar menos fidelidad** con un candidato MIT/CC0 (habría que animarlo
-y texturizarlo) o **mantener la fidelidad y resolver la licencia** (permiso del
-autor, asset comprado o encargado). Lo que no se hace es dejar el asset NC en el
-producto final sin resolverlo.
+1. **Arreglar la malla actual**: descartado con medición. Blender rompe el skinning; la edición directa del buffer del GLB conserva el rig pero tapar el corte sale como tapa plana y hundirlo arruga el cuero.
+2. **Bajar la cámara o estrechar el FOV**: excluido explícitamente, y el FOV además encogería el arma.
+3. **Descargar un reemplazo limpio**: medido, **no existe** uno que cumpla el listón. El mejor candidato descargable sin cuenta tiene **636 triángulos contra los 14 852 del actual** (12,4× menos) y **cero texturas**; el único con textura es un asset retro de 512². Detalle y licencias comprobadas en `CREDITS_MODELS.md`.
+
+### Decisión pendiente (bloquea el lanzamiento comercial)
+
+**Hay que elegir entre dos caminos, y no corresponde a quien mantiene el código:**
+
+- **A — Priorizar licencia limpia**: integrar uno de los candidatos MIT/CC0 descargables. Implica una **regresión visual de 12-52× en geometría** y perder el material PBR; habría que animarlo y texturizarlo. Contra el objetivo de "nada de aspecto PSX/low-poly".
+- **B — Priorizar fidelidad**: mantener el asset actual y **resolver su licencia** — permiso de Cransh/bumstrum, un asset comprado (Fab tiene packs de brazos FPS desde 34,99 USD, pero su página devuelve HTTP 403 a peticiones automáticas y **su licencia no se ha podido verificar aquí**) o encargo. Es la única vía que conserva los 14 852 triángulos, los 81 huesos y las 4 texturas.
+
+Lo que **no** es aceptable y por eso no se ha hecho: dejar el asset NC en el producto final sin resolverlo.
+
+Con el asset en el repo, la integración es directa y está documentada: separar las animaciones offline (nada de retarget en runtime) y volver a clavar los instantes mecánicos `RELOAD_MAG_OUT_T`, `RELOAD_MAG_IN_T` y `RELOAD_SLIDE_T`, cuyos valores actuales están medidos sobre las claves de las animaciones vigentes.
 
 ### Licencia de los brazos: pendiente de sustituir
 
