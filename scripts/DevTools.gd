@@ -599,8 +599,6 @@ func _visual_reset_player() -> void:
     p.recoil_yaw_vel = 0.0
     p.recoil_roll = 0.0
     p.recoil_roll_vel = 0.0
-    p.recoil_kick = 0.0
-    p.recoil_kick_vel = 0.0
     p.camera.position = Vector3(0.0, VISUAL_EYE_Y, 0.0)
     p.camera.rotation = Vector3.ZERO
     p.camera.fov = VISUAL_FOV_HIP
@@ -639,7 +637,6 @@ func _visual_reset_weapon() -> void:
     w.reload_empty = false
     w.reload_pose_blend = 0.0
     w.reload_mag_seated = true
-    w.reload_anim_cut = true
     w.mag_sound_out = true
     w.slide_pos = 0.0
     w.slide_vel = 0.0
@@ -1013,14 +1010,174 @@ func run_armdiag() -> void:
     _player.weapon.set_aim(false)
     await _settle_pose()
     _print_arm_frame("hip")
+    _print_silhouette("hip")
     _player.weapon.set_aim(true)
     await _settle_pose()
     _print_arm_frame("ads")
+    _print_silhouette("ads")
     _player.weapon.set_aim(false)
     await _settle_pose()
     _print_arm_screen_box("hip")
     print("ARM_DIAG_DONE")
     get_tree().quit()
+
+
+## Cobertura real de silueta: cuánta pantalla ocupan los brazos y cuánta el
+## arma, y en qué zonas. Es la medida que distingue "la persona sostiene la
+## pistola" de "dos masas tapan las esquinas", un juicio que a ojo se pierde
+## entre cambios. Rasteriza los triángulos de verdad (no sólo los vértices)
+## sobre una rejilla gruesa: un triángulo grande con 3 vértices cuenta lo que
+## ocupa en pantalla.
+func _print_silhouette(label: String) -> void:
+    var w = _player.weapon
+    if w.arms_root == null or w.arms_skeleton == null or w.arms_mesh_visible == null:
+        return
+    var cam: Camera3D = _player.camera
+    var vp := get_viewport().get_visible_rect().size
+    const GW := 96
+    const GH := 54
+    var gun_meshes: Array = []
+    for m in _viewmodel_meshes(w):
+        if m != w.arms_mesh_visible:
+            gun_meshes.append(m)
+    var arms := _raster_instances([w.arms_mesh_visible], cam, GW, GH)
+    var gun := _raster_instances(gun_meshes, cam, GW, GH)
+    var total := float(GW * GH)
+    # Franjas laterales inferiores: es donde aterrizan los hombros cuando el
+    # brazo no llega y el rig se ve obligado a entrar en el encuadre.
+    var corners := 0
+    var corner_hits := 0
+    for gy in range(GH):
+        for gx in range(GW):
+            if gy < GH / 2 or (gx >= GW / 4 and gx < GW - GW / 4):
+                continue
+            corners += 1
+            if arms["mask"][gy * GW + gx]:
+                corner_hits += 1
+    print("SILUETA ", label,
+        " brazos=", snappedf(arms["hits"] / total * 100.0, 0.1), "%",
+        " arma=", snappedf(gun["hits"] / total * 100.0, 0.1), "%",
+        " laterales_inferiores=", snappedf(corner_hits / float(maxi(corners, 1)) * 100.0, 0.1), "%",
+        " verts_brazos_detras_camara=", arms["behind"], "/", arms["onscreen"] + arms["behind"])
+
+
+## Rasteriza las mallas dadas sobre una rejilla GW x GH en espacio de pantalla.
+##
+## La proyeccion se calcula a mano con aspect 16:9 FIJO en vez de usar
+## `unproject_position`: en headless el viewport es de 64x64 (aspect 1:1) y con
+## esa relacion de aspecto los hombros caen fuera del encuadre cuando en el
+## juego real (1920x1080) entran de lleno. La medida tiene que describir la
+## pantalla del juego, no la ventana dummy del test.
+func _raster_instances(meshes: Array, cam: Camera3D, gw: int, gh: int) -> Dictionary:
+    const ASPECT := 16.0 / 9.0
+    var mask := []
+    mask.resize(gw * gh)
+    mask.fill(false)
+    var hits := 0
+    var behind := 0
+    var onscreen := 0
+    var half_h_scale := tan(deg_to_rad(cam.fov) * 0.5)
+    var origin: Vector3 = cam.global_transform.origin
+    var fwd: Vector3 = -cam.global_transform.basis.z
+    var right: Vector3 = cam.global_transform.basis.x
+    var up: Vector3 = cam.global_transform.basis.y
+    for m: MeshInstance3D in meshes:
+        if m == null or not is_instance_valid(m) or not m.visible or m.mesh == null:
+            continue
+        # _skinned_verts devuelve en espacio del esqueleto: la piel se aplica
+        # como skeleton.global * (pose * rest^-1) * v, asi que falta ese paso.
+        # Las mallas RIGIDAS (la OWK) no tienen huesos y su sitio es su propio
+        # transform global.
+        var skel_xf: Transform3D = _player.weapon.arms_skeleton.global_transform
+        var local: PackedVector3Array = _skinned_verts(m, _player.weapon.arms_skeleton, m)
+        var world := PackedVector3Array()
+        if local.is_empty():
+            var xf: Transform3D = m.global_transform
+            for si in range(m.mesh.get_surface_count()):
+                var ra: Array = m.mesh.surface_get_arrays(si)
+                if ra.is_empty() or ra[Mesh.ARRAY_VERTEX] == null:
+                    continue
+                for v in (ra[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+                    world.append(xf * v)
+        else:
+            world.resize(local.size())
+            for i in range(local.size()):
+                world[i] = skel_xf * local[i]
+        if world.is_empty():
+            continue
+        var pts := PackedVector2Array()
+        var depth := PackedFloat32Array()
+        pts.resize(world.size())
+        depth.resize(world.size())
+        for i in range(world.size()):
+            var rel: Vector3 = world[i] - origin
+            var d: float = rel.dot(fwd)
+            depth[i] = d
+            if d <= cam.near:
+                behind += 1
+                pts[i] = Vector2(NAN, NAN)
+                continue
+            onscreen += 1
+            var half_h: float = d * half_h_scale
+            var half_w: float = half_h * ASPECT
+            pts[i] = Vector2((0.5 + 0.5 * rel.dot(right) / half_w) * gw,
+                (0.5 - 0.5 * rel.dot(up) / half_h) * gh)
+        for si in range(m.mesh.get_surface_count()):
+            var arrays: Array = m.mesh.surface_get_arrays(si)
+            if arrays.is_empty():
+                continue
+            if arrays[Mesh.ARRAY_INDEX] == null:
+                continue
+            var idx: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+            var t := 0
+            while t + 2 < idx.size():
+                _fill_tri(mask, gw, gh, Vector2(gw, gh), pts, depth, cam.near,
+                    idx[t], idx[t + 1], idx[t + 2])
+                t += 3
+    for c in mask:
+        if c:
+            hits += 1
+    return {"mask": mask, "hits": hits, "behind": behind, "onscreen": onscreen}
+
+
+func _fill_tri(mask: Array, gw: int, gh: int, vp: Vector2, pts: PackedVector2Array,
+        depth: PackedFloat32Array, near: float, a: int, b: int, c: int) -> void:
+    if a >= pts.size() or b >= pts.size() or c >= pts.size():
+        return
+    # Un triángulo que cruza el plano cercano no existe en la imagen, y uno con
+    # un vertice pegado a el se proyecta a coordenadas enormes: en los dos casos
+    # lo correcto es descartarlo, no dejar que su caja llene la rejilla.
+    if depth[a] <= near or depth[b] <= near or depth[c] <= near:
+        return
+    var pa: Vector2 = pts[a]
+    var pb: Vector2 = pts[b]
+    var pc: Vector2 = pts[c]
+    if not (is_finite(pa.x) and is_finite(pa.y) and is_finite(pb.x) and is_finite(pb.y)
+            and is_finite(pc.x) and is_finite(pc.y)):
+        return
+    # Un triangulo mucho mas grande que la rejilla es casi siempre un poligono
+    # que roza la camara: se recorta al encuadre antes de rasterizar.
+    var lim := 40.0
+    if (absf(pa.x) > gw * lim and absf(pb.x) > gw * lim and absf(pc.x) > gw * lim):
+        return
+    var sx := vp.x / float(gw)
+    var sy := vp.y / float(gh)
+    var minx := maxi(int(floor(minf(pa.x, minf(pb.x, pc.x)) / sx)), 0)
+    var maxx := mini(int(ceil(maxf(pa.x, maxf(pb.x, pc.x)) / sx)), gw - 1)
+    var miny := maxi(int(floor(minf(pa.y, minf(pb.y, pc.y)) / sy)), 0)
+    var maxy := mini(int(ceil(maxf(pa.y, maxf(pb.y, pc.y)) / sy)), gh - 1)
+    if maxx < minx or maxy < miny:
+        return
+    if absf((pb - pa).cross(pc - pa)) < 0.0001:
+        return
+    for gy in range(miny, maxy + 1):
+        for gx in range(minx, maxx + 1):
+            var p := Vector2((gx + 0.5) * sx, (gy + 0.5) * sy)
+            var w0 := (pb - pa).cross(p - pa)
+            var w1 := (pc - pb).cross(p - pb)
+            var w2 := (pa - pc).cross(p - pc)
+            if (w0 >= 0.0 and w1 >= 0.0 and w2 >= 0.0) or (w0 <= 0.0 and w1 <= 0.0 and w2 <= 0.0):
+                mask[gy * gw + gx] = true
 
 
 func _print_arm_frame(label: String) -> void:
