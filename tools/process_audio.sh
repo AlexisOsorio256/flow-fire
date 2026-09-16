@@ -38,6 +38,28 @@ SOFT_ATTACK_TARGET=-16.0
 SHOT_PEAK_CEILING=-1.2
 PEAK_CEILING=-1.5          # dBFS
 
+# --- Reparto entre el estampido y el mecánico DENTRO del disparo ---
+#
+# Medido en los 5 disparos de la grabación (energía integrada de la muestra):
+# el estampido (0-20 ms) se llevaba 35-54% y el mecánico (20-110 ms) 46-52%,
+# porque el mecánico dura 90 ms contra 20 y su PICO es el mismo (~-1.20 dBFS).
+# O sea: dos golpes del mismo tamaño, que es exactamente lo que se percibe como
+# "el disparo suena dos veces".
+#
+# Se hunde el mecánico a SHOT_TAIL_DB desde SHOT_TAIL_FULL_S con una rampa hasta
+# SHOT_TAIL_RAMP_S. El ataque NO se toca (la ganancia es 1.0 hasta 25 ms), así
+# que el disparo que gusta queda intacto en pico y en RMS; sólo deja de competir
+# el mecánico. Medido después: energía del estampido 47% -> 76%, y la relación
+# estampido/mecánico pasa de +4,8..+7,3 dB a +10,4..+12,5 dB.
+#
+# Por qué NO se resuelve con un compresor: probado (thr -12 dB, 3:1 y -10 dB,
+# 2:1, attack 1 ms, release 35-40 ms) y EMPEORA — la energía se mueve HACIA el
+# mecánico (49% -> 56%) y la cola sube (3,7% -> 6,4%), porque el release devuelve
+# ganancia antes de que acabe. Es un problema de reparto, no de dinámica.
+SHOT_TAIL_DB=-7.0
+SHOT_TAIL_FULL_S=0.025
+SHOT_TAIL_RAMP_S=0.045
+
 mkdir -p "$BACKUP_DIR"
 
 # level <archivo> [ventana] -> media en dB (de la ventana o del archivo entero)
@@ -267,7 +289,13 @@ process_shot() {
         return
     fi
 
-    local chain="volume=${gain}dB,atrim=0:${keep}"
+    # Cadena: ganancia de familia -> recorte -> REPARTO estampido/mecanico ->
+    # recorte de cola -> fade. El volumen del mecanico va aqui y no en el motor
+    # para que el pico de la muestra siga siendo el del estampido.
+    local tail_lin
+    tail_lin="$(awk -v d="$SHOT_TAIL_DB" 'BEGIN { printf "%.6f", 10^(d/20) }')"
+    local vexpr="if(lt(t,${SHOT_TAIL_FULL_S}),1,if(lt(t,${SHOT_TAIL_RAMP_S}),1-(1-${tail_lin})*(t-${SHOT_TAIL_FULL_S})/(${SHOT_TAIL_RAMP_S}-${SHOT_TAIL_FULL_S}),${tail_lin}))"
+    local chain="volume=${gain}dB,atrim=0:${keep},volume=volume='${vexpr}':eval=frame"
     if awk -v f="$fade" 'BEGIN { exit !(f > 0) }'; then
         chain="$chain,afade=t=out:st=${fade_start}:d=${fade}"
     fi
