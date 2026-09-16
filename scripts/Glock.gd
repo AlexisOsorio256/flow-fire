@@ -15,7 +15,24 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## la UNICA malla de arma visible; la MIRA visible (alza real) define el ADS.
 const MAG_SIZE := 17
 const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
-const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
+# Ojo -> mira trasera en ADS. Estaba en 0.42 m y era la causa del encuadre: con
+# el arma tan cerca, los antebrazos del rig caen en el borde inferior y ocupan
+# media pantalla. Medido con la metrica SILUETA de --armdiag (viewport 16:9):
+#
+#   0.42 m -> brazos 41.2% del encuadre, bandas laterales inferiores 70.9%
+#   0.48 m -> brazos 34.8%, bandas 57.2%
+#   0.52 m -> brazos 30.9%, bandas 45.5%
+#   0.54 m -> brazos 28.7%, bandas 36.3%   <- elegido
+#   0.56 m -> brazos 26.5%, bandas 29.2%
+#   0.62 m -> brazos 20.4%, bandas 13.9%
+#
+# No es un offset de encuadre: es la distancia a la que un tirador real tiene el
+# alza del ojo, y la unica palanca que queda sin tocar la escala de los brazos
+# (atada a la empuñadura real de la OWK) ni la pose del autor. El porcentaje del
+# ARMA baja en la misma proporcion (0.9% -> 0.4%) porque mira al frente y se ve
+# de canto, no porque el arma se aleje del centro. Se para en 0.54 y no en 0.62
+# porque a partir de ahi el alza trasera deja de leerse.
+const ADS_SIGHT_DISTANCE := 0.54
 const HIP_POS := Vector3(0.0, 0.062, 0.0)  # Pose de lista: el arma va baja pero visible.
 const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
 # Ciclo mecánico de la corredera. El recorrido de 39 mm es el real de una
