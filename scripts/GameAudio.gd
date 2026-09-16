@@ -3,13 +3,22 @@ extends Node
 ## Audio real CC0 con mix por buses.
 ##
 ## Los WAV de `assets/audio/` están normalizados por familia con
-## `tools/process_audio.sh` (mismo ataque, cola corta, pico < -1.5 dBFS). Si se
+## `tools/process_audio.sh` (mismo ataque, cola corta, pico < -1.2 dBFS). Si se
 ## reemplaza un sonido hay que volver a pasar ese script: este mix da por hecha
 ## esa normalización y los niveles de abajo están medidos sobre ella.
 ##
 ## Reparto: el arma suena en el bus `Weapons` y el mundo (impactos, rebotes,
-## casquillos, pasos) en `World`. Cada bus tiene su compresor para que la suma de
-## capas no sature, y en Master sólo queda un techo de seguridad.
+## casquillos, pasos) en `World`. Los one-shots ya vienen normalizados por
+## familia desde el script, así que cada bus sólo lleva su nivel y Master queda
+## con un techo de seguridad.
+##
+## SIN compresor de bus. Lo hubo (`Weapons` a -14 dB, 3:1) y se midió que no
+## servía: con los WAV ya normalizados el detector apenas cruzaba el umbral
+## (2,2 dB de reducción en el ataque del disparo, 0 en las colas), así que no
+## protegía nada; y su release de 120 ms devolvía ganancia justo durante la cola
+## del disparo, que es la clase de bombeo que hace que un solo disparo se
+## perciba como dos eventos. La suma de capas tampoco satura sin él: medido, el
+## pico del mix con disparo + mecánica + pasos se queda muy por debajo del techo.
 
 const BUS_WEAPONS := "Weapons"
 const BUS_WORLD := "World"
@@ -17,9 +26,18 @@ const BUS_WORLD := "World"
 # Tabla única de sonidos: archivo + nivel base en dB. Los one-shots del arma se
 # piden con `play_2d`, los del mundo con `play_3d`; el segundo argumento de
 # ambos es un *ajuste* en dB sobre este nivel base.
+#
+# `slide` es el único nivel que no es de familia: su archivo es un chasquido
+# metálico con el 63% de su energía entre 2,5 y 16 kHz (medido), mientras que el
+# estampido la tiene en 800-2500 Hz. Al mismo nivel que el disparo el chasquido
+# no se oye "debajo" del blast: se oye AL LADO, y como entra a 12,7 ms del
+# estampido (el tope trasero real de la corredera, calculado del resorte de
+# Glock.gd) suena a un segundo golpe. Medido en el mix: a -10 dB el chasquido
+# doblaba la energía relativa en agudos de la ventana 13-40 ms (0,17 -> 0,43);
+# a -18 dB aporta profundidad mecánica sin competir con el blast.
 const SOUNDS := {
     "empty": {"stream": preload("res://assets/audio/empty_b.wav"), "db": -8.0, "bus": BUS_WEAPONS},
-    "slide": {"stream": preload("res://assets/audio/slide.wav"), "db": -10.0, "bus": BUS_WEAPONS},
+    "slide": {"stream": preload("res://assets/audio/slide.wav"), "db": -18.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
@@ -52,16 +70,15 @@ func _ready() -> void:
     _setup_buses()
 
 
-## Crea los buses y su dinámica. Se hace por código para que el proyecto no
-## dependa de un layout binario que nadie revisa.
+## Crea los buses. Se hace por código para que el proyecto no dependa de un
+## layout binario que nadie revisa. Sin efectos: los one-shots ya llegan
+## normalizados de `tools/process_audio.sh`.
 func _setup_buses() -> void:
     var weapons := _ensure_bus(BUS_WEAPONS)
     AudioServer.set_bus_volume_db(weapons, 0.0)
-    AudioServer.add_bus_effect(weapons, _compressor(-14.0, 3.0, 0.004, 0.12))
 
     var world := _ensure_bus(BUS_WORLD)
     AudioServer.set_bus_volume_db(world, -3.0)
-    AudioServer.add_bus_effect(world, _compressor(-18.0, 2.5, 0.010, 0.20))
 
     # Master: sólo techo de seguridad, sin pre-ganancia (no debe bombear).
     var master := AudioServer.get_bus_index("Master")
@@ -82,16 +99,6 @@ func _ensure_bus(bus_name: String) -> int:
     AudioServer.set_bus_name(index, bus_name)
     AudioServer.set_bus_send(index, "Master")
     return index
-
-
-func _compressor(threshold_db: float, ratio: float, attack: float, release: float) -> AudioEffectCompressor:
-    var comp := AudioEffectCompressor.new()
-    comp.threshold = threshold_db
-    comp.ratio = ratio
-    comp.attack_us = attack * 1000000.0
-    comp.release_ms = release * 1000.0
-    comp.gain = 0.0
-    return comp
 
 
 ## Sólo el estampido. El golpe mecánico lo emite Glock.gd cuando la corredera
