@@ -88,7 +88,9 @@ func _materials() -> void:
     lamp_mat.albedo_color = Color(0.9, 0.9, 0.85)
     lamp_mat.emission_enabled = true
     lamp_mat.emission = Color(1.0, 0.94, 0.78)
-    lamp_mat.emission_energy_multiplier = 6.0
+    # La luminancia visible de la pantalla no debe convertirse en un halo de
+    # lente. La iluminación que produce la Omni se calibra por separado abajo.
+    lamp_mat.emission_energy_multiplier = 2.0
     lamp_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
     stand_mat = StandardMaterial3D.new()
@@ -178,8 +180,8 @@ func _make_lamp(x: float, z: float) -> void:
     var light := OmniLight3D.new()
     light.position = Vector3(x, 3.55, z)
     light.light_color = Color(1.0, 0.96, 0.88)
-    light.light_energy = 7.5
-    light.omni_range = 9.0
+    light.light_energy = 4.2
+    light.omni_range = 7.0
     light.shadow_enabled = false
     add_child(light)
 

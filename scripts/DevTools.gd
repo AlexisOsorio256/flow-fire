@@ -466,7 +466,7 @@ const VISUAL_EYE_Y := 1.62
 const VISUAL_FOV_HIP := 82.0
 const VISUAL_FOV_ADS := 60.0
 const VISUAL_GRAIN_TIME := 12.0        # semilla fija del grano del bodycam
-const VISUAL_FLASH_ENERGY := 8.0       # energía fija del fogonazo
+const VISUAL_FLASH_ENERGY := 0.85      # pulso real calibrado de la boca
 const VISUAL_LOADOUT := {"mag": 17, "chamber": 1, "reserve": 68}
 
 var _visual_pin := {}

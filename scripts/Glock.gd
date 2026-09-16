@@ -57,7 +57,8 @@ var muzzle_light: OmniLight3D
 var viewmodel_light: OmniLight3D
 
 var brass_mat: StandardMaterial3D
-var flash_mat: StandardMaterial3D
+var flash_mat: ShaderMaterial
+var flash_core_mat: ShaderMaterial
 
 var mag := 17
 var chamber := 1
@@ -235,11 +236,10 @@ func start_reload() -> bool:
     reload_anim_cut = false
     aim = false
     trigger_held = false
+    # `_play_reload_animation()` resuelve una sola vez la animación que
+    # corresponde al estado mecánico. Antes se llamaba también a
+    # `_play_arms_anim()` en el mismo frame y el clip se reiniciaba dos veces.
     _play_reload_animation()
-    # Las dos recargas del autor se corresponden una a una con las dos de
-    # FlowFire: `Reload_easy` conserva la recamara (tactica) y `Reload_full`
-    # libera la corredera (vacio). Esa distincion ya existe en el asset.
-    _play_arms_anim("FPS_Pistol_Reload_full" if reload_empty else "FPS_Pistol_Reload_easy")
     _emit_ammo()
     return true
 
@@ -274,12 +274,19 @@ func _process(delta: float) -> void:
     shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
 
     var flash_visible := muzzle_timer > 0.0
+    if flash_visible and camera != null:
+        # Los quads se orientan desde la autoridad de cámara. `billboard` no es
+        # un render mode válido para shaders espaciales de Godot 4.
+        muzzle_flash.look_at(camera.global_position, Vector3.UP)
+        muzzle_flash_2.look_at(camera.global_position, Vector3.UP)
     if muzzle_flash != null:
         muzzle_flash.visible = flash_visible
     if muzzle_flash_2 != null:
         muzzle_flash_2.visible = flash_visible
     if muzzle_light != null:
-        muzzle_light.light_energy = randf_range(5.5, 10.5) if flash_visible else 0.0
+        # Pulso corto sobre el entorno, no una segunda fuente de iluminación
+        # amarilla que convierta tela y piel en metal dorado.
+        muzzle_light.light_energy = randf_range(0.65, 1.10) if flash_visible else 0.0
 
 
 func _update_trigger(delta: float) -> void:
@@ -634,17 +641,38 @@ func _build_materials() -> void:
     brass_mat.metallic = 0.95
     brass_mat.roughness = 0.24
 
-    flash_mat = StandardMaterial3D.new()
-    flash_mat.albedo_texture = preload("res://assets/textures/muzzle_flash.png")
-    flash_mat.albedo_color = Color(1.0, 0.85, 0.55, 1.0)
-    flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-    flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    flash_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-    flash_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-    flash_mat.emission_enabled = true
-    flash_mat.emission = Color(1.0, 0.55, 0.15)
-    flash_mat.emission_energy_multiplier = 5.0
-    flash_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    # El sprite anterior era una estrella radial perfecta. Este shader mínimo
+    # conserva la economía de un quad, pero da un núcleo irregular y dos
+    # lenguas orientadas: no parece un decal pegado a la boca del arma.
+    var flash_shader := Shader.new()
+    flash_shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
+
+uniform vec4 flash_color : source_color = vec4(1.0, 0.68, 0.22, 1.0);
+uniform float intensity = 1.0;
+
+void fragment() {
+    vec2 p = UV * 2.0 - 1.0;
+    float core = exp(-dot(p * vec2(1.0, 1.35), p * vec2(1.0, 1.35)) * 8.0);
+    vec2 tongue_a = p - vec2(-0.12, 0.25);
+    vec2 tongue_b = p - vec2(0.18, -0.16);
+    float lobe_a = exp(-dot(tongue_a * vec2(5.2, 2.2), tongue_a * vec2(5.2, 2.2)) * 1.4);
+    float lobe_b = exp(-dot(tongue_b * vec2(4.0, 2.8), tongue_b * vec2(4.0, 2.8)) * 1.5);
+    float edge = 1.0 - smoothstep(0.72, 1.0, length(p));
+    float shape = max(core, max(lobe_a * 0.72, lobe_b * 0.58)) * edge;
+    ALBEDO = flash_color.rgb;
+    EMISSION = flash_color.rgb * intensity;
+    ALPHA = clamp(shape, 0.0, 1.0);
+}
+"""
+    flash_mat = ShaderMaterial.new()
+    flash_mat.shader = flash_shader
+    flash_mat.set_shader_parameter("flash_color", Color(1.0, 0.58, 0.16, 1.0))
+    flash_mat.set_shader_parameter("intensity", 1.8)
+    flash_core_mat = flash_mat.duplicate() as ShaderMaterial
+    flash_core_mat.set_shader_parameter("flash_color", Color(1.0, 0.88, 0.52, 1.0))
+    flash_core_mat.set_shader_parameter("intensity", 1.35)
 
 
 ## Construye el viewmodel: la OWK 19 como UNICA arma. Sin rig legacy, sin
@@ -751,7 +779,7 @@ func _band_centroid(verts: PackedVector3Array, box: AABB, z0: float, z1: float, 
 func _build_flash() -> void:
     muzzle_flash = MeshInstance3D.new()
     var flash_quad := QuadMesh.new()
-    flash_quad.size = Vector2(0.075, 0.075)
+    flash_quad.size = Vector2(0.064, 0.050)
     flash_quad.material = flash_mat
     muzzle_flash.mesh = flash_quad
     muzzle_flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -760,17 +788,17 @@ func _build_flash() -> void:
 
     muzzle_flash_2 = MeshInstance3D.new()
     var core_quad := QuadMesh.new()
-    core_quad.size = Vector2(0.036, 0.036)
-    core_quad.material = flash_mat
+    core_quad.size = Vector2(0.030, 0.026)
+    core_quad.material = flash_core_mat
     muzzle_flash_2.mesh = core_quad
     muzzle_flash_2.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     muzzle_flash_2.visible = false
     muzzle.add_child(muzzle_flash_2)
 
     muzzle_light = OmniLight3D.new()
-    muzzle_light.light_color = Color(1.0, 0.78, 0.4)
+    muzzle_light.light_color = Color(1.0, 0.86, 0.70)
     muzzle_light.light_energy = 0.0
-    muzzle_light.omni_range = 5.5
+    muzzle_light.omni_range = 2.4
     muzzle_light.shadow_enabled = false
     muzzle.add_child(muzzle_light)
 
@@ -1431,8 +1459,23 @@ func _darken_arms() -> void:
             var src := m as StandardMaterial3D
             var dark := src.duplicate() as StandardMaterial3D
             dark.albedo_color = Color(0.09, 0.09, 0.10, 1.0)
+            # La textura/normal del asset se conserva, pero el guante es
+            # tela/cuero y no una superficie metálica. Hacer explícita esta
+            # respuesta evita que el pulso de boca produzca reflejos dorados.
+            dark.metallic = 0.0
+            # El GLB trae un mapa packed metallic-roughness con el canal
+            # metálico a 1.0. La rugosidad se mantiene abajo; este canal no
+            # puede seguir gobernando la respuesta del guante.
+            dark.metallic_texture = null
+            dark.roughness = 1.0
+            dark.metallic_specular = 0.28
             arms_mesh_visible.set_surface_override_material(si, dark)
-            print("ARMS_GUANTE superficie ", si, " albedo_origen=", src.albedo_color)
+            print("ARMS_GUANTE superficie ", si, " albedo_origen=", src.albedo_color,
+                " metallic=", src.metallic, " roughness=", src.roughness,
+                " metallic_tex=", src.metallic_texture != null,
+                " roughness_tex=", src.roughness_texture != null,
+                " normal_tex=", src.normal_texture != null,
+                " -> metallic=", dark.metallic, " roughness=", dark.roughness)
 
 
 func _play_arms_anim(short_name: String, loop := false) -> bool:

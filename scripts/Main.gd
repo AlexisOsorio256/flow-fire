@@ -85,9 +85,13 @@ func _setup_environment() -> void:
     env.ssao_enabled = false
     env.ssil_enabled = false
     env.glow_enabled = true
-    env.glow_intensity = 0.55
-    env.glow_bloom = 0.08
-    env.glow_hdr_threshold = 0.82
+    # El halo visible de las lámparas venía sobre todo de su luminancia y de
+    # las Omni, no de una identidad bodycam que necesitase bloom abundante.
+    # Conservamos un glow corto para las altas luces, pero evitamos lavar el
+    # techo y los materiales cercanos.
+    env.glow_intensity = 0.28
+    env.glow_bloom = 0.04
+    env.glow_hdr_threshold = 1.25
     # Los niveles 3 y 4 del glow aportaban una cola de blur muy suave: medido
     # sobre capturas idénticas, su ausencia sólo cambiaba ~1% de bloques 8x8
     # por encima de 4/255, pero costaban ~2.4 ms/frame en la GPU objetivo.
