@@ -157,6 +157,9 @@ godot4 --headless --path . -- --aimtest
 # Penetración + daño + decals
 godot4 --headless --path . -- --pentest
 
+# Salida por segunda cara de la geometría (madera + pladur)
+godot4 --headless --path . -- --penetrationdiag
+
 # Recarga vacía y táctica
 godot4 --headless --path . -- --reloadtest
 ```

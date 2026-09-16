@@ -216,8 +216,9 @@ func _make_barrier(x: float, z: float, rot_y: float) -> void:
     var board := _static_box(root, "BarrierBoard", Vector3(2.3, 0.72, 0.055), Vector3(0, 1.08, 0), wood_mat)
     board.set_meta("surface", "wood")
     board.set_meta("penetrable", true)
-    board.set_meta("thickness", 0.055)
-    board.set_meta("penetration_factor", 0.68)
+    # Resistencia por metro; la distancia real sale de la segunda cara de la
+    # colisión, no de una salida calculada desde metadata.
+    board.set_meta("penetration_resistance", 7.0)
 
     for leg_x in [-1.0, 1.0]:
         var leg := _static_box(root, "BarrierLeg", Vector3(0.08, 1.05, 0.08), Vector3(leg_x, 0.52, 0), wood_mat)
@@ -233,8 +234,7 @@ func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> vo
     var body := _static_box(root, "DrywallSheet", Vector3(panel_size.x, panel_size.y, 0.06), Vector3(0.0, panel_size.y * 0.5, 0.0), drywall_mat)
     body.set_meta("surface", "drywall")
     body.set_meta("penetrable", true)
-    body.set_meta("thickness", 0.06)
-    body.set_meta("penetration_factor", 0.70)
+    body.set_meta("penetration_resistance", 5.95)
 
 
 func _make_drum(x: float, z: float) -> void:

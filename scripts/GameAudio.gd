@@ -39,7 +39,6 @@ const SHOT_STREAMS: Array[AudioStream] = [
 ]
 
 const SHOT_DB := -6.0        # disparo (los 5 WAV comparten loudness de ataque)
-const SHOT_MECH_DB := -18.0  # capa de corredera bajo el disparo
 
 # Voces simultáneas del arma: al disparar rápido las colas se apilaban y
 # enfangaban el mix, así que se cortan las más viejas con un fade corto.
@@ -95,23 +94,12 @@ func _compressor(threshold_db: float, ratio: float, attack: float, release: floa
     return comp
 
 
-## Disparo + capa mecánica de corredera. La mecánica entra 45 ms después: es el
-## ciclo real de la corredera, no un eco.
+## Sólo el estampido. El golpe mecánico lo emite Glock.gd cuando la corredera
+## llega físicamente al tope trasero; mantener ambas autoridades separadas evita
+## que una cola fija de audio se despegue del movimiento a otro FPS.
 func play_shot() -> void:
     var stream: AudioStream = SHOT_STREAMS[randi() % SHOT_STREAMS.size()]
     _spawn(BUS_WEAPONS, stream, SHOT_DB + randf_range(-1.0, 1.0), randf_range(0.965, 1.035))
-    var mech := _spawn(
-        BUS_WEAPONS,
-        SOUNDS["slide"]["stream"],
-        SHOT_MECH_DB + randf_range(-1.5, 1.5),
-        randf_range(0.98, 1.06),
-        false,
-        false
-    )
-    get_tree().create_timer(0.045).timeout.connect(func() -> void:
-        if is_instance_valid(mech):
-            mech.play()
-    )
 
 
 ## Sonido no posicional. El bus lo declara la tabla según el sonido (el arma va

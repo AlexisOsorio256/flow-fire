@@ -7,14 +7,19 @@ const DRAG_K := 0.00142
 const GRAVITY := 9.81
 const MAX_DISTANCE := 520.0
 const COLLISION_MASK := 1
+const PENETRATION_EPSILON := 0.0015
+const PENETRATION_SEARCH_DISTANCE := 4.0
 
 var bullets: Array = []
 var tracer_pool: Array[MeshInstance3D] = []
 var tracer_material: StandardMaterial3D
+var penetration_events := 0
+var penetration_debug := false
 
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_PAUSABLE
+    penetration_debug = OS.get_cmdline_user_args().has("--penetrationdiag")
     tracer_material = StandardMaterial3D.new()
     tracer_material.albedo_color = Color(1.0, 0.55, 0.16, 0.95)
     tracer_material.emission_enabled = true
@@ -99,6 +104,7 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
     if normal.length_squared() < 0.5:
         normal = -dir
     var collider: Object = hit.collider
+    b.distance += point.distance_to(b.pos)
     var surface := "concrete"
     if collider is Node:
         surface = str(collider.get_meta("surface", "concrete"))
@@ -114,24 +120,57 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         target_hit.emit(zone)
 
     var penetrable := false
-    var thickness := 0.02
-    var penetration_factor := 0.78
+    var penetration_resistance := 0.0
     if collider is Node:
         penetrable = bool(collider.get_meta("penetrable", false))
-        thickness = float(collider.get_meta("thickness", 0.02))
-        penetration_factor = float(collider.get_meta("penetration_factor", 0.78))
+        if penetrable:
+            penetration_resistance = float(collider.get_meta("penetration_resistance", 0.0))
 
     if penetrable:
-        # Salida geométrica: punto de entrada + grosor proyectado según el ángulo.
-        var denom := maxf(0.25, absf(dir.dot(normal)))
-        var exit_point: Vector3 = point + dir * (thickness / denom)
-        var exit_normal: Vector3 = dir
+        if penetration_resistance <= 0.0:
+            # Un volumen penetrable sin resistencia calibrada no tiene una
+            # propiedad física completa: no inventamos una pérdida ni una
+            # salida. La entrada sí ocurrió; el proyectil se detiene aquí.
+            push_warning("Penetrable sin penetration_resistance: " + str(collider))
+            b.active = false
+            return
+
+        var exit := _find_exit_geometry(point, dir, collider)
+        if exit.is_empty():
+            # Sin segunda cara del mismo volumen no existe una penetración
+            # demostrable. Esto evita el antiguo punto de salida fabricado a
+            # partir de metadata de grosor.
+            b.active = false
+            if penetration_debug:
+                print("PEN_GEOM stop surface=", surface, " reason=no_exit_same_shape entry=", point)
+            return
+
+        var exit_point: Vector3 = exit["point"]
+        var exit_normal: Vector3 = exit["normal"]
+        var actual_thickness: float = exit["distance"]
+        if actual_thickness <= PENETRATION_EPSILON:
+            b.active = false
+            return
+
         ImpactFX.spawn_impact(exit_point, exit_normal, collider, surface, true)
-        b.vel = b.vel * penetration_factor
-        # Lo sacamos bien afuera para que el próximo subpaso no vuelva a golpear el mismo cuerpo.
-        b.pos = exit_point + dir * 0.035
-        b.distance += 0.035
+        # La resistencia es material; el espesor recorrido viene de la
+        # geometría. La pérdida, por tanto, cambia de forma continua si el
+        # panel se rota o el tiro entra oblicuo.
+        var retained_energy := exp(-penetration_resistance * actual_thickness)
+        b.vel *= clampf(sqrt(retained_energy), 0.05, 0.98)
+        # Dejamos sólo una separación numérica de la cara de salida: la próxima
+        # colisión debe ser con la geometría que haya detrás, no con el mismo
+        # panel por redondeo del raycast.
+        b.pos = exit_point + dir * PENETRATION_EPSILON
+        b.distance += actual_thickness + PENETRATION_EPSILON
         b.penetrations += 1
+        penetration_events += 1
+        if penetration_debug:
+            print("PEN_GEOM surface=", surface,
+                " entry=", point.snapped(Vector3(0.001, 0.001, 0.001)),
+                " exit=", exit_point.snapped(Vector3(0.001, 0.001, 0.001)),
+                " thickness=", snappedf(actual_thickness * 1000.0, 0.1), "mm",
+                " retained_speed=", snappedf(b.vel.length(), 0.1))
         if b.penetrations > 4 or b.vel.length() < 75.0:
             b.active = false
         return
@@ -148,6 +187,67 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             return
 
     b.active = false
+
+
+## Busca la cara de salida en la geometría de la forma de colisión. Para cada
+## BoxShape3D del collider se transforma la trayectoria al espacio local y se
+## resuelve el intervalo de intersección de los tres slabs; la cara lejana es
+## la salida real. No se usa grosor de metadata para fabricar un punto.
+func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object) -> Dictionary:
+    if not collider is CollisionObject3D:
+        return {}
+    var body := collider as CollisionObject3D
+    var best := {}
+    var best_distance := PENETRATION_SEARCH_DISTANCE
+    for owner_id in body.get_shape_owners():
+        var shape_transform: Transform3D = body.global_transform * body.shape_owner_get_transform(owner_id)
+        for shape_index in range(body.shape_owner_get_shape_count(owner_id)):
+            var shape := body.shape_owner_get_shape(owner_id, shape_index)
+            if not shape is BoxShape3D:
+                continue
+            var box := shape as BoxShape3D
+            var inv := shape_transform.affine_inverse()
+            var local_entry := inv * entry
+            var local_direction := (inv * (entry + direction)) - local_entry
+            var half := box.size * 0.5
+            var t_near := -INF
+            var t_far := INF
+            var valid := true
+            for axis in 3:
+                var origin_axis := local_entry[axis]
+                var direction_axis := local_direction[axis]
+                if absf(direction_axis) < 0.000001:
+                    if absf(origin_axis) > half[axis] + PENETRATION_EPSILON:
+                        valid = false
+                        break
+                    continue
+                var t1 := (-half[axis] - origin_axis) / direction_axis
+                var t2 := (half[axis] - origin_axis) / direction_axis
+                t_near = maxf(t_near, minf(t1, t2))
+                t_far = minf(t_far, maxf(t1, t2))
+            if not valid or t_far <= PENETRATION_EPSILON or t_near > PENETRATION_EPSILON * 4.0:
+                continue
+            var local_exit := local_entry + local_direction * t_far
+            var world_exit := shape_transform * local_exit
+            var distance := entry.distance_to(world_exit)
+            if distance <= PENETRATION_EPSILON or distance >= best_distance:
+                continue
+
+            var exit_axis := 0
+            var axis_error := absf(absf(local_exit.x) - half.x)
+            var y_error := absf(absf(local_exit.y) - half.y)
+            var z_error := absf(absf(local_exit.z) - half.z)
+            if y_error < axis_error:
+                exit_axis = 1
+                axis_error = y_error
+            if z_error < axis_error:
+                exit_axis = 2
+            var local_normal := Vector3.ZERO
+            local_normal[exit_axis] = 1.0 if local_exit[exit_axis] >= 0.0 else -1.0
+            var world_normal := (shape_transform.basis * local_normal).normalized()
+            best = {"point": world_exit, "normal": world_normal, "distance": distance}
+            best_distance = distance
+    return best
 
 
 func _take_tracer() -> MeshInstance3D:

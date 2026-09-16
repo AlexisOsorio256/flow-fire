@@ -18,14 +18,14 @@ const GUN_LENGTH := 0.186  # Glock 19 real: 186 mm de punta a punta.
 const ADS_SIGHT_DISTANCE := 0.42  # Ojo -> mira trasera con el brazo extendido.
 const HIP_POS := Vector3(0.0, 0.062, 0.0)  # Pose de lista: el arma va baja pero visible.
 const GUN_TOP_OVER_ORIGIN := 0.035  # La corredera queda 3.5 cm sobre el origen.
-# Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm) y un
-# impulso también real (4 m/s): el ciclo sale ~105 ms, el doble que los ~50 ms
-# de una Glock de verdad, porque por debajo de eso el ojo (y un frame a 60 FPS)
-# sólo ve un parpadeo. Sigue siendo frenético, pero se ve el viaje completo.
+# Ciclo mecánico de la corredera. Recorrido real de una Glock 19 (39 mm). La
+# pareja resorte/amortiguador está calibrada contra captura de alta velocidad de
+# una pistola 9 mm comparable: el ciclo visible completo queda cerca de 60 ms,
+# no ralentizado artificialmente para que el jugador lo pueda seguir.
 const SLIDE_TRAVEL := 0.039
-const SLIDE_K := 1800.0        # rigidez del muelle recuperador
-const SLIDE_C := 64.0          # amortización (zeta 0.755)
-const SLIDE_IMPULSE := 4.05    # velocidad de retroceso tras el disparo (m/s)
+const SLIDE_K := 4000.0        # rigidez equivalente del muelle recuperador
+const SLIDE_C := 80.0          # amortiguación (zeta 0.632)
+const SLIDE_IMPULSE := 5.45    # impulso calibrado para 39 mm en ~60 ms
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto
 # Tiempos de la animación "Reload" del autor (medidos sobre sus claves): el
@@ -73,10 +73,11 @@ var slide_vel := 0.0
 var slide_locked := false
 var slide_extracted := false
 var slide_open := false  # la corredera llegó a abrirse (para recamarar al cerrar)
+var slide_rear_sound_emitted := true
 var reload_pose_blend := 0.0
 
 # Retroceso en capas independientes, cada una con su escala de tiempo:
-#  1) mecánica: corredera/gatillo/cargador (la manda la lógica, ~80 ms)
+#  1) mecánica: corredera/gatillo/cargador (la manda la lógica, ~60 ms)
 #  2) arma en la mano: recoil_node girando sobre la MUÑECA (~240 ms)
 #  3) brazos/viewmodel: pose_root entero, más lento y blando (~660 ms)
 #  4) cámara: resortes de Player.gd, la más lenta
@@ -169,7 +170,7 @@ func _build_viewmodel_light() -> void:
 
     var fill := OmniLight3D.new()
     fill.name = "ViewmodelFill"
-    fill.light_color = Color(1.0, 0.94, 0.86)
+    fill.light_color = Color(0.95, 0.97, 1.0)
     fill.light_energy = 0.95
     fill.omni_range = 1.3
     fill.omni_attenuation = 1.2
@@ -286,7 +287,7 @@ func _process(delta: float) -> void:
     if muzzle_light != null:
         # Pulso corto sobre el entorno, no una segunda fuente de iluminación
         # amarilla que convierta tela y piel en metal dorado.
-        muzzle_light.light_energy = randf_range(0.65, 1.10) if flash_visible else 0.0
+        muzzle_light.light_energy = randf_range(0.30, 0.55) if flash_visible else 0.0
 
 
 func _update_trigger(delta: float) -> void:
@@ -321,6 +322,7 @@ func _fire() -> void:
     trigger_reset_timer = 0.075
     slide_extracted = false
     slide_open = false
+    slide_rear_sound_emitted = false
     slide_vel += SLIDE_IMPULSE
     shot_pulse = 1.0
 
@@ -385,6 +387,7 @@ func _update_slide(delta: float) -> void:
                 # Tope trasero real: la corredera golpea el armazón y rebota.
                 slide_pos = SLIDE_TRAVEL
                 slide_vel = -slide_vel * SLIDE_RESTITUTION
+                _emit_slide_rear_event()
 
             if not slide_extracted and slide_pos > SLIDE_EJECT_AT:
                 slide_extracted = true
@@ -405,7 +408,14 @@ func _update_slide(delta: float) -> void:
         slide_locked = true
         slide_pos = SLIDE_TRAVEL
         slide_vel = 0.0
-        GameAudio.play_2d("slide")
+        _emit_slide_rear_event()
+
+
+func _emit_slide_rear_event() -> void:
+    if slide_rear_sound_emitted:
+        return
+    slide_rear_sound_emitted = true
+    GameAudio.play_2d("slide", 0.0, randf_range(0.98, 1.06))
 
 
 func _update_recoil(delta: float) -> void:
@@ -796,9 +806,12 @@ func _build_flash() -> void:
     muzzle.add_child(muzzle_flash_2)
 
     muzzle_light = OmniLight3D.new()
-    muzzle_light.light_color = Color(1.0, 0.86, 0.70)
+    # La luz de flash sólo aclara el volumen cercano; el naranja vive en el
+    # elemento visual del fogonazo. Una fuente cálida grande convertía la tela
+    # negra en cuero dorado durante el disparo.
+    muzzle_light.light_color = Color(1.0, 0.97, 0.92)
     muzzle_light.light_energy = 0.0
-    muzzle_light.omni_range = 2.4
+    muzzle_light.omni_range = 1.6
     muzzle_light.shadow_enabled = false
     muzzle.add_child(muzzle_light)
 
@@ -921,6 +934,12 @@ func _build_high_fidelity_pistol() -> bool:
             push_error("Al arma de alta fidelidad le falta la pieza '%s'" % required)
             return false
 
+    if pistol_parts.has("Shell"):
+        var shell_asset_verts := _part_verts(inst, pistol_parts["Shell"], [])
+        var shell_asset_box := _bounds(shell_asset_verts)
+        print("PISTOL_SHELL_ASSET caja_modelo=", shell_asset_box.size.snapped(Vector3(0.001, 0.001, 0.001)),
+            " vertices=", shell_asset_verts.size())
+
     # La medida del arma EXCLUYE Shell y Bullet: en este asset son dos objetos
     # sueltos de 2x2x2.3 unidades, mucho mayores que cualquier pieza del arma
     # (~1.6), y colándolos en la caja envolvente falseaban el eje del cañón y la
@@ -1019,6 +1038,9 @@ func _build_high_fidelity_pistol() -> bool:
     _calibrate_viewmodel_lights()
     _rebuild_markers_from_pistol(inst, holder)
     pistol_ok = true
+    if pistol_parts.has("Shell"):
+        print("PISTOL_SHELL_ASSET local=", _local_chain(pistol_parts["Shell"], holder).origin.snapped(Vector3(0.001, 0.001, 0.001)),
+            " ejection_local=", _local_chain(ejection_port, holder).origin.snapped(Vector3(0.001, 0.001, 0.001)))
     print("PISTOL_OWK19 piezas=", pistol_parts.size(), " escala=", snappedf(pistol_scale, 0.00001),
         " largo_modelo=", snappedf(box.size[ax_len], 0.0001),
         " caja=", box.size.snapped(Vector3(0.001,0.001,0.001)), " ejes=", [ax_len, ax_h, ax_w],
@@ -1458,7 +1480,7 @@ func _darken_arms() -> void:
         if m is StandardMaterial3D:
             var src := m as StandardMaterial3D
             var dark := src.duplicate() as StandardMaterial3D
-            dark.albedo_color = Color(0.09, 0.09, 0.10, 1.0)
+            dark.albedo_color = Color(0.20, 0.20, 0.21, 1.0)
             # La textura/normal del asset se conserva, pero el guante es
             # tela/cuero y no una superficie metálica. Hacer explícita esta
             # respuesta evita que el pulso de boca produzca reflejos dorados.
@@ -1468,14 +1490,20 @@ func _darken_arms() -> void:
             # puede seguir gobernando la respuesta del guante.
             dark.metallic_texture = null
             dark.roughness = 1.0
-            dark.metallic_specular = 0.28
+            # El mapa de rugosidad del GLB también tiene zonas de cuero muy
+            # pulido. En la referencia el guante es tela negra mate: conservar
+            # ese mapa producía reflejos amarillos durante el flash, aunque el
+            # canal metálico ya estuviese corregido.
+            dark.roughness_texture = null
+            dark.metallic_specular = 0.16
             arms_mesh_visible.set_surface_override_material(si, dark)
             print("ARMS_GUANTE superficie ", si, " albedo_origen=", src.albedo_color,
                 " metallic=", src.metallic, " roughness=", src.roughness,
                 " metallic_tex=", src.metallic_texture != null,
                 " roughness_tex=", src.roughness_texture != null,
                 " normal_tex=", src.normal_texture != null,
-                " -> metallic=", dark.metallic, " roughness=", dark.roughness)
+                " -> metallic=", dark.metallic, " roughness=", dark.roughness,
+                " roughness_tex=", dark.roughness_texture != null)
 
 
 func _play_arms_anim(short_name: String, loop := false) -> bool:
@@ -1559,10 +1587,13 @@ func gun_frame_marker_root(holder: Node3D) -> void:
 ## recorte. No se toca ninguna textura del asset.
 func _calibrate_viewmodel_lights() -> void:
     if viewmodel_light != null:
-        viewmodel_light.light_energy = 0.85
+        # La corrección PBR del arma quitó el reflejo metálico falso. La clave
+        # puede recuperar luz difusa real sin volver a quemar la corredera ni
+        # convertir el guante (metallic=0, roughness=1) en oro.
+        viewmodel_light.light_energy = 1.55
     for child in pose_root.get_children():
         if child is OmniLight3D and child != viewmodel_light:
-            (child as OmniLight3D).light_energy = 0.30
+            (child as OmniLight3D).light_energy = 0.48
     print("PISTOL_LUCES key=", viewmodel_light.light_energy if viewmodel_light != null else -1.0)
 
 

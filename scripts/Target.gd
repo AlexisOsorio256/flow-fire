@@ -31,8 +31,7 @@ func _ready() -> void:
         plate_width = 0.66
         set_meta("surface", "paper")
         set_meta("penetrable", true)
-        set_meta("thickness", 0.024)
-        set_meta("penetration_factor", 0.96)
+        set_meta("penetration_resistance", 1.70)
     else:
         max_health = 150.0
         health = 150.0

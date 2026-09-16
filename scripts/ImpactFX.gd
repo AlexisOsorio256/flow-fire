@@ -177,15 +177,20 @@ func _spawn_particles(point: Vector3, normal: Vector3, surface: String, is_exit:
 
 
 func _spawn_light(point: Vector3, surface: String) -> void:
+    # La luz no es un sustituto de partículas. Hormigón, yeso, papel y madera
+    # levantan polvo/fibra pero no producen un destello que ilumine la sala;
+    # sólo el impacto metálico tiene un flash físico breve junto a la chispa.
+    if surface != "metal":
+        return
     var light := OmniLight3D.new()
-    light.omni_range = 2.7
-    light.light_energy = 4.5
-    light.light_color = Color(1.0, 0.72, 0.34) if surface == "metal" else Color(0.8, 0.76, 0.68)
+    light.omni_range = 0.85
+    light.light_energy = 0.9
+    light.light_color = Color(1.0, 0.72, 0.34)
     light.shadow_enabled = false
     add_child(light)
     light.global_position = point + Vector3.UP * 0.05
     var tween := create_tween()
-    tween.tween_property(light, "light_energy", 0.0, 0.09)
+    tween.tween_property(light, "light_energy", 0.0, 0.045)
     tween.finished.connect(light.queue_free)
 
 

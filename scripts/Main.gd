@@ -25,6 +25,8 @@ func _ready() -> void:
         _run_aimtest()
     if OS.get_cmdline_user_args().has("--pentest"):
         _run_pentest()
+    if OS.get_cmdline_user_args().has("--penetrationdiag"):
+        _run_penetrationdiag()
     if OS.get_cmdline_user_args().has("--reloadtest"):
         _run_reloadtest()
     _run_dev_tools()
@@ -232,6 +234,35 @@ func _run_pentest() -> void:
         " mag=", player.weapon.mag, " chamber=", player.weapon.chamber)
     if not passed:
         push_error("PENTEST falló: " + "; ".join(failures))
+    get_tree().quit(0 if passed else 1)
+
+
+## Dos tiros controlados contra volúmenes penetrables reales. El diagnóstico
+## sólo pasa si cada tiro encuentra una segunda cara del collider: así vigila
+## que no vuelva la antigua salida fabricada desde `thickness`.
+func _run_penetrationdiag() -> void:
+    await get_tree().create_timer(0.7).timeout
+    var w = player.weapon
+    w.mag = 5
+    w.chamber = 1
+    w.reserve = 10
+    var before := Ballistics.penetration_events
+
+    _aim_at(Vector3(-5.8, 1.08, -8.0))
+    await get_tree().create_timer(0.2).timeout
+    w.force_fire_once()
+    await get_tree().create_timer(0.35).timeout
+
+    _aim_at(Vector3(-8.6, 1.2, -14.0))
+    await get_tree().create_timer(0.2).timeout
+    w.force_fire_once()
+    await get_tree().create_timer(0.45).timeout
+
+    var exits := Ballistics.penetration_events - before
+    var passed := exits >= 2
+    print("PENETRATIONDIAG exits=", exits, " expected>=2 passed=", passed)
+    if not passed:
+        push_error("PENETRATIONDIAG falló: no se encontraron las dos caras de los paneles")
     get_tree().quit(0 if passed else 1)
 
 
