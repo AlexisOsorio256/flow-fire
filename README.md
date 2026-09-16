@@ -195,7 +195,12 @@ Estas herramientas existen para que el modelo pueda comprobar su propio trabajo.
 # Geometría, encuadre, corredera, recarga
 godot4 --path . -- --geometrydebug
 
-# Diagnósticos específicos de brazos y miras
+# Brazos (encuadre, huesos y SILUETA) y miras
+#   --armdiag imprime, por hueso, profundidad/lateral/altura respecto a la
+#   cámara y su margen en pantalla, y ademas la linea SILUETA: que porcentaje
+#   del encuadre 16:9 ocupan los brazos y el arma y cuanto de las bandas
+#   laterales inferiores. Es la medida que convierte "los hombros salen
+#   demasiado" en un numero comparable entre cambios.
 godot4 --path . -- --armdiag
 godot4 --path . -- --sightdiag
 
