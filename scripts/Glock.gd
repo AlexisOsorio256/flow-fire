@@ -213,12 +213,9 @@ func _build_viewmodel_light() -> void:
 func setup(cam: Camera3D) -> void:
 	camera = cam
 	# ADVERTENCIA CONOCIDA: aqui los marcadores aun no existen (los monta
-	# _ready() despues), asi que el ADS queda con el offset constante de abajo.
-	# LIMITACION DECLARADA: la linea de mira del asset no esta todavia clavada
-	# al eje optico (medido: 54 mm / 63 mrad de desvio, --aimtest en rojo). El
-	# arma se ve centrada porque su animacion la centra, pero la mira no es
-	# autoridad geometrica como lo era la OWK. Ver README.
-	_solve_ads()
+	# El ADS NO se resuelve aqui: los marcadores los monta _ready() despues, asi
+	# que medir en este punto daba un offset sobre nodos nulos. Se resuelve al
+	# final de _ready(), con la jerarquia completa (ver alli).
 
 
 func set_aim(value: bool) -> void:
