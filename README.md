@@ -67,15 +67,15 @@ No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, cra
 Actualmente FlowFire es un vertical slice de combate y entrenamiento.
 
 - Glock 19 de alta fidelidad en `assets/models/owk19_pistol.glb` (OWK 19, OKgamedev, CC-BY 4.0): 11 568 tris en 9 piezas rígidas. Es la **única representación del arma**; no existe rig legacy ni fallback.
-- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): única fuente de pose humana. El cuerpo del arma cuelga de `PBody` y el cargador de `Pmag`. El GLB venía con `KHR_materials_pbrSpecularGlossiness`, que Godot no implementa: **su textura difusa se descartaba entera** y los brazos salían como geometría gris plana. Está convertido a metallic-roughness (receta reproducible en `CREDITS_MODELS.md`); ahora el guante, el normal y la rugosidad son los del autor y el código sólo tiñe el albedo. **Atribución pendiente de aclarar**: la malla parece ser "FP Arms" de bumstrum, que ese autor publica como CC-BY-NC; ver `CREDITS_MODELS.md` antes de un lanzamiento comercial.
+- Brazos/manos y animaciones de pistola en `assets/models/fps_pistol_arms.glb` (Cransh): única fuente de pose humana. El cuerpo del arma cuelga de `PBody` y el cargador de `Pmag`. El GLB venía con `KHR_materials_pbrSpecularGlossiness`, que Godot no implementa: **su textura difusa se descartaba entera** y los brazos salían como geometría gris plana. Está convertido a metallic-roughness (receta reproducible en `CREDITS_MODELS.md`); ahora el guante, el normal y la rugosidad son los del autor y el código sólo tiñe el albedo. **No es utilizable en un producto comercial**: la malla de brazos es `FP Arms` de bumstrum, que se publica como CC-BY-NC. Ver el apartado de licencia más abajo y `CREDITS_MODELS.md`.
 - Montaje de brazos con **escala uniforme derivada de geometría**, sin estiramientos anatómicos para ocultar hombros.
-- ADS resuelto desde la **mira trasera y delantera visibles de la OWK**; los marcadores geométricos son fuente y la pose es derivada, no al revés.
+- ADS resuelto desde la **mira trasera y delantera visibles de la OWK**; los marcadores geométricos son fuente y la pose es derivada, no al revés. La distancia ojo → alza (0,54 m) se eligió midiendo el encuadre: ver "Encuadre del viewmodel en ADS".
 - Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
 - Corredera, gatillo, cargador, recarga, expulsión de casquillo y recamarado gobernados por el estado mecánico.
 - Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona. **La salida ya se calcula desde la geometría real del volumen**, no desde metadata de grosor: se resuelve el intervalo de intersección de los tres *slabs* de cada `BoxShape3D` del collider y la cara lejana es la salida. Limitación concreta y deliberada: **`_find_exit_geometry()` sólo entiende `BoxShape3D`**; con cualquier otra forma no hay salida demostrable y el proyectil se detiene. Es suficiente para el rango actual (paneles y muros son cajas) y no se generaliza hasta que exista un caso real.
 - Jolt para jugador, blancos y casquillos.
 - Cámara bodycam con sway/bob/breathing/recoil y post-proceso sin blur deliberado.
-- Audio con buses `Weapons` / `World`, compresión por bus y techo de seguridad en Master. Los 5 disparos son tomas reales de Glock 18c (Sonniss GDC 2016, royalty-free comercial); la foley es CC0. Todos los WAV se alinean a su ataque real con `tools/process_audio.sh`: **los 15 archivos atacan dentro de los primeros 2 ms**, así que ningún evento suena tarde.
+- Audio con buses `Weapons` / `World` y techo de seguridad en Master. **Sin compresores de bus**: se midió que no protegían nada y que su release devolvía ganancia durante la cola del disparo. Los 5 disparos son tomas reales de Glock 18c (Sonniss GDC 2016, royalty-free comercial) y **se cortan de la grabación original en su ataque medido**, con la cola acotada al hueco real hasta el disparo siguiente (`tools/process_audio.sh`, tabla `SHOT_CUTS`); la grabación original se versiona en `assets/audio/source/`. La foley es CC0. Todos los WAV se alinean a su ataque real con el mismo script: **los 15 archivos atacan dentro de los primeros 2 ms**.
 - Materiales PBR reales para entorno y OWK 19.
 - Tests duros con exit code y un laboratorio separado de medición/diagnóstico.
 
@@ -93,22 +93,91 @@ Mientras el usuario no cambie la fase, el trabajo debe concentrarse en:
 - sustituir assets de primera persona cuando la propia geometría limite el realismo;
 - eliminar bugs, residuos, fallbacks y contradicciones.
 
-### Limitación conocida del viewmodel
+### Encuadre del viewmodel en ADS
 
-El encuadre de **ADS no puede evitar que los hombros entren en pantalla** con este rig, y no es un problema de ajuste: es geometría medida con `--armdiag`.
+El encuadre de ADS se corrigió midiendo, no ajustando a ojo, y la causa no era
+la que parecía.
 
-- En ADS el alza trasera queda a 0,42 m del ojo, y el hombro cae **21,6 cm por delante de la cámara y a la altura del ojo** (`UpArm_L depth=0.216 up=-0.006`).
-- El hombro está sólo **20,4 cm por detrás del alza** en el eje de visión. Un tirador real tiene el hombro a 55-65 cm por detrás de la mira.
-- Como el hombro está rígidamente unido al arma en el rig, **ninguna traslación ni rotación del conjunto puede bajarlo**: la única traslación libre es la profundidad, y para que el hombro saliera del encuadre el alza tendría que estar a ~0,20 m del ojo (el arma pegada a la cara).
-- La escala de los brazos (0,669) se deriva de la empuñadura y **no se toca**: subirla haría que la mano no envolviera la empuñadura real de la OWK.
+**Lo que estaba mal.** En ADS se veían dos masas negras enormes a los lados que
+se comían la pantalla. Medido con la métrica `SILUETA` de `--armdiag`, los
+brazos ocupaban **41,2% del encuadre y 70,9% de las bandas laterales
+inferiores**, contra 0,9% del arma.
 
-Medido con la métrica `SILUETA` de `--armdiag`: los brazos ocupan **41% del encuadre en ADS** (71% de las bandas laterales inferiores) contra 17% en hip. El arma, 0,9%.
+**Qué son esas masas.** No son los hombros. El análisis de la malla (skinning
+conforme al glTF, peso dominante por vértice) sitúa en las esquinas inferiores
+las **cadenas de antebrazo**, en concreto sus huesos de torsión:
+`BoneTwist_01.R_013` (550 vértices, la región más grande de toda la malla) y
+`BoneTwist_02.R_012` hacia la derecha, `BoneTwist_01.L_07` y `BoneTwist_02.L_06`
+hacia la izquierda. Los huesos llamados `Forearm_L/R` sólo llevan ~180 vértices
+(el codo); el bulto del antebrazo **no** está en el hueso que su nombre sugiere.
 
-Lo que **sí** se corrigió en esta pasada es que esas masas se lean como brazos: la difusa real del autor las convierte en guantes de cuero con costuras y nudillos en vez de cilindros negros.
+**Cuál era la causa real.** La distancia ojo → mira trasera estaba en **0,42 m**.
+Con el arma tan pegada a la cara, toda la geometría entre la mano y el hombro
+queda a ~0,2 m de la cámara y su tamaño angular se dispara. Al alejar el ojo del
+alza, esa masa se aleja *más* que las manos (que ya estaban lejos), así que el
+reparto arma/brazos se corrige solo. Barrido medido:
 
-La palanca que queda, si se quiere el encuadre de la referencia bodycam, es **bajar la cámara ~12 cm** (1,62 → 1,50 m), que es donde va montada una bodycam real: con eso el hombro cae por debajo del borde inferior. No se ha hecho porque cambia el nivel de ojos del jugador y el usuario lo excluyó explícitamente en esta tarea.
+| ojo → alza | brazos | bandas laterales inferiores |
+|---|---|---|
+| 0,42 m (antes) | 41,2% | 70,9% |
+| 0,48 m | 34,8% | 57,2% |
+| 0,52 m | 30,9% | 45,5% |
+| **0,54 m (actual)** | **28,8%** | **36,5%** |
+| 0,56 m | 26,5% | 29,2% |
+| 0,62 m | 20,4% | 13,9% |
 
-No ampliar el juego para “aprovechar” que una tarea terminó pronto.
+Se para en 0,54 m y no en 0,62 m porque a partir de ahí el alza trasera (unos
+30 px) deja de leerse. El porcentaje del **arma** baja en la misma proporción
+(0,9% → 0,4%) porque mira al frente y se ve de canto: no es que el arma se aleje
+del centro, es que se acorta la profundidad. La mira sigue centrada (AIMTEST:
+0,2 mm, 0,35 mrad) y HIP no cambia (17,4% / 27,6%). La escala de los brazos
+(0,6694) sigue **derivada** de la empuñadura real de la OWK, con residuo 0,0 mm:
+no se estiró nada para compensar.
+
+Efecto secundario medido: el antebrazo izquierdo pasa de quedar **fuera** del
+encuadre a quedar **dentro** con 147 px de margen, así que la pose también se
+lee mejor que antes.
+
+**Lo que sigue limitado, y no se disimula.** El encuadre ya no lo domina el
+brazo, pero la geometría del asset sigue teniendo dos defectos reales que no se
+arreglan con encuadre:
+
+1. Los antebrazos son una **cáscara abierta**: medido en Blender, la malla tiene
+   20 bucles de frontera (1 502 aristas sin cara). En ADS se mira el extremo del
+   antebrazo de canto y se ve el corte, no un brazo cerrado.
+2. La manga es **corta en proporción al arma**: el tramo hombro→mano mide ~24 cm
+   escalado, cuando un tirador real tiene el hombro a 45-55 cm de la empuñadura.
+   Por eso, por mucho que se aleje el ojo, el hombro siempre entra en pantalla si
+   se quiere que el arma domine. Es geometría, no ajuste.
+
+Los dos se resolverían sustituyendo la malla. Lo que lo bloquea no es criterio
+artístico sino **licencia** (ver siguiente apartado) y que no hay forma de
+descargar los candidatos limpios desde este entorno. Un intento de reescribir el
+GLB en Blender para tapar los agujeros rompió el rig (la silueta cayó a 0,0% y
+6 071 vértices acabaron detrás de la cámara): el round-trip de Blender no
+conserva bien este asset, así que esa vía queda descartada con evidencia, no por
+suposición.
+
+### Licencia de los brazos: pendiente de sustituir
+
+**La malla de brazos en uso no es utilizable en un producto comercial.** No es
+una sospecha: está en la propia descripción del asset que el proyecto usa.
+
+- `assets/models/fps_pistol_arms.glb` se declara **CC-BY 4.0** (Cransh), pero la
+  descripción de esa misma página dice literalmente *"Hands - FP Arms by
+  @bumstrum"*.
+- `FP Arms` de bumstrum/DJMaesen
+  (https://sketchfab.com/3d-models/8416c380544949bb9b224278819cbe6b) es
+  **CC Attribution-NonCommercial** (`by-nc/4.0`, "No commercial use"), y su
+  recuento de caras (14 852) coincide con la malla de brazos de este GLB.
+- Una licencia CC-BY concedida sobre un derivado **no puede sustituir** la
+  licencia del original. Cransh relicencia como CC-BY algo que aguas arriba es
+  NC (lo hace en varios de sus packs, no sólo en éste).
+
+FlowFire será comercial, así que **NC no es aceptable**. El reemplazo está
+investigado y verificado (ver `CREDITS_MODELS.md`), pero no se ha integrado.
+
+No ampliar el juego para "aprovechar" que una tarea terminó pronto.
 
 ---
 
@@ -131,11 +200,11 @@ Estado en el HEAD actual (`--fpsbench --fpsreps=3 --fpsduration=6`, 3 corridas):
 
 | | fps avg | p1 | frametime avg | p95 | max |
 |---|---|---|---|---|---|
-| baseline completo | 26.06 | 22.32 | 38.37 ms | 44.81 ms | 48.09 ms |
+| baseline completo | 25.11 | 21.23 | 39.83 ms | 47.09 ms | 92.81 ms |
 
-**Coste del viewmodel, medido por diferencia** (misma escena y cámara): ocultar el viewmodel entero ahorra **1.48 ms/frame** (4%); de eso, los brazos son **0.56 ms** y la OWK rígida ~0.05 ms, que está dentro del ruido. Los brazos cuestan poco más que antes aunque ahora lleven sus 4 texturas reales (albedo, normal, oclusión y metallic-roughness): el trabajo sigue siendo skinning, no muestreo de textura.
+**Coste del viewmodel, medido por diferencia** (misma escena y cámara): ocultar el viewmodel entero ahorra **2.03 ms/frame** (5,4%); de eso, los brazos son **0.49 ms** y la OWK rígida está dentro del ruido (ocultar sólo el arma *sube* el frametime medio, es decir, no se puede separar de la varianza). Los brazos cuestan poco más que antes aunque ahora lleven sus 4 texturas reales (albedo, normal, oclusión y metallic-roughness): el trabajo sigue siendo skinning, no muestreo de textura. Nada de esto cambió con el retrabajo de audio, que no toca el render.
 
-Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEAD actual. La referencia de ~27 FPS de pasadas anteriores y estos 26.06 FPS no son una regresión: son la misma medida con distinto número de repeticiones en una máquina de 4 núcleos, y el orden de magnitud se mantiene. **Lo que sí es firme es el coste marginal del viewmodel, que es lo que esta pasada podía mover.**
+Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEAD actual. En esta máquina de 4 núcleos y GPU integrada la dispersión es grande (`fps_min` oscila entre 9 y 19 entre variantes que deberían medir casi igual), así que **el promedio de 3 corridas sirve para detectar regresiones grandes, no para comparar décimas**. Lo que sí es firme es el coste marginal del viewmodel, que es lo que estas pasadas podían mover.
 
 ### Autoridades existentes
 
@@ -268,12 +337,14 @@ Antes de controles táctiles, migrar entrada a acciones reutilizables. **No dupl
 ## 6. Assets y licencias
 
 - **Arma:** `assets/models/owk19_pistol.glb` — “OWK 19 Pistol 9mm (G19)” de OKgamedev, CC-BY 4.0. Única representación del arma.
-- **Brazos y animaciones:** `assets/models/fps_pistol_arms.glb` — “FPS pistol animations” de Cransh, CC-BY 4.0. Única fuente de pose humana.
-- **Audio:** Freesound CC0, procesado con `tools/process_audio.sh`.
+- **Brazos y animaciones:** `assets/models/fps_pistol_arms.glb` — “FPS pistol animations” de Cransh, CC-BY 4.0 **en la etiqueta**, pero la malla de brazos es `FP Arms` de bumstrum (CC-BY-**NC**). **Bloquea el lanzamiento comercial**; candidatos de reemplazo ya verificados en `CREDITS_MODELS.md`.
+- **Audio:** disparos de Sonniss #GameAudioGDC (royalty-free comercial, sin atribución obligatoria) y foley CC0 de Freesound. Todo procesado con `tools/process_audio.sh`.
 - **Texturas PBR:** Poly Haven CC0.
 - **Código y contenido original de FlowFire:** propietario; los recursos de terceros conservan sus licencias. Ver `LICENSE` y `CREDITS_*.md`.
 
 Nunca sustituir un asset bueno sólo por novedad. Cambiarlo únicamente si mejora de forma visible/medible el resultado o resuelve una limitación real.
+
+**Una etiqueta CC-BY no basta para los assets de primera persona.** El campo de los packs de brazos FPS en Sketchfab está lleno de derivados de `FP Arms` (bumstrum, CC-BY-NC) reetiquetados como CC-BY por quien los sube. Antes de integrar uno hay que leer la descripción buscando `@bumstrum` / `fp-arms` **y** remontar la licencia de la malla original, no sólo la del pack.
 
 Los assets de **primera persona** tienen un estándar más alto que el decorado: arma, manos, brazos, cargador y casquillo ocupan gran parte de la pantalla y no pueden delatar geometría pobre si el objetivo visual es realista. Si un asset limita la silueta/anatomía, se sustituye; no se deforma brutalmente ni se esconde con shaders.
 
