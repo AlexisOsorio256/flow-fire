@@ -11,16 +11,6 @@
 - **No trae esqueleto ni animaciones a propósito**: la mecánica de FlowFire (recorrido de corredera, gatillo, recámara, cargador, expulsión) es la autoridad y mueve las piezas como nodos rígidos.
 - La metadata de licencia se conserva dentro del GLB; no se ha eliminado al copiarlo al repositorio.
 
-## 9mm Luger Ammo (Free) — Ziperi
-
-- Archivo: `assets/models/9mm_luger.glb` (8.4 MB).
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-luger-ammo-free-25cac470713949619a6c766886e3cd0a
-- Autor: **Ziperi** — https://sketchfab.com/ziperistudio
-- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en `asset.extras`.
-- Atribución a incluir: *"9mm Luger Ammo (Free)" by Ziperi, licensed under CC-BY 4.0, via Sketchfab*.
-- 608 triángulos, 1 malla, 1 material PBR completo.
-- **No integrado todavía**: la Glock OWK ya trae piezas `Shell` (380 tris) y `Bullet` (208 tris). Se usará el que dé mejor calidad por coste tras compararlos visualmente.
-
 ---
 
 ## FPS pistol animations — Cransh
@@ -55,6 +45,7 @@
 El viewmodel activo es, por tanto, la combinación única de `owk19_pistol.glb`
 con los brazos y animaciones de `fps_pistol_arms.glb`, sin ningún rig legacy
 en runtime.
+
 ---
 
 No documentar assets que ya no existan en el repo. Antes de sustituir o añadir un
