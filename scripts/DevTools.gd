@@ -686,10 +686,6 @@ func _visual_apply_state(state: String) -> void:
             w.shot_pulse = 1.0
             w.slide_pos = 0.010
             w.trigger_visual = 1.0
-            w.muzzle_flash.rotation.z = 0.0
-            w.muzzle_flash.scale = Vector3.ONE
-            w.muzzle_flash_2.rotation.z = 0.0
-            w.muzzle_flash_2.scale = Vector3.ONE * 0.92
             _visual_park_animation("Shoot", 0.05)
         "casing":
             # Vaina en vuelo, puerto ya abierto: es el frame en el que el
@@ -786,14 +782,15 @@ func _visual_pin_post(state: String) -> void:
     }
     _visual_pin_active = true
     _process(0.0)
+    if state == "shot" or state == "casing":
+        w._anchor_flash()
+        await get_tree().process_frame
     if w.sight_marker != null and w.muzzle != null:
         var camv: Camera3D = _player.camera
         var pm: Vector2 = camv.unproject_position((w.sight_marker as Node3D).global_position)
         var pb: Vector2 = camv.unproject_position((w.muzzle as Node3D).global_position)
         print("VISUAL_MIRA ", state, " mira_px=(", snappedf(pm.x, 1.0), ",", snappedf(pm.y, 1.0),
             ") boca_px=(", snappedf(pb.x, 1.0), ",", snappedf(pb.y, 1.0), ")")
-
-
 ## Espera a que la pose del arma se asiente (la transición hip<->ADS tarda ~0.5 s
 ## y medir a mitad da números falsos).
 func _settle_pose() -> void:
