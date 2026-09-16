@@ -10,5 +10,10 @@ Thumbs.db
 .idea/
 *.swp
 
-
-
+# Capturas de diagnostico: se regeneran con --visualab/--timeline y no aportan
+# nada al repo. Solo se versiona la evidencia de auditoria de captures/review/.
+captures/*
+!captures/review/
+!captures/review/**
+# ...pero sus .import no: los regenera Godot al importar el proyecto.
+captures/review/*.import
