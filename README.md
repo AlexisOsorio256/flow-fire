@@ -173,9 +173,20 @@ arregla parchando la malla: hace falta sustituirla.** Un FOV más estrecho tambi
 lo taparía, pero está excluido explícitamente y además encogería el arma, que es
 justo lo contrario de lo que se pide.
 
-Los dos se resolverían sustituyendo la malla. Lo que lo bloquea no es criterio
-artístico sino **licencia** (ver siguiente apartado) y que no hay forma de
-descargar los candidatos limpios desde este entorno.
+Los dos se resolverían sustituyendo la malla. Lo que lo bloquea **no es sólo la
+licencia**: se buscaron y descargaron las alternativas de licencia limpia que no
+requieren cuenta, y **todas son una regresión de fidelidad medida**. El mejor
+candidato descargable tiene **636 triángulos contra los 14 852 del actual** (12,4×
+menos) y **cero texturas**; el único con textura es un asset retro de 512². Con 0
+imágenes el material sale plano, que es el estado del que este proyecto ya salió
+cuando recuperó la difusa real del guante. Detalle completo, con las licencias
+comprobadas en el propio fichero, en `CREDITS_MODELS.md`.
+
+Así que la decisión queda entre dos caminos que no puede tomar quien mantiene el
+código: **aceptar menos fidelidad** con un candidato MIT/CC0 (habría que animarlo
+y texturizarlo) o **mantener la fidelidad y resolver la licencia** (permiso del
+autor, asset comprado o encargado). Lo que no se hace es dejar el asset NC en el
+producto final sin resolverlo.
 
 ### Licencia de los brazos: pendiente de sustituir
 

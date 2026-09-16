@@ -96,7 +96,61 @@ se eliminaron con el `prune`.
 
 ---
 
-## Candidatos de reemplazo verificados (no integrados)
+## Candidatos descargables sin cuenta (verificados, descargados y medidos)
+
+Se buscaron assets de brazos FPS en repositorios abiertos (GitHub) y en
+OpenGameArt, que **sí se pueden descargar sin cuenta**. Los tres con licencia
+limpia se descargaron y se midió su contenido real:
+
+| asset | dónde | licencia (comprobada en el propio fichero) | tris (malla de brazos) | huesos | texturas |
+|---|---|---|---|---|---|
+| **fps_pistol_arms.glb** (el actual) | — | CC-BY 4.0 **pero malla NC** | **14 852** | **81** | **4 × 1024²** |
+| GodotFPS-Template → `resources/player/fps_demo_arms.glb` | https://github.com/bukkbeek/GodotFPS-Template | MIT (LICENSE: "Copyright (c) 2026 bukkbeek"; README: *"3D assets + FPS arms animations by bukkbeek"*) | **636** (`fps_arms_extended`) | 33 | **0** |
+| novemberdev…godot → `Assets/Models/gun.glb` | https://github.com/NovemberDev/novemberdev_first_person_shooter_godot | MIT (LICENSE: "Copyright (c) 2020 NovemberDev") | **286** (`Cube.001`) | 10 | **0** |
+| WRAD ARMS → `arms.glb` | https://github.com/wwwriks/wrad-arms | CC0 1.0 (LICENSE = texto legal completo de CC0) | 1 196 | 50 | 1 × 512² |
+
+**Por qué ninguno sustituye al actual, medido:** el candidato con más geometría
+tiene **12,4 veces menos triángulos** que el actual (636 contra 14 852) y **cero
+texturas** — ni albedo, ni normal, ni rugosidad. Con 0 imágenes el material sale
+plano, que es exactamente el estado del que este proyecto ya salió: la malla
+actual sólo empezó a parecer cuero cuando se recuperó su difusa real (ver arriba).
+El único con textura es CC0 pero es un asset retro PSX de 512², por debajo del
+listón de "nada de aspecto PSX/low-poly" que pide el objetivo.
+
+**Conclusión medida: no existe un reemplazo descargable sin cuenta que cumpla el
+listón de fidelidad.** Las tres alternativas limpias son una regresión visual de
+12-52× en geometría y pierden el material. Por eso **el asset actual sigue en
+runtime**, y la decisión queda entre dos caminos que no puede tomar quien
+mantiene el código:
+
+1. **Aceptar menos fidelidad** a cambio de licencia limpia con uno de los
+   candidatos MIT/CC0 de arriba (habría que animarlo y texturizarlo).
+2. **Mantener la fidelidad** y resolver la licencia del asset actual: pedir
+   permiso a Cransh/bumstrum, o **comprar un asset** (Fab tiene packs de brazos
+   FPS desde 34,99 USD con licencia estándar) o encargarlo. La página de Fab
+   devuelve HTTP 403 a las peticiones automáticas, así que su licencia **no se ha
+   podido verificar aquí** y no se recomienda a ciegas.
+
+Lo que **no** es aceptable y por eso no se ha hecho: dejar el asset NC en el
+producto final sin resolverlo.
+
+### Lo que sí está descartado con evidencia
+
+- **GDQuest `godot-4-FPS-arms`**: el mejor aspecto de todos (3 152 tris, 50
+  huesos, 8 animaciones, dos manos con pistola) y el más peligroso. Su LICENSE
+  dice literalmente: *"Art assets (image textures and 3D models) are
+  CC-BY-NC-SA 4.0"*. El código es MIT, los modelos **no**.
+- **`aravkp/godot-dungeon-crawler-fps`**: 1 176 tris, 52 huesos, 18 animaciones,
+  pero **sin fichero de licencia**; su propio README avisa de que hay packs sin
+  licencia verificada.
+- **`AetherRadar/operation-steel-tide`**, **`unfa/liblast`**: MIT pero no tienen
+  brazos FPS (sólo armas o un personaje completo).
+- **`OctavianTocan/Low-Poly-Animated-Modern-Guns-Pack`**: el repo **no contiene
+  ningún modelo**, sólo README e imágenes.
+- **1Matzh** y **bumstrum/DJMaesen**: no existe ningún repositorio suyo; su
+  trabajo vive sólo en Sketchfab, con muro de login.
+
+## Candidatos de Sketchfab verificados (no integrados, requieren cuenta)
 
 Los tres tienen licencia **CC-BY 4.0** (comercial permitido, con atribución) y su
 cadena de licencia está **comprobada hasta la malla original**, que es lo que
