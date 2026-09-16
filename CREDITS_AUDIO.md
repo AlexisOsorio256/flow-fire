@@ -2,6 +2,31 @@
 
 Sonidos reales procesados con `tools/process_audio.sh` (ffmpeg): cada one-shot se alinea con su ataque, se iguala la loudness dentro de cada familia y se recorta la cola con fade.
 
+**Alineación al ataque (corregida).** El modo antiguo del script comparaba
+bloques de 20 ms de RMS contra el bloque más fuerte con 12 dB de margen. Un
+ruido de sala 30 dB por debajo del golpe no lo activaba, así que el archivo se
+dejaba intacto y **el evento sonaba tarde**. Medido sobre los WAV que había:
+
+| archivo | retraso del ataque antes | ahora |
+|---|---|---|
+| `impact_concrete.wav` | 54 ms | 2 ms |
+| `empty_b.wav` | 34 ms | 2 ms |
+| `shot_1.wav` / `shot_3.wav` | 16 ms | 1 ms |
+| `footstep.wav`, `impact_wood.wav` | 9 ms | 1 ms |
+| `ricochet.wav` | 3 ms | 1 ms |
+| `shot_2/4/5`, `slide`, `magin`, `shell_drop` | 0 ms | 0-1 ms |
+
+Que dos de cada cinco disparos salieran 16 ms tarde y los otros tres a 0 ms era
+el defecto más audible: la cadencia no sonaba uniforme. `slide.wav` se sigue
+alineando a su pico (su golpe bueno está a 0,4 s dentro del archivo original),
+no al primer sonido.
+
+La detección nueva usa `silencedetect` con el umbral fijado **relativo al pico
+del propio archivo** (pico − 20 dB). No se usa `astats` con `reset` pequeño: su
+reset se queda en el tamaño de frame (2048 muestras ≈ 46 ms), así que la
+resolución nunca baja de ahí. Verificado después de procesar: **los 15 WAV
+atacan dentro de los primeros 2 ms**.
+
 **Los 5 disparos** son tomas de una misma grabación de Glock 18c (micrófono MKH416 a 1 m) del **Sonniss #GameAudioGDC Bundle (2016)**, cuya licencia está en el `Licensing.pdf` que acompaña al bundle: concede uso **comercial, mundial y libre de regalías, sin obligación de atribución**, y prohíbe revender los WAV tal cual (dentro del juego sí se pueden usar). Se acredita igualmente por cortesía.
 
 - `shot_1.wav` … `shot_5.wav`: 5 disparos separados de `Sonnis/GDC 2016/Weapons/Glock 18c/Glock 18c 1m.wav` — Sonniss #GameAudioGDC Bundle 2016 — https://sonniss.com/gameaudiogdc — licencia Sonniss (royalty-free comercial).

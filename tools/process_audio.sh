@@ -53,30 +53,49 @@ duration_of() {
 }
 
 # start_offset <archivo> <modo>
-#   lead: primer instante audible comparado con el pico (quita silencio inicial)
-#   peak: instante del pico de RMS (alinea el golpe a t=0)
+#   transient: instante en que el nivel sube por encima de (pico - 20 dB), menos
+#              2 ms de margen. Es el modo que alinea sonidos percusivos
+#              (disparos, impactos, clics) a su ataque REAL.
+#   peak:      instante del pico de RMS, para un archivo cuyo golpe bueno no esta
+#              al principio (slide.wav lo tiene a 0.4 s).
+#
+# Por que existe `transient`: el modo antiguo comparaba bloques de 20 ms de RMS
+# contra el bloque mas fuerte con un margen de 12 dB. Un ruido de sala 30 dB por
+# debajo del golpe no lo activaba, asi que el archivo se dejaba intacto y el
+# evento sonaba tarde. Medido en los WAV que habia: impact_concrete tenia 54 ms
+# de ruido de sala delante del golpe, empty_b 34 ms, y shot_1/shot_3 16 ms
+# mientras shot_2/4/5 empezaban a 0 ms: dos de cada cinco disparos salian tarde.
+#
+# No se usa `astats` con reset pequeno para esto: su reset se queda en el tamano
+# de frame (2048 muestras, ~46 ms), asi que la resolucion nunca baja de ahi.
+# `silencedetect` si trabaja a nivel de muestra, y su umbral se fija relativo al
+# pico del propio archivo, que es lo que hace falta.
 start_offset() {
-    ffmpeg -hide_banner -i "$1" \
-        -af "astats=metadata=1:reset=882,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" \
-        -f null - 2>/dev/null \
-        | grep -E "pts_time|RMS_level" | paste - - \
-        | awk -v mode="$2" 'BEGIN { best = -999; n = 0 }
-            {
-                for (i = 1; i <= NF; i++) {
-                    if ($i ~ /^pts_time:/) { gsub("pts_time:", "", $i); t = $i + 0 }
-                    if ($i ~ /^lavfi\.astats\.Overall\.RMS_level=/) { split($i, a, "="); v = a[2] + 0 }
+    local file="$1" mode="$2"
+    if [ "$mode" = "peak" ]; then
+        ffmpeg -hide_banner -i "$file" \
+            -af "astats=metadata=1:reset=882,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" \
+            -f null - 2>/dev/null \
+            | grep -E "pts_time|RMS_level" | paste - - \
+            | awk 'BEGIN { best = -999; n = 0 }
+                {
+                    for (i = 1; i <= NF; i++) {
+                        if ($i ~ /^pts_time:/) { gsub("pts_time:", "", $i); t = $i + 0 }
+                        if ($i ~ /^lavfi\.astats\.Overall\.RMS_level=/) { split($i, a, "="); v = a[2] + 0 }
+                    }
+                    n++; times[n] = t; vals[n] = v
+                    if (v > best) { best = v; bt = t }
                 }
-                n++; times[n] = t; vals[n] = v
-                if (v > best) { best = v; bt = t }
-            }
-            END {
-                if (mode == "peak") { s = bt - 0.012; printf "%.3f", (s > 0 ? s : 0); exit }
-                thr = best - 12.0
-                for (i = 1; i <= n; i++) {
-                    if (vals[i] >= thr) { s = times[i] - 0.010; printf "%.3f", (s > 0 ? s : 0); exit }
-                }
-                printf "0.000"
-            }'
+                END { s = bt - 0.012; printf "%.3f", (s > 0 ? s : 0) }'
+        return
+    fi
+    local pk thr end
+    pk="$(peak "$file")"
+    thr="$(awk -v p="$pk" 'BEGIN { printf "%.1f", p - 20.0 }')"
+    end="$(ffmpeg -hide_banner -i "$file" -af "silencedetect=noise=${thr}dB:d=0.002" -f null - 2>&1 \
+        | grep -o 'silence_end: [0-9.]*' | head -1 | awk '{ print $2 }')"
+    [ -z "$end" ] && end="0"
+    awk -v e="$end" 'BEGIN { s = e - 0.002; printf "%.3f", (s > 0 ? s : 0) }'
 }
 
 # process <archivo> <ataque_objetivo> <duracion_max> <fade> <modo>
@@ -136,17 +155,17 @@ process() {
 }
 
 echo "== Disparos (misma loudness de ataque, cola corta) =="
-for s in shot_1 shot_2 shot_3 shot_4 shot_5; do process "$s" "$SHOT_ATTACK_TARGET" 0.55 0.15 lead; done
+for s in shot_1 shot_2 shot_3 shot_4 shot_5; do process "$s" "$SHOT_ATTACK_TARGET" 0.55 0.15 transient; done
 
 echo "== Impactos =="
-for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 lead; done
+for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 transient; done
 
 echo "== Mecánica del arma =="
 # slide.wav: su golpe bueno está a 0.4 s, así que se alinea al pico.
 process slide "$MECH_ATTACK_TARGET" 0.18 0.05 peak
-for s in empty_b magin magout; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 lead; done
+for s in empty_b magin magout; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 transient; done
 
 echo "== Otros =="
-for s in footstep shell_drop; do process "$s" "$SOFT_ATTACK_TARGET" 0.30 0.05 lead; done
+for s in footstep shell_drop; do process "$s" "$SOFT_ATTACK_TARGET" 0.30 0.05 transient; done
 
 echo "Listo. Originales en $BACKUP_DIR"
