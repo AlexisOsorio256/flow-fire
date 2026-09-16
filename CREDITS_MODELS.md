@@ -130,15 +130,23 @@ con permiso de descarga en el entorno. Mientras no exista ninguna de las dos, el
 asset NC sigue en runtime y el proyecto no es comercializable.
 
 La alternativa que sí estaba en disco (el GLB de pistola del addon *Godot FPS
-Hands*, del mismo DJMaesen, **CC-BY 4.0**, `asset.extras` lo confirma) se midió y
-se descartó: su malla de brazos carga **14 336 de sus pesos en el hueso del codo**
-y la pistola es un nodo rígido sin hueso de arma. Además trae **una sola pista de
-animación de 7,8 s** que el importador de Godot parte en tramos por `slice`
-(`fire` 0,300 s, `reload` 2,167 s, `idle` 0,833 s, medidos en su `.import`): para
-FlowFire habría que separarla en cuatro clips y volver a clavar los instantes
-mecánicos (`RELOAD_MAG_OUT_T`, `RELOAD_MAG_IN_T`, `RELOAD_SLIDE_T`), que hoy están
-medidos sobre las claves de las animaciones actuales. No compensa frente al
-candidato 1.
+Hands*, del mismo DJMaesen, **CC-BY 4.0**, `asset.extras` lo confirma) se midió,
+se renderizó y se descartó:
+
+- **La manga es un muñón.** Renderizada la malla aislada en Blender, los brazos
+  son manos y antebrazos cortos: la mano y los dedos tienen buen detalle, pero el
+  antebrazo termina enseguida. Para un encuadre FPS eso es **peor** que el asset
+  actual, porque el corte quedaría aún más cerca de la cámara.
+- Carga **14 336 de sus pesos en el hueso del codo** y la pistola es un nodo
+  rígido sin hueso de arma, así que no sirve para el montaje `PBody`/`Pmag`.
+- Trae **una sola pista de animación de 7,8 s** que el importador de Godot parte
+  en tramos por `slice` (`fire` 0,300 s, `reload` 2,167 s, `idle` 0,833 s,
+  medidos en su `.import`): habría que separarla en cuatro clips y volver a clavar
+  los instantes mecánicos (`RELOAD_MAG_OUT_T`, `RELOAD_MAG_IN_T`,
+  `RELOAD_SLIDE_T`), que hoy están medidos sobre las claves de las animaciones
+  actuales.
+
+No compensa frente al candidato 1.
 
 ---
 
