@@ -5,10 +5,13 @@ Sonidos reales procesados con `tools/process_audio.sh` (ffmpeg): cada one-shot s
 ## El disparo sonaba dos veces: causa medida (corregido)
 
 El disparo base gustaba, pero se percibía un segundo golpe inmediatamente después.
-La causa **no** era la capa mecánica sintética, sino las propias muestras.
+Se encontraron **tres** causas, y la tercera sólo apareció después de arreglar las
+dos primeras.
 
-**Los `shot_N.wav` anteriores eran ventanas de 700 ms cortadas a mano de la misma
-rafaga**, y su "ataque" (el pico de muestra, que es lo que medía el script) no
+### Causa 1 — las muestras no empezaban en su ataque
+
+Los `shot_N.wav` anteriores eran ventanas de 700 ms cortadas a mano de la misma
+rafaga, y su "ataque" (el pico de muestra, que es lo que medía el script) no
 coincidía con el ataque acústico. Medido con la envolvente RMS de 2 ms:
 
 | archivo | ataque real | muestras recortadas al ras | duración |
@@ -37,14 +40,56 @@ estampido. La grabación original se versiona en
 `assets/audio/source/sonniss_gdc2016_glock18c_1m.wav` (md5
 `692d47763d6af32ee551312f24868b38`) para que el corte sea reproducible.
 
-**La capa mecánica también competía, y se bajó.** `slide.wav` es un chasquido con
-el **63% de su energía entre 2,5 y 16 kHz**, mientras que el estampido la tiene en
-800-2500 Hz. Entra a **12,7 ms** del disparo (el tope trasero real de la
-corredera, calculado del resorte de `Glock.gd`: k=4000, c=80, v0=5,45 m/s,
-recorrido 39 mm). Al mismo nivel que el disparo no se oía *debajo* del blast, se
-oía **al lado**. Medido en el mix, energía relativa en agudos de la ventana
-13-40 ms: 0,17 sin capa mecánica, **0,43 a -10 dB**, 0,22 a -20 dB. Ahora está en
-**-18 dB**, que aporta profundidad mecánica sin competir con el estampido.
+### Causa 2 — la capa mecánica sintética competía
+
+`slide.wav` es un chasquido con el **63% de su energía entre 2,5 y 16 kHz**,
+mientras que el estampido la tiene en 800-2500 Hz. Entra a **12,7 ms** del
+disparo (el tope trasero real de la corredera, calculado del resorte de
+`Glock.gd`: k=4000, c=80, v0=5,45 m/s, recorrido 39 mm). Al mismo nivel que el
+disparo no se oía *debajo* del blast, se oía **al lado**. Medido en el mix,
+energía relativa en agudos de la ventana 13-40 ms: 0,17 sin capa mecánica,
+**0,43 a -10 dB**, 0,22 a -20 dB. Ahora está en **-18 dB**.
+
+A ese nivel su aporte medido al mix es de sólo **0,13-0,17 dB** en su ventana,
+así que hoy es prácticamente inaudible: se conserva porque **ancla el sonido al
+evento físico** (el tope trasero de la corredera), que es el principio que rige
+este mix, no porque se oiga.
+
+### Causa 3 — dentro de la muestra, el mecánico pesaba tanto como el estampido
+
+Ésta no se veía hasta arreglar las dos anteriores. Medido en los 5 disparos:
+
+| ventana | pico | rms | energía del archivo |
+|---|---|---|---|
+| estampido 0-20 ms | -1.20 dB | -6,0…-7,0 dB | **35-54%** |
+| mecánico 20-110 ms | **-1.20 dB** | -10,8…-14,2 dB | **46-52%** |
+
+Dos datos clave: **los dos picos son idénticos** (~-1.20 dBFS), y el mecánico
+dura 90 ms contra los 20 del estampido, así que en energía total lo empata o lo
+supera. Eso es exactamente lo que el oído lee como dos golpes del mismo tamaño.
+
+Se probó primero un **compresor de ataque** (thr -12 dB 3:1 y -10 dB 2:1, attack
+1 ms, release 35-40 ms) y **empeora**: la energía se mueve *hacia* el mecánico
+(49% → 56%) y la cola sube (3,7% → 6,4%), porque el release devuelve ganancia
+antes de que la cola acabe. Es un problema de **reparto**, no de dinámica, y esa
+vía queda descartada con medición.
+
+**Corrección.** El mecánico se hunde **7 dB** con una rampa (1.0 hasta 25 ms,
+lineal hasta -7 dB en 45 ms, constante después), en `tools/process_audio.sh` y no
+en el motor, para que el pico de la muestra siga siendo el del estampido. El
+ataque **no se toca**: el disparo que gusta queda intacto en pico y en RMS.
+
+| | antes | después |
+|---|---|---|
+| pico de la muestra | -1.20 dBFS | **-1.20 dBFS** (intacto) |
+| rms del estampido | -6,0…-7,0 dB | **igual** (intacto) |
+| relación estampido/mecánico | +4,8…+7,3 dB | **+9,2…+11,1 dB** |
+| energía del estampido | 35-54% | **62-74%** |
+| muestras recortadas | 0 | **0** |
+
+En el mix real: pico **-5,05 dBFS**, 0 recortadas, y la estructura del disparo
+pasa a ser estampido dominante con la cola 12-20 dB por debajo, en vez de un
+segundo bloque a 4,6 dB.
 
 **Fuera los compresores de bus.** El de `Weapons` (thr -14 dB, 3:1) daba sólo
 **2,2 dB** de reducción en el ataque y **0** en las colas, así que no protegía
