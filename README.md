@@ -275,7 +275,7 @@ Antes de controles táctiles, el input debe pasar por acciones reutilizables. **
 - **Brazos y animaciones:** `assets/models/fps_pistol_arms.glb` — “FPS pistol animations” de Cransh, CC-BY 4.0. Única fuente de pose humana. Ver `CREDITS_MODELS.md`.
 - **Audio:** Freesound CC0, procesado con `tools/process_audio.sh`. Ver `CREDITS_AUDIO.md`.
 - **Texturas PBR:** Poly Haven CC0. Ver `CREDITS_TEXTURES.md`.
-- **Código del proyecto:** MIT. Ver `LICENSE`.
+- **Código del proyecto:** propietario, todos los derechos reservados. Ver `LICENSE`.
 
 Nunca sustituir un asset bueno sólo por novedad. Cambiarlo únicamente si mejora de forma visible/medible el resultado o resuelve una limitación real.
 
