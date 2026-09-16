@@ -179,6 +179,40 @@ Los dos se resolverían sustituyendo la malla. **El código ya no puede avanzar 
 2. **Bajar la cámara o estrechar el FOV**: excluido explícitamente, y el FOV además encogería el arma.
 3. **Descargar un reemplazo limpio**: medido, **no existe** uno que cumpla el listón. El mejor candidato descargable sin cuenta tiene **636 triángulos contra los 14 852 del actual** (12,4× menos) y **cero texturas**; el único con textura es un asset retro de 512². Detalle y licencias comprobadas en `CREDITS_MODELS.md`.
 
+### Viewmodel actual: asset 1Matzh completo (integrado)
+
+El viewmodel es `assets/models/full9mm_2k.glb` — "9mm Pistol | First Person
+Animations" de 1Matzh, **CC-BY 4.0**, 29 321 tris, 928 huesos y **10 animaciones**
+(Equip, Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty, Inspect, Unequip).
+Trae los brazos Y el arma, ya agarrados y animados: la OWK 19 **ya no se usa** y
+sus 13 texturas salieron del repo. Texturas bajadas de 4096 a 2048 con
+`tools/downscale_glb_textures.py` para el perfil Mobile.
+
+- La pistola visible es la del propio asset. Se apaga su skybox de presentacion y
+  sus ayudantes de apuntado.
+- **F = inspeccionar** (`Inspect`). Antes era un disparo de prueba.
+- Los instantes mecanicos de recarga estan puestos a las claves del rig nuevo:
+  `RELOAD_MAG_OUT_T=0.90`, `RELOAD_MAG_IN_T=1.90`, `RELOAD_SLIDE_T=2.40`,
+  totales 3,20 s (tactica) y 4,00 s (vacia).
+- La vaina es **procedural** (cilindro de laton de 9x19: 19,15 mm x 4,9 mm), porque
+  antes se sacaba de la malla de la OWK. El puerto de expulsion es un punto fijo
+  del marco del arma (`ejection_port`).
+
+**LIMITACION DECLARADA Y NO RESUELTA.** La linea de mira del asset **no esta
+clavada al eje optico**: `--aimtest` mide **54 mm / 63 mrad** de desvio (el
+criterio son 6 mm) y por eso ese test esta en rojo. El arma se ve centrada porque
+su animacion la centra, pero el alza no es autoridad geometrica como lo era la
+mira de la OWK. Resolverlo requiere que `_solve_ads()` mida la pose de ADS real
+(hoy se resuelve antes de que existan los marcadores) o alinear el eje desde la
+malla del arma. **Es el siguiente trabajo pendiente del viewmodel.**
+
+Otra limitacion medida: en este archivo la pistola es 12x mas estrecha que las
+manos (0,074 contra 0,908), asi que no existe un factor de escala uniforme que
+las encaje perfectamente. Se ajusto con `ARMS_SCALE_TRIM` y la constante de
+acercamiento, no con escala no uniforme.
+
+---
+
 ### Decisión pendiente (bloquea el lanzamiento comercial)
 
 **Hay que elegir entre dos caminos, y no corresponde a quien mantiene el código:**

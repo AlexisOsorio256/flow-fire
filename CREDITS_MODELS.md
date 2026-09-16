@@ -1,5 +1,33 @@
 # Créditos de modelos 3D
 
+## 9mm Pistol | First Person Animations — 1Matzh  (VIEWMODEL ACTUAL)
+
+- Archivo: `assets/models/full9mm_2k.glb` (38,26 MB).
+- Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f
+- Autor: **1Matzh** — https://sketchfab.com/1Matzh
+- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en
+  `asset.extras` del propio GLB (que se conserva) y verificada por API antes de
+  integrar. Atribución: *"9mm Pistol | First Person Animations" by 1Matzh,
+  licensed under CC-BY 4.0, via Sketchfab*.
+- **Cadena de licencia comprobada hasta la malla original**: la pistola es
+  `9mm Pistol` de **Urpo** (`30222f9a59104426ba526a6b20cd7532`, CC-BY 4.0) y los
+  brazos, `Modern Soldier` de **Blue-Spirit**
+  (`358b4fb07f0146cb9b9063342db5897a`, CC-BY 4.0). Acreditar también a ambos.
+- 29 321 triángulos: brazos 6 164 (`Object_0`, antebrazos) + 14 312 (`Object_1`,
+  manos con guantes), pistola 8 357 (`Object_2/3/4`). **928 huesos** y **10
+  animaciones**: Equip, Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty,
+  Inspect, Unequip. Materiales con albedo, metallic-roughness y normal.
+- Procesado reproducible con `tools/trim_glb.py` (materiales y texturas
+  huérfanas fuera) y `tools/downscale_glb_textures.py` (4096 -> 2048 para el
+  perfil Mobile). El skybox de presentación y los ayudantes de apuntado se apagan
+  en runtime.
+- Limitación medida: la pistola mide 0,074 de ancho y las manos 0,908 en el mismo
+  archivo (12x), así que no hay escala uniforme que las encaje exactamente.
+
+---
+
+## OWK 19 Pistol 9mm (G19) — OKgamedev  (YA NO SE USA)
+
 ## OWK 19 Pistol 9mm (G19) — OKgamedev
 
 - Archivo: `assets/models/owk19_pistol.glb` (28.5 MB, md5 `b26c4f52f481aea04475ce35847bf9d4`).

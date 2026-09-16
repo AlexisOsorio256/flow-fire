@@ -99,8 +99,10 @@ func _input(event: InputEvent) -> void:
             KEY_R:
                 weapon.start_reload()
             KEY_F:
+                # Inspeccionar el arma: la animacion viene en el propio rig de
+                # brazos (Inspect), asi que la tecla solo la pide.
                 if mouse_captured:
-                    weapon.force_fire_once()
+                    weapon.inspect_weapon()
 
     if event is InputEventMouseButton:
         if event.button_index == MOUSE_BUTTON_LEFT:

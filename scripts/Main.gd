@@ -150,7 +150,10 @@ func _run_reloadtest() -> void:
     w.slide_vel = 0.0
     var empty_started: bool = w.start_reload()
     var empty_total: float = w.reload_total
-    await get_tree().create_timer(2.65).timeout
+    # La espera se deriva de la duracion real de la recarga (las animaciones del
+    # rig nuevo duran mas que las antiguas): antes eran 2,65 s fijos y con un
+    # total de 4,0 s la recarga seguia en curso al empezar la siguiente prueba.
+    await get_tree().create_timer(empty_total + 0.6).timeout
     var empty_rounds: int = w.mag + w.chamber + w.reserve
     if not empty_started:
         failures.append("la recarga en vacío no arrancó")
@@ -176,7 +179,7 @@ func _run_reloadtest() -> void:
     var tactical_empty: bool = w.reload_empty
     var slide_moved := false
     var guard := 0.0
-    while w.reloading and guard < 3.0:
+    while w.reloading and guard < 6.0:
         await get_tree().process_frame
         guard += get_process_delta_time()
         if w.slide_locked or w.slide_pos > 0.004:
