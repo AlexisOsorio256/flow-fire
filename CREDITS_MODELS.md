@@ -1,5 +1,19 @@
 # Créditos de modelos 3D
 
+## Fps Rig — J-Toastie  (BRAZOS)
+
+- Archivo: `assets/models/fps_rig.glb` (706 KB).
+- Fuente: Poly Pizza — pack FPS de J-Toastie (brazos riggeados + Glock riggeada).
+- Autor: **J-Toastie**.
+- Licencia: **CC-BY 3.0**, declarada en la ficha del modelo
+  (campo Licence de la pagina); compatible, sin cláusula NonCommercial.
+  Atribución: *"Fps Rig" by J-Toastie, licensed under CC-BY 3.0*.
+- Del asset se usan los **brazos (41 huesos, 4 animaciones: Grip, Idle, Reload,
+  Shoot)** y el hueso `Root` como referencia del armazón. La malla de su
+  pistola se vacía en runtime (`mesh = null`, nunca `visible = false`); el arma
+  visible es la de Urpo.
+- 9 593 triángulos visibles (2 432 de brazos + arma de piezas).
+
 ## 9mm Pistol — Urpo  (ARMA VISIBLE)
 
 - Archivo: `assets/models/glock_urpo.glb` (15,9 MB).
@@ -32,9 +46,12 @@ usa como base), así que la sustitución no cambia el aspecto del arma.
 
 ---
 
-## 9mm Pistol | First Person Animations — 1Matzh  (BRAZOS)
+## 9mm Pistol | First Person Animations — 1Matzh  (REEMPLAZADO)
 
-- Archivo: `assets/models/full9mm_2k.glb` (38,26 MB).
+- Archivo eliminado del repo (`assets/models/full9mm_2k.glb`, 38,26 MB):
+  sus hombros y mangas no encuadraban en cadera y el esqueleto de 928 huesos
+  era un lastre. Lo sustituye Fps Rig (arriba). Se conserva la atribucion
+  por su pistola, que es la de Urpo (ver arma visible).
 - Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f
 - Autor: **1Matzh** — https://sketchfab.com/1Matzh
 - Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en
@@ -56,11 +73,6 @@ usa como base), así que la sustitución no cambia el aspecto del arma.
   huérfanas fuera) y `tools/downscale_glb_textures.py` (4096 -> 2048 para el
   perfil Mobile). El skybox de presentación y los ayudantes de apuntado se apagan
   en runtime.
-- Escala: la pistola y las manos son coherentes entre sí. En el mismo espacio y
-  misma pose, el cociente de anchos manos/arma es **0,96x**
-  (101,8 mm de manos / 105,5 mm de arma en hip). Una cifra anterior de "12x" era
-  falsa: comparaba espacios distintos y ya no aplica.
-
 ---
 
 ## Assets evaluados y descartados
