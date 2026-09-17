@@ -252,6 +252,9 @@ func _update_trigger(delta: float) -> void:
 			if trigger_reset_timer <= 0.0:
 				trigger_ready = true
 				trigger_latched = false
+				# Reset del disparador: el fiador reengancha con un clic seco.
+				# Corto y bajo (contacto metalico agudo): textura, no evento.
+				GameAudio.play_2d("slide_hand", -8.0, randf_range(1.25, 1.35))
 		else:
 			trigger_ready = true
 

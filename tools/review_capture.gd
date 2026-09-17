@@ -86,7 +86,7 @@ func _trigger() -> void:
 
 func _process(_delta: float) -> void:
 	_frame += 1
-	if _frame == warmup - 2 and action == "pen":
+	if _frame == warmup - 4 and action == "pen":
 		var player := _game.get_node_or_null("Player")
 		if player != null:
 			# Delante del blanco de papel x=0: blanco sobre fondo, oscila al

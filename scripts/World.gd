@@ -107,6 +107,7 @@ func _materials() -> void:
 func _build_room() -> void:
     var floor := _static_box(self, "Floor", Vector3(24, 0.3, 42), Vector3(0, -0.15, -15), concrete_mat)
     floor.set_meta("surface", "concrete")
+    _distance_lines()
     var ceiling := _static_box(self, "Ceiling", Vector3(24, 0.2, 42), Vector3(0, 4.2, -15), ceiling_mat)
     ceiling.set_meta("surface", "concrete")
     var ceiling_mesh := ceiling.get_child(0) as MeshInstance3D
@@ -156,6 +157,22 @@ func _build_targets() -> void:
         _make_paper_target(-4.0 + i * 2.0, -18.0)
     for i in range(3):
         _make_steel_target(-3.0 + i * 3.0, -27.0)
+
+
+## Lineas de distancia (5/10/15 m desde el tirador): pintura sobre el suelo,
+## sin colision (no existen para la bala). Para leer caida y penetracion.
+func _distance_lines() -> void:
+    var paint := StandardMaterial3D.new()
+    paint.albedo_color = Color(0.75, 0.72, 0.62)
+    paint.roughness = 0.9
+    for z in [-5.0, -10.0, -15.0]:
+        var strip := MeshInstance3D.new()
+        var mesh := BoxMesh.new()
+        mesh.size = Vector3(6.0, 0.012, 0.09)
+        mesh.material = paint
+        strip.mesh = mesh
+        strip.position = Vector3(0, 0.006, z)
+        add_child(strip)
 
 
 func _build_lights() -> void:
