@@ -92,12 +92,19 @@ visual se comprueba con capturas del Godot del usuario, no headless.
 
 ## Workflow IA + usuario
 
-- **El usuario muestra, la IA diagnostica.** Las capturas headless no
-  concuerdan con lo que se ve en Godot, asi que no se usan. Si el problema es
-  espacial, visual o de pose, el usuario manda una captura o foto de su Godot
-  y la IA diagnostica sobre ESA imagen.
-- **Ciclo:** cambio pequeño → commit/push → el usuario prueba en Godot y manda
-  captura si algo se ve mal → feedback → corregir.
+- **La IA abre el juego, toma capturas y juzga.** Si algo se ve mal, la
+  IA ejecuta el juego en Godot, saca sus propias capturas y juzga sobre ellas.
+  Nunca pide al usuario imágenes de lo que puede ver sola.
+- **Ciclo:** cambio pequeño → la IA lo verifica en el juego con capturas →
+  commit/push → el usuario valida en su Godot → feedback → corregir.
+- **Honestidad antes que avance.** Si algo atrasa el proyecto, la IA lo dice y
+  propone una forma mejor de reemplazarlo. Prohibido decir "ya quedó" sin
+  haberlo verificado en el juego. Nada a medias ni mal hecho.
+- **Assets:** si un asset frena o se ve mal, se descarga uno mejor (licencia
+  compatible + crédito en `CREDITS_*.md`). Sin animaciones exorbitantes si
+  atrasan: brazos y gestos, lo justo para que se vea bien y barato de
+  mantener. La PISTOLA es lo que vende: calidad excelente de primer nivel en
+  modelo, físicas y sensación, sin sacrificar velocidad de desarrollo.
 - **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
   justifica si el usuario la pide explícitamente o autoriza una invariante
   concreta (pregunta objetiva que el usuario no responde mejor mirando o
