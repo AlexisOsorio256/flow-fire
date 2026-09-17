@@ -1,31 +1,20 @@
 extends Node3D
 
-## Presentacion de los impactos: marca proyectada, crater segun material y
-## eyecciones. NO decide balistica: `Ballistics.gd` dice DONDE y CONTRA QUE, y
-## aqui se representa. Autoload.
+## Presentacion de impactos y penetracion. NO decide balistica: Ballistics.gd
+## dice DONDE entra/sale y CONTRA QUE; aqui solo se representa el material roto.
 ##
-## Cada impacto se compone de tres cosas que NO son lo mismo:
-##   1. Agujero tallado: un embudo de dos anillos apoyado en la superficie, con
-##      el interior hundido y el labio enrasado. Geometria OPACA: en este
-##      renderer ni el Decal nativo dibuja ni el alfa de una calcomania llega al
-##      fragmento.
-##   2. Eyecciones: polvo y escombros por material (ver IMPACT_MATERIALS).
+## Un impacto legible tiene tres capas distintas:
+##   1. cavidad oscura: pequena y hundida; es profundidad, no una pegatina negra
+##   2. labio fracturado: material expuesto que SI recibe luz
+##   3. eyeccion: polvo/astillas/chispas segun el material y si es entrada/salida
 ##
-## Entrada y salida tienen CARACTER distinto (no es la entrada escalada): la
-## salida es mas ancha, mas plana y revienta hacia fuera, y en pladur y madera
-## se lleva material.
+## Entrada y salida no son el mismo agujero escalado. La salida abre mas el
+## material, tiene borde mas irregular y expulsa masa hacia fuera.
 
 const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png")
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
 
-## Tope de impactos visibles. Los agujeros son geometria real y barata (unos
-## 25 tris): caben de sobra y tienen que persistir para leer el entrenamiento.
 const MAX_HOLES := 128
-## Diametro EXTERIOR del agujero por material. Exagerado respecto al real (un
-## 9 mm deja ~9 mm) a proposito: a tamano fisico el agujero es un punto de
-## 4 mm ilegible a dos metros, que es lo que se ve como nada. El interior (lo
-## que se lee como hueco) es el 34% de esto. La exageracion es del agujero,
-## no de la profundidad; la geometria sigue siendo real (embudo tallado).
 const HOLE_SIZE := {
     "concrete": 0.070,
     "drywall": 0.064,
@@ -45,10 +34,16 @@ func _ready() -> void:
 func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool = false) -> void:
     _spawn_decal(point, normal, collider, surface, is_exit)
     _spawn_particles(point, normal, surface, is_exit)
-    _spawn_light(point, surface)
+    if not is_exit:
+        _spawn_light(point, surface)
 
-    # Una grabacion por material. La salida usa la misma muestra mas floja: es
-    # el mismo material rompiendose por el otro lado, no otro sonido.
+    # En una lamina/tabla la entrada y la salida suceden con separacion de
+    # milisegundos. Reproducir la misma muestra DOS veces hacia que una sola
+    # penetracion sonara como dos impactos baratos. El evento acustico se oye
+    # en la entrada; la salida se comunica con geometria y eyeccion.
+    if is_exit:
+        return
+
     var sound_name := "impact_concrete"
     var volume := 0.0
     match surface:
@@ -66,8 +61,6 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
             sound_name = "impact_flesh"
         _:
             sound_name = "impact_concrete"
-    if is_exit:
-        volume -= 3.0
     GameAudio.play_3d(sound_name, point, volume, randf_range(0.92, 1.08))
 
 
@@ -77,9 +70,6 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     pm.spread = 24.0
     pm.initial_velocity_min = 0.25
     pm.initial_velocity_max = 0.9
-    # El humo acompana al disparo hacia delante y se disipa: antes subia
-    # demasiado (+0.35) durante 0.9 s y desde atras se leia como una estela
-    # vertical colgando sobre la corredera.
     pm.gravity = Vector3(0, 0.12, 0)
     pm.scale_min = 0.45
     pm.scale_max = 1.8
@@ -100,14 +90,10 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     get_tree().create_timer(1.5).timeout.connect(particles.queue_free)
 
 
-## Agujero del impacto: geometria OPACA, no una calcomania con alfa.
-##
-## El Decal nativo no dibuja en el renderer Mobile sobre GL, y el alfa de la
-## textura del agujero no llega al fragmento (sale un cuadrado negro). Lo que si
-## funciona y ademas da profundidad es tallar el agujero: un embudo de dos
-## anillos con el interior hundido y un labio que sobresale una decima de
-## milimetro. El interior es oscuro y sin shading (es un hueco, no una
-## superficie iluminada); el labio si recibe luz. Nada de esto depende de alfa.
+## Agujero de dos superficies. Antes TODO el embudo usaba un unico material
+## casi negro y el radio interior era enorme: desde camara se leia como una
+## moneda negra pegada a la pared. Ahora solo la cavidad central es oscura; el
+## anillo roto conserva el color del material y recibe iluminacion.
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
     var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
     var size := float(HOLE_SIZE.get(surface, 0.026))
@@ -120,7 +106,7 @@ func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: St
     var basis := _surface_basis(n).rotated(n, randf_range(0.0, TAU))
 
     var hole := MeshInstance3D.new()
-    hole.name = "BulletHole"
+    hole.name = "BulletExit" if is_exit else "BulletEntry"
     hole.mesh = _hole_mesh(size, surface, is_exit)
     hole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(hole)
@@ -136,75 +122,129 @@ func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: St
             old.queue_free()
 
 
-## Embudo del agujero en el plano XY local (Z = normal). `size` es el diametro
-## exterior: el interior es ~30% de eso y esta hundido; el labio sobresale para
-## que la luz marque el borde. La salida es mas ancha y casi plana.
+## Construye una cavidad pequena + un labio de fractura ancho. La entrada es
+## mas profunda y contenida; la salida es mas plana, abierta e irregular.
 func _hole_mesh(size: float, surface: String, is_exit: bool) -> ArrayMesh:
-    var segments := 8
-    var lip := size * 0.5
-    var inner := size * 0.34
-    # Profundidad: la salida revienta hacia fuera (casi plana); la entrada se
-    # hunde segun el material. El metal no se hunde: marca y ya.
-    # El labio de ENTRADA va 0.4 mm POR FUERA de la superficie: a ras o por
-    # dentro el embudo quedaba enterrado y el agujero era invisible (el
-    # comentario antiguo decia "enrasado" pero el codigo lo hundia).
-    var depth := 0.0012
-    var bulge := 0.0004
-    if not is_exit:
-        depth = float(IMPACT_MATERIALS.get(surface, {}).get("crater", 0.004))
-    else:
-        bulge = 0.0008
+    const SEGMENTS := 10
+    var outer_radius := size * 0.5
+    var inner_radius := size * (0.22 if is_exit else 0.17)
+    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
+    var depth := 0.0010 if is_exit else float(profile.get("crater", 0.0035))
+    var bulge := 0.0011 if is_exit else 0.00055
 
     var verts := PackedVector3Array()
-    var idx := PackedInt32Array()
-    # Centro hundido, anillo interior irregular y labio en la superficie.
+    var cavity_idx := PackedInt32Array()
+    var lip_idx := PackedInt32Array()
+
+    # Centro real del hueco.
     verts.append(Vector3(0.0, 0.0, bulge - depth))
-    for i in range(segments):
-        var a := TAU * float(i) / float(segments)
-        var r := inner * (0.80 + randf() * 0.45)
-        verts.append(Vector3(cos(a) * r, sin(a) * r, bulge - depth * 0.45))
-    for i in range(segments):
-        var a := TAU * float(i) / float(segments)
-        var r := lip * (0.86 + randf() * 0.28)
-        verts.append(Vector3(cos(a) * r, sin(a) * r, bulge))
+
+    # Anillo interior. La salida rompe mas desigual que la entrada.
+    for i in range(SEGMENTS):
+        var a := TAU * float(i) / float(SEGMENTS)
+        var jitter := randf_range(0.72, 1.32) if is_exit else randf_range(0.82, 1.20)
+        var r := inner_radius * jitter
+        var z := bulge - depth * randf_range(0.34, 0.58)
+        verts.append(Vector3(cos(a) * r, sin(a) * r, z))
+
+    # Labio exterior roto. No es circular: cada sector conserva una longitud
+    # diferente y la salida tiene mas desgarro radial.
+    for i in range(SEGMENTS):
+        var a := TAU * float(i) / float(SEGMENTS)
+        var jitter := randf_range(0.72, 1.30) if is_exit else randf_range(0.84, 1.18)
+        var r := outer_radius * jitter
+        var z := bulge + (randf_range(-0.00020, 0.00038) if is_exit else randf_range(-0.00010, 0.00018))
+        verts.append(Vector3(cos(a) * r, sin(a) * r, z))
+
     var inner_start := 1
-    var outer_start := 1 + segments
-    for i in range(segments):
-        var j := (i + 1) % segments
-        idx.append(0); idx.append(inner_start + j); idx.append(inner_start + i)
-        idx.append(inner_start + i); idx.append(inner_start + j); idx.append(outer_start + j)
-        idx.append(inner_start + i); idx.append(outer_start + j); idx.append(outer_start + i)
+    var outer_start := 1 + SEGMENTS
+    for i in range(SEGMENTS):
+        var j := (i + 1) % SEGMENTS
+        # Cavidad: solo centro -> anillo interior.
+        cavity_idx.append(0)
+        cavity_idx.append(inner_start + j)
+        cavity_idx.append(inner_start + i)
+        # Fractura: anillo interior -> borde exterior.
+        lip_idx.append(inner_start + i)
+        lip_idx.append(inner_start + j)
+        lip_idx.append(outer_start + j)
+        lip_idx.append(inner_start + i)
+        lip_idx.append(outer_start + j)
+        lip_idx.append(outer_start + i)
 
-    var arrays := []
-    arrays.resize(Mesh.ARRAY_MAX)
-    arrays[Mesh.ARRAY_VERTEX] = verts
-    arrays[Mesh.ARRAY_INDEX] = idx
+    var cavity_arrays := []
+    cavity_arrays.resize(Mesh.ARRAY_MAX)
+    cavity_arrays[Mesh.ARRAY_VERTEX] = verts
+    cavity_arrays[Mesh.ARRAY_INDEX] = cavity_idx
+
+    var lip_arrays := []
+    lip_arrays.resize(Mesh.ARRAY_MAX)
+    lip_arrays[Mesh.ARRAY_VERTEX] = verts
+    lip_arrays[Mesh.ARRAY_INDEX] = lip_idx
+
     var mesh := ArrayMesh.new()
-    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-
-    # Interior del agujero: un hueco, no una superficie; nada de shading y casi
-    # negro. El material solo define el tono de lo que se ha roto.
-    var mat := StandardMaterial3D.new()
-    if surface == "wood":
-        mat.albedo_color = Color(0.09, 0.06, 0.03)
-    elif surface == "drywall":
-        mat.albedo_color = Color(0.13, 0.12, 0.11)
-    elif surface == "metal":
-        mat.albedo_color = Color(0.10, 0.10, 0.11)
-        mat.metallic = 0.6
-        mat.roughness = 0.35
-    elif surface == "paper":
-        mat.albedo_color = Color(0.10, 0.09, 0.08)
-    else:
-        mat.albedo_color = Color(0.03, 0.03, 0.028)
-    mat.roughness = 1.0
-    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    mat.disable_receive_shadows = true
-    mesh.surface_set_material(0, mat)
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, cavity_arrays)
+    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, lip_arrays)
+    mesh.surface_set_material(0, _cavity_material(surface))
+    mesh.surface_set_material(1, _fracture_material(surface, is_exit))
     return mesh
 
 
-## Base con la normal como eje Z, para apoyar Decal y crater en la superficie.
+func _cavity_material(surface: String) -> StandardMaterial3D:
+    var mat := StandardMaterial3D.new()
+    match surface:
+        "wood":
+            mat.albedo_color = Color(0.050, 0.031, 0.015)
+        "drywall":
+            mat.albedo_color = Color(0.085, 0.080, 0.072)
+        "metal":
+            mat.albedo_color = Color(0.055, 0.058, 0.064)
+            mat.metallic = 0.75
+            mat.roughness = 0.34
+        "paper":
+            mat.albedo_color = Color(0.075, 0.066, 0.055)
+        "flesh":
+            mat.albedo_color = Color(0.090, 0.018, 0.016)
+        _:
+            mat.albedo_color = Color(0.024, 0.024, 0.022)
+    mat.roughness = 1.0 if surface != "metal" else mat.roughness
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    mat.disable_receive_shadows = true
+    return mat
+
+
+func _fracture_material(surface: String, is_exit: bool) -> StandardMaterial3D:
+    var mat := StandardMaterial3D.new()
+    match surface:
+        "wood":
+            # Fibra fresca: mucho mas clara que el agujero carbonizado anterior.
+            mat.albedo_color = Color(0.46, 0.30, 0.14)
+            mat.roughness = 0.96
+        "drywall":
+            mat.albedo_color = Color(0.74, 0.71, 0.65)
+            mat.roughness = 1.0
+        "metal":
+            mat.albedo_color = Color(0.32, 0.33, 0.36)
+            mat.metallic = 0.82
+            mat.roughness = 0.30
+        "paper":
+            mat.albedo_color = Color(0.70, 0.66, 0.56)
+            mat.roughness = 1.0
+        "flesh":
+            mat.albedo_color = Color(0.28, 0.065, 0.050)
+            mat.roughness = 0.90
+        _:
+            mat.albedo_color = Color(0.38, 0.37, 0.34)
+            mat.roughness = 0.95
+    if is_exit:
+        # Cara rota expuesta a la luz: un poco mas clara, sin volverla blanca.
+        var c := mat.albedo_color
+        mat.albedo_color = Color(minf(c.r * 1.12, 1.0), minf(c.g * 1.12, 1.0), minf(c.b * 1.12, 1.0), c.a)
+    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+    return mat
+
+
 func _surface_basis(n: Vector3) -> Basis:
     var up_ref := Vector3.UP
     if absf(n.dot(up_ref)) > 0.94:
@@ -218,14 +258,8 @@ func _surface_basis(n: Vector3) -> Basis:
     return Basis(x_axis, y_axis, n)
 
 
-## Respuesta por material. Cada entrada declara una o dos eyecciones DISTINTAS:
-##   dust   - lo que queda en el aire (polvo mineral, yeso, fibra fina)
-##   debris - lo que sale disparado y cae (esquirlas, astillas, chispas)
-## No son las mismas particulas con otro color: cambian cantidad, velocidad,
-## gravedad, tamano, duracion y textura. El papel casi no se mueve; el hormigon
-## levanta polvo y esquirlas; la madera, astillas alargadas; el metal, chispas
-## con luz. `crater` es la profundidad del reborde de entrada en metros (0 = no
-## se rompe hacia dentro, como el metal o el papel).
+## Respuesta por material. Polvo y fragmento NO son la misma particula pintada:
+## cambian cantidad, velocidad, gravedad, tamano, duracion y silueta.
 const IMPACT_MATERIALS := {
     "concrete": {
         "dust": {"amount": 9, "color": Color(0.56, 0.55, 0.52, 0.60), "vel": [0.4, 1.6], "gravity": -2.0, "scale": [0.6, 2.4], "life": 0.85, "size": 0.050, "spread": 62.0},
@@ -267,18 +301,26 @@ const IMPACT_MATERIALS := {
 func _spawn_particles(point: Vector3, normal: Vector3, surface: String, is_exit: bool) -> void:
     var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
     var n := normal.normalized()
-    # En la salida el material ya viene roto: menos cantidad y mas lenta, salvo
-    # el pladur, que se deshace hacia fuera y por eso tiene su propio factor.
-    var strength := 0.55 if is_exit else 1.0
-    if is_exit and surface == "drywall":
-        strength = 1.30
+    var strength := 1.0
+    if is_exit:
+        # La salida no es "la entrada al 55%". Madera/yeso arrancan material
+        # hacia fuera; hormigon/papel pierden menos masa visible.
+        match surface:
+            "drywall":
+                strength = 1.35
+            "wood":
+                strength = 1.15
+            "paper":
+                strength = 0.75
+            "concrete":
+                strength = 0.78
+            _:
+                strength = 0.65
     for key in ["dust", "debris"]:
         if profile.has(key):
-            _burst(point + n * 0.01, n, profile[key], strength)
+            _burst(point + n * 0.006, n, profile[key], strength)
 
 
-## Una eyeccion concreta. `strength` escala cantidad y velocidad sin cambiar el
-## caracter del material (que es lo que lo identifica).
 func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) -> void:
     var spark: bool = spec.get("spark", false)
     var pm := ParticleProcessMaterial.new()
@@ -299,13 +341,11 @@ func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) 
 
     var particles := GPUParticles3D.new()
     var amount := float(spec["amount"])
-    particles.amount = maxi(1, int(round(amount * (1.0 if strength >= 1.0 else 0.7 + 0.3 * strength))))
+    particles.amount = maxi(1, int(round(amount * (1.0 if strength >= 1.0 else 0.72 + 0.28 * strength))))
     particles.lifetime = float(spec["life"])
     particles.one_shot = true
     particles.explosiveness = 1.0
     particles.process_material = pm
-    # La astilla de madera es un sliver alargado, no un quad cuadrado: es lo que
-    # la distingue de una particula de polvo a la misma distancia.
     var stretch := float(spec.get("stretch", 1.0))
     var size := float(spec["size"])
     particles.draw_pass_1 = _particle_quad(
@@ -318,9 +358,6 @@ func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) 
 
 
 func _spawn_light(point: Vector3, surface: String) -> void:
-    # La luz no es un sustituto de partículas. Hormigón, yeso, papel y madera
-    # levantan polvo/fibra pero no producen un destello que ilumine la sala;
-    # sólo el impacto metálico tiene un flash físico breve junto a la chispa.
     if surface != "metal":
         return
     var light := OmniLight3D.new()
