@@ -177,10 +177,9 @@ func _apply_viewmodel_layer(root_node: Node) -> void:
 
 
 func _build_viewmodel() -> void:
-	# El arma visible es la del asset de primera persona: aqui solo se prepara
-	# su marco. La mira, la boca y el fogonazo (que si son de FlowFire) se
-	# montan sobre la corredera real en _install_arms.
-	_build_high_fidelity_pistol()
+	# El arma visible es la del asset de primera persona (manos + pistola en
+	# un solo rig). La mira, la boca y el fogonazo (que si son de FlowFire)
+	# se montan sobre la corredera real en _install_arms.
 	print("GLOCK arma=asset 9mm 1Matzh")
 
 
@@ -343,31 +342,16 @@ var arms_ok := false
 ## ---------------------------------------------------------------------------
 ## Arma de alta fidelidad: la del propio asset, sin piezas paralelas.
 ##
-## Aqui solo se crea el marco (GunFrame, referencia espacial bajo el retroceso).
-## La mira trasera/delantera, la boca y el puerto cuelgan de la CORREDERA REAL
-## (hueso Slidder_919) via BoneAttachment3D en _install_arms: se mueven con la
-## animacion y con la logica porque SON el arma, no una copia. El fogonazo lo
-## cuelga Glock de esa boca (ver WeaponFX.gd).
+## No hay segunda arma ni marco que colgar: la mira trasera/delantera, la boca
+## y el puerto cuelgan de la CORREDERA REAL (hueso Slidder_919) via
+## BoneAttachment3D en _install_arms: se mueven con la animacion y con la
+## logica porque SON el arma, no una copia. El fogonazo lo cuelga Glock de esa
+## boca (ver WeaponFX.gd).
 ## ---------------------------------------------------------------------------
-var pistol_holder: Node3D  # marco del arma bajo RecoilNode (referencia espacial)
 var pistol_ok := false  # true cuando los huesos mecanicos estan listos
 
 
-## Crea el marco del arma. El arma visible es la del asset de primera persona,
-## que trae su pistola con las manos ya agarradas y sus animaciones.
-func _build_high_fidelity_pistol() -> bool:
-	var holder := Node3D.new()
-	holder.name = "GunFrame"
-	recoil_node.add_child(holder)
-	pistol_holder = holder
-	pistol_ok = false
-	return true
-
-
 func _install_arms() -> void:
-	if pistol_holder == null:
-		push_error("Falta el soporte del viewmodel")
-		return
 	var packed := load(ARMS_PATH) as PackedScene
 	if packed == null:
 		push_warning("No se pudieron cargar los brazos: " + ARMS_PATH)

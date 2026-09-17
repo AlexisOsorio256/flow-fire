@@ -68,6 +68,11 @@ func _trigger() -> void:
 			weapon.force_fire_once()
 			_burst_left = 1
 			_burst_gap = 14
+		"ads":
+			# Apunta, deja asentar el blend y dispara dos veces con la mira.
+			weapon.set_aim(true)
+			_burst_left = 2
+			_burst_gap = 8
 		"reload":
 			weapon.set("mag", 10)
 			weapon.start_reload()
@@ -98,7 +103,9 @@ func _process(_delta: float) -> void:
 		_trigger()
 	if _frame >= warmup and (_frame - warmup) < total:
 		# Rafaga: disparos extra separados _burst_gap frames (~90 ms de juego).
-		if (action == "burst" or action == "pen") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
+		# En ads el primero cae con el blend ya asentado (el del trigger no
+		# existe: (frame-warmup)>0 lo excluye en el instante cero).
+		if (action == "burst" or action == "pen" or action == "ads") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
 			var weapon := _player_weapon()
 			if weapon != null and (_frame - warmup) > 0:
 				weapon.force_fire_once()
