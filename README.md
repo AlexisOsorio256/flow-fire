@@ -43,10 +43,10 @@ eficiencia son criterios de aceptación.
 
 | Responsabilidad | Autoridad |
 |---|---|
-| Arranque, escena y tests | `scripts/Main.gd` |
+| Arranque y escena | `scripts/Main.gd` |
 | Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga | `scripts/Glock.gd` |
 | Viewmodel: rig, huesos, ADS, pose, animación, materiales | `scripts/GlockViewmodel.gd` |
-| Retroceso: muñeca, arma, brazos | `scripts/GlockRecoil.gd` |
+| Retroceso: el arma dentro de la mano, y el brazo | `scripts/GlockRecoil.gd` |
 | Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
 | Audio | `scripts/GameAudio.gd` |
 | Balística | `scripts/Ballistics.gd` |
@@ -55,25 +55,22 @@ eficiencia son criterios de aceptación.
 | HUD y post bodycam | `scripts/HUD.gd` + `shaders/bodycam.gdshader` |
 | Mundo y rango | `scripts/World.gd` |
 | Blancos | `scripts/Target.gd` |
-| Laboratorio: setup y despacho | `scripts/DevTools.gd` |
-| Diagnóstico del arma y del rig | `scripts/DevWeapon.gd` |
-| Capturas y cámara lenta | `scripts/DevVisual.gd` |
-| Benchmark | `scripts/DevBenchmark.gd` |
-| Captura de audio | `scripts/DevAudio.gd` |
 
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
 
 ## Workflow IA + usuario
 
-- **Perceptual:** cambia UNA cosa → pide al usuario que lo pruebe → corrige.
-  El usuario es el evaluador visual y auditivo en tiempo real.
-- **Mide** solo cuando la pregunta sea objetiva y la respuesta no evidente.
-  No medir por ceremonia; el usuario puede enviar vídeo.
-- **Test proporcional al cambio:** `aimtest` para ADS, `reloadtest` para recarga,
-  mirar lo visual, escuchar lo audible, `fpsbench` para rendimiento. Suite
-  completa solo al cerrar una etapa.
-- **Herramientas:** `godot4 --path . -- --devhelp` lista las disponibles.
+- **Perceptual:** cambia UNA cosa → commit/push → pide al usuario que lo pruebe →
+  corrige. **El usuario es el único evaluador visual y auditivo.**
+- **Prohibido medir por el usuario:** nada de capturas, métricas, diagnósticos,
+  benchmarks ni scripts de comprobación para decidir si algo se ve o se oye
+  bien. Si la duda es perceptual, se pregunta.
+- **Sin herramientas de laboratorio.** El proyecto no incluye flags de
+  diagnóstico ni tests. Que el proyecto cargue es la única comprobación
+  mecánica; el resto lo juzga el usuario.
+- **Si algo se ve mal, se corrige y se pide que lo mire.** No se demuestra que
+  existe.
 
 ## Alcance
 

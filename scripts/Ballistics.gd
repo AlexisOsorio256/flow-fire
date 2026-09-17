@@ -14,12 +14,10 @@ var bullets: Array = []
 var tracer_pool: Array[MeshInstance3D] = []
 var tracer_material: StandardMaterial3D
 var penetration_events := 0
-var penetration_debug := false
 
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_PAUSABLE
-    penetration_debug = OS.get_cmdline_user_args().has("--penetrationdiag")
     tracer_material = StandardMaterial3D.new()
     tracer_material.albedo_color = Color(1.0, 0.55, 0.16, 0.95)
     tracer_material.emission_enabled = true
@@ -141,8 +139,6 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             # demostrable. Esto evita el antiguo punto de salida fabricado a
             # partir de metadata de grosor.
             b.active = false
-            if penetration_debug:
-                print("PEN_GEOM stop surface=", surface, " reason=no_exit_same_shape entry=", point)
             return
 
         var exit_point: Vector3 = exit["point"]
@@ -165,12 +161,6 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         b.distance += actual_thickness + PENETRATION_EPSILON
         b.penetrations += 1
         penetration_events += 1
-        if penetration_debug:
-            print("PEN_GEOM surface=", surface,
-                " entry=", point.snapped(Vector3(0.001, 0.001, 0.001)),
-                " exit=", exit_point.snapped(Vector3(0.001, 0.001, 0.001)),
-                " thickness=", snappedf(actual_thickness * 1000.0, 0.1), "mm",
-                " retained_speed=", snappedf(b.vel.length(), 0.1))
         if b.penetrations > 4 or b.vel.length() < 75.0:
             b.active = false
         return

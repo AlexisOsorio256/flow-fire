@@ -21,8 +21,8 @@
   huérfanas fuera) y `tools/downscale_glb_textures.py` (4096 -> 2048 para el
   perfil Mobile). El skybox de presentación y los ayudantes de apuntado se apagan
   en runtime.
-- Escala: la pistola y las manos son coherentes entre sí. Medido con `--gundiag`
-  en el mismo espacio y misma pose, el cociente de anchos manos/arma es **0,96x**
+- Escala: la pistola y las manos son coherentes entre sí. En el mismo espacio y
+  misma pose, el cociente de anchos manos/arma es **0,96x**
   (101,8 mm de manos / 105,5 mm de arma en hip). Una cifra anterior de "12x" era
   falsa: comparaba espacios distintos y ya no aplica.
 

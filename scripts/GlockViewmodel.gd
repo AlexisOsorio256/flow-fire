@@ -19,12 +19,10 @@ extends Node3D
 ## escribe ENCIMA los huesos mecanicos (corredera y gatillo) con las pistas
 ## animadas eliminadas al cargar, para que no exista una segunda corredera.
 
-## Ojo -> mira trasera en ADS. Medido con la metrica SILUETA de --armdiag
-## (viewport 16:9): 0.42 m dejaba los brazos en 41.2% del encuadre y las
-## bandas laterales inferiores en 70.9%; 0.54 m las baja a 28.7% y 36.3%.
-## Es la distancia a la que un tirador real tiene el alza del ojo, y no toca
-## la escala de los brazos (atada a la empunadura del asset). Se para en 0.54
-## y no en 0.62 porque a partir de ahi el alza trasera deja de leerse.
+## Ojo -> mira trasera en ADS. 0.54 m es la distancia a la que un tirador real
+## tiene el alza del ojo y no toca la escala de los brazos (atada a la
+## empunadura del asset). Se para en 0.54 y no en 0.62 porque a partir de ahi el
+## alza trasera deja de leerse.
 const ADS_SIGHT_DISTANCE := 0.54
 ## Pose de cadera (validada). El ADS sale SOLO del solver geometrico.
 const HIP_POS := Vector3(0.0, 0.122, -0.34)
@@ -41,7 +39,7 @@ const RELOAD_POSE_FWD := 0.045
 const RELOAD_POSE_PITCH := 0.17
 const RELOAD_POSE_ROLL := -0.30
 ## Geometria del arma MEDIDA EN ESTE ASSET (offsets en espacio local del
-## hueso que la mueve; extraccion documentada en --gundiag): corredera
+## hueso que la mueve): corredera
 ## 29.4 x 42.4 x 176.3 mm; linea de mira de radio 158.3 mm y 13.6 mm sobre la
 ## boca (una G19 real anda por 160 mm y ~13 mm); boca 2.7 mm por delante del
 ## frente de corredera; puerto en el lado derecho; el gatillo se tira 4.6 mm
@@ -87,7 +85,7 @@ var ads_rot := Vector3.ZERO  # giro de ADS resuelto junto al offset (radianes)
 var ads_solved := false  # solve_ads ya corrio con el arma real montada
 # Caja de la corredera real en espacio del hueso (ver SLIDE_BOX): la usan el
 # encuadre y el diagnostico. La escala del asset (manos ~2.5x la corredera en
-# el mismo espacio y pose, medido con --gundiag) es la del autor y se conserva.
+# el mismo espacio y pose, medido en el asset) es la del autor y se conserva.
 var gun_box := SLIDE_BOX
 # Escala uniforme del conjunto (manos+arma, un solo rig). Valor CALIBRADO de
 # FlowFire para el encuadre: el asset esta modelado ~1:1 en metros (corredera
@@ -261,7 +259,7 @@ func solve_ads() -> void:
 	var sight_dir: Vector3 = (front_g - rear_g).normalized()
 	# El "arriba" del arma es el eje Y de la corredera (hueso Slidder), no el UP
 	# del nodo: el Idle del asset sostiene la pistola con ~16 grados de canto
-	# (MEDIDO con --gundiag) y nivelar el nodo dejaba la corredera torcida en
+	# (medido en el asset) y nivelar el nodo dejaba la corredera torcida en
 	# ADS. La referencia es el arma real.
 	var slide_up_g: Vector3 = (glock_inv.basis * (arms_skeleton.global_transform.basis * arms_skeleton.get_bone_global_pose(slide_bone).basis).y).normalized()
 	# Rotacion minima que lleva la linea de mira al eje, mas correccion de
@@ -575,7 +573,7 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 ##  - Slidder_919 y Weapon_Trigger_921 en Fire, Reload y Reload_Empty: sin esto
 ##    habria dos correderas, la simulada (slide_pos, 59 ms) y la animada
 ##    (33.6 mm en 250 ms).
-##  - Weapon_922 SOLO en Fire (rotacion y traslacion): MEDIDO con --recoilprobe,
+##  - Weapon_922 SOLO en Fire (rotacion y traslacion): medido en el asset,
 ##    la animacion del autor sube el arma 0.24 grados en los primeros 40 ms y
 ##    luego la levanta en rampa casi lineal hasta 14 grados a 180 ms. Eso es un
 ##    gesto dibujado, no un impulso: el arma se quedaba clavada justo cuando la

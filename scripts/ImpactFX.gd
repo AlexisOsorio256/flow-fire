@@ -6,8 +6,8 @@ const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
 
 var decals: Array[MeshInstance3D] = []
-# Interruptor de laboratorio para aislar el coste de FX (--fpsbench
-# --fpsstress). No cambia ninguna regla ni el comportamiento por defecto.
+# Interruptor para aislar el coste de FX al perfilar. No cambia ninguna regla
+# ni el comportamiento por defecto.
 var spawning_enabled := true
 
 

@@ -43,7 +43,7 @@ estampido. La grabación original se versiona en
 ### Causa 2 — la capa mecánica usaba el MISMO archivo dos veces
 
 Los dos golpes de la corredera son dos eventos físicos distintos: el **tope
-trasero** a ~12 ms (medido con `--slowmo`: la corredera toca 38-39 mm) y la
+trasero** a ~12 ms (la corredera toca 38-39 mm) y la
 **vuelta a batería** a ~54 ms. Los dos usaban el mismo `slide.wav` —un chasquido
 con el 63% de su energía entre 2,5 y 16 kHz— con distinto volumen y pitch, así
 que el oído recibía el mismo transitorio dos veces separado 42 ms: exactamente
@@ -60,7 +60,7 @@ distintas para que no puedan confundirse:
 El trasero va a **−14 dB** y el de batería a **−18 dB** (4 dB por debajo): la
 energía del primero vive en agudos, donde el estampido ya no compite, y la del
 segundo en graves, donde sí compite con la cola del estampido. Medido en la
-captura real (`--audiocapture`), en la ventana 26-45 ms el centroide sube a
+captura real, en la ventana 26-45 ms el centroide sube a
 **2700-3000 Hz** con el 34-43% de la energía por encima de 2,5 kHz, que es
 exactamente la huella del tope trasero, y el estampido conserva el dominio (su
 ataque sigue 6-9 dB por encima de la mecánica). Antes de este cambio la capa

@@ -21,9 +21,9 @@ extends RefCounted
 
 # Impulso de cabeceo del ARMA en el disparo (rad/s). Es la unica fuente del
 # latigazo visible desde que el clip Fire no mueve el hueso del arma: medido
-# con --recoilprobe, la animacion daba 0.24 grados en los primeros 40 ms y
-# subia en rampa hasta 180 ms, que es lo que hacia que la vaina pareciese
-# moverse mas que la pistola. Con 4.2 rad/s la boca sube ~8 grados con pico
+# la animacion del asset daba 0.24 grados en los primeros 40 ms y subia en
+# rampa hasta 180 ms, que es lo que hacia que la vaina pareciese moverse mas
+# que la pistola. Con 4.2 rad/s la boca sube ~8 grados con pico
 # a ~50 ms.
 const MAIN_RECOIL_KICK := 4.2
 # El pivote del giro va detras y debajo de la empunadura (lo mide el viewmodel

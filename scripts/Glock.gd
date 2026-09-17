@@ -31,7 +31,7 @@ const MAG_SIZE := 17
 # moverse en el momento del ignicionado y que puede recorrer 2-3 mm antes de que
 # el proyectil salga del cañón; eso justifica que el impulso se aplique en
 # _fire() y no después. El ciclo que sale de esta pareja k/c es de ~59 ms
-# medidos con --geometrydebug (SLIDECYCLE): dentro del rango de una pistola de
+# medidos en el ciclo simulado: dentro del rango de una pistola de
 # servicio 9 mm y validado a ojo en cámara lenta. Es un valor CALIBRADO, no una
 # medición de Glock 19.
 const SLIDE_TRAVEL := 0.039
@@ -43,7 +43,7 @@ const SLIDE_IMPULSE := 5.90    # impulso CALIBRADO para tocar el tope trasero
 # no tenia mecanica audible; con 5.90 el tope llega a ~12 ms y la bateria a
 # ~54 ms (SLIDECYCLE con subpaso de 1 ms: pico 39+ mm; en juego el subpaso de
 # 2.5 ms amortigua mas y el margen es justo pero suficiente, verificado en
-# --slowmo: la corredera toca 37+ mm entre frames y los eventos suenan)
+# en juego la corredera toca 37+ mm entre frames y los eventos suenan)
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto (~8 ms)
 # Instantes de la recarga, MEDIDOS sobre las claves de Reload (3.125 s) y
@@ -106,7 +106,7 @@ var look_delta := Vector2.ZERO
 var player_velocity := Vector3.ZERO
 var _last_local_move := Vector2.ZERO
 
-var last_delta := 0.0  # lo lee --recoilprobe
+var last_delta := 0.0
 
 # Pulso del disparo para la exposicion del bodycam (lo lee HUD.gd).
 var shot_pulse := 0.0
