@@ -136,7 +136,7 @@ func _process(delta: float) -> void:
     post_mat.set_shader_parameter("aim_amount", aim_amount)
     # Sin blur de movimiento ni grano variable: el post sólo da carácter de
     # cámara (lente, viñeta, sensor) y no debe esconder detalle ni con el
-    # jugador corriendo. El grano y la nitidez se midieron sobre capturas.
+    # jugador corriendo.
     post_mat.set_shader_parameter("exposure_pulse", shot_pulse)
 
 

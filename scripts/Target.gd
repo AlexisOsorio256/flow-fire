@@ -18,7 +18,6 @@ func _ready() -> void:
     collision_layer = 1
     collision_mask = 1
     continuous_cd = true
-    add_to_group("targets")
     set_meta("dynamic_decal", true)
     linear_damp = 0.4
     angular_damp = 0.5

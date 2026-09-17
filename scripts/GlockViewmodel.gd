@@ -14,22 +14,27 @@ extends Node3D
 ##   Skeleton3D -> SlideAttach -> SightRear/SightFront/Muzzle/EjectionPort
 ##
 ## El asset (`full9mm_2k.glb`, 1Matzh) trae brazos Y pistola ya agarrada y
-## animada en un solo rig: no hay segunda arma, ni retargeting, ni IK. Las
-## animaciones del autor mandan la pose humana y arrastran el arma; la logica
-## escribe ENCIMA los huesos mecanicos (corredera y gatillo) con las pistas
-## animadas eliminadas al cargar, para que no exista una segunda corredera.
+## animada en un solo rig: no hay segunda arma, ni retargeting, ni IK.
+##
+## OWNERSHIP DEL RIG (una sola autoridad por pieza; lo aplica
+## `_strip_mechanical_tracks` al cargar):
+##   Humano / brazos ........... AnimationPlayer (Idle/Fire/Reload/Reload_Empty)
+##   Arma root durante Fire .... GlockRecoil (procedural) sobre la pose neutra
+##   Arma root durante reload .. AnimationPlayer
+##   Corredera ................. Glock.gd (`slide_pos`, recorrido visual mapeado)
+##   Gatillo ................... Glock.gd (`trigger_visual`)
+##   Cargador durante Fire ..... rigido con el arma (GlockRecoil)
+##   Cargador durante reload ... AnimationPlayer (gesto del clip)
 
 ## Ojo -> mira trasera en ADS. 0.54 m es la distancia a la que un tirador real
-## tiene el alza del ojo y no toca la escala de los brazos (atada a la
-## empunadura del asset). Se para en 0.54 y no en 0.62 porque a partir de ahi el
-## alza trasera deja de leerse.
+## tiene el alza del ojo sin tocar la escala de los brazos (atada a la
+## empunadura del asset). Mas alla el alza trasera deja de leerse.
 const ADS_SIGHT_DISTANCE := 0.54
 ## Pose de cadera (validada). El ADS sale SOLO del solver geometrico.
 const HIP_POS := Vector3(0.0, 0.122, -0.34)
-## Recorrido VISUAL de la corredera en el asset: la animacion Fire mueve el
-## hueso Slidder 33.6 mm (medido en este asset, pico a 0.167 s) mientras la
-## logica integra los 39 mm reales de una G19. El mapeo es lineal: la
-## corredera visible reproduce el estado logico, no la pista animada.
+## Recorrido VISUAL de la corredera en el asset (33.6 mm): la logica integra los
+## 39 mm reales de una G19 y el mapeo lineal reproduce el estado logico, no la
+## pista animada.
 const SLIDE_VISUAL_TRAVEL := 0.0336
 ## Pose de recarga: el tirador sube el arma y la gira para ver el brocal del
 ## cargador. Sin esto la empunadura queda bajo el borde de la pantalla y el
@@ -54,8 +59,6 @@ const SIGHT_FRONT_SLIDE := Vector3(-0.0037, 0.01022, 0.10447)
 const MUZZLE_SLIDE := Vector3(-0.0037, -0.00283, 0.11336)
 const EJECT_SLIDE := Vector3(0.00922, 0.00478, 0.00863)
 const TRIGGER_PULL := Vector3(0.000153, -0.000112, -0.004601)
-# Caja de la corredera en su espacio (para encuadre y diagnostico).
-const SLIDE_BOX := AABB(Vector3(-0.0184, -0.0279, -0.0656), Vector3(0.0294, 0.0424, 0.1763))
 
 var camera: Camera3D
 var recoil: GlockRecoil  # estado del retroceso; lo aplica update()
@@ -83,15 +86,6 @@ var front_marker: Node3D
 var ads_offset := Vector3(0.0, 0.15, -0.24)  # pose de ADS: la resuelve solve_ads()
 var ads_rot := Vector3.ZERO  # giro de ADS resuelto junto al offset (radianes)
 var ads_solved := false  # solve_ads ya corrio con el arma real montada
-# Caja de la corredera real en espacio del hueso (ver SLIDE_BOX): la usan el
-# encuadre y el diagnostico. La escala del asset (manos ~2.5x la corredera en
-# el mismo espacio y pose, medido en el asset) es la del autor y se conserva.
-var gun_box := SLIDE_BOX
-# Escala uniforme del conjunto (manos+arma, un solo rig). Valor CALIBRADO de
-# FlowFire para el encuadre: el asset esta modelado ~1:1 en metros (corredera
-# 29.4 mm como una real), asi que esta escala tambien agranda las manos; se
-# conserva porque el encuadre y el ADS estan validados sobre ella.
-var arms_scale := 1.362
 # Huesos mecanicos (autoridad de la logica) y sus reposos locales.
 var slide_bone := -1
 var trigger_bone := -1
@@ -109,17 +103,15 @@ var slide_attach: BoneAttachment3D  # la mira/boca van con la corredera real
 ## Capa de render EXCLUSIVA del viewmodel. El rig de brazos se dibuja en ella y
 ## las luces del viewmodel solo la iluminan a ella (`light_cull_mask`): la
 ## pistola se lee igual de bien, pero el mundo no recibe NINGUNA luz constante
-## del jugador. Antes estas dos luces eran OmniLight3D normales, así que al
-## acercarse a una pared la bañaban y el personaje parecía llevar una linterna.
-## La cámara las ve porque su `cull_mask` es el de defecto (capas 1..20).
+## del jugador (de lo contrario, acercarse a una pared la bañaba). La cámara las
+## ve porque su `cull_mask` es el de defecto (capas 1..20).
 const VIEWMODEL_LAYER := 13
 const VIEWMODEL_LAYER_BIT := 1 << (VIEWMODEL_LAYER - 1)
 
-## Luces del viewmodel: el arma vive en un interior oscuro y con su albedo real
-## (polímero ~0.08) se leía como una mancha negra: medido, 5/255 de luminancia
-## media sobre los píxeles del arma. Dos luces cortas y sin sombras (clave
-## arriba-izquierda y relleno desde la cámara) la definen. Cuelgan de pose_root
-## para que acompañen al arma en recarga y apuntado.
+## Luces del viewmodel: con su albedo real (polímero ~0.08) el arma se leía como
+## una mancha negra. Dos luces cortas y sin sombras (clave arriba-izquierda y
+## relleno desde la cámara) la definen. Cuelgan de pose_root para que acompañen
+## al arma en recarga y apuntado.
 ##
 ## AÍSLAN su influencia, no se apagan: `light_cull_mask` las limita a
 ## VIEWMODEL_LAYER, así que mundo y viewmodel viven en dos regímenes de luz
@@ -222,10 +214,10 @@ func _apply_pose(delta: float) -> void:
 	pos.x = clampf(pos.x, -0.30, 0.30)
 	pos.y = clampf(pos.y, -0.30, maxf(0.18, ads_pos.y))
 	pos.z = clampf(pos.z, minf(-0.45, ads_pos.z), 0.15)
-	# El límite del balanceo no debe recortar una inclinación ADS elegida por
-	# captura: la pose de apuntado puede necesitar más de 20° para que el cañón
-	# quede apenas por debajo del frente, mientras hip y el retroceso conservan
-	# el límite corto.
+	# El límite del balanceo no debe recortar la inclinación que el solver de ADS
+	# haya resuelto: la pose de apuntado puede necesitar más de 20° para que el
+	# cañón quede apenas por debajo del frente. Hip y retroceso conservan el
+	# límite corto.
 	var rot_limit := maxf(0.35, absf(ads_pose_rot.x) + 0.015)
 	rot.x = clampf(rot.x, -rot_limit, rot_limit)
 	rot.y = clampf(rot.y, -0.35, 0.35)
@@ -258,9 +250,8 @@ func solve_ads() -> void:
 	var axis_g: Vector3 = (glock_inv.basis * -camera.global_transform.basis.z).normalized()
 	var sight_dir: Vector3 = (front_g - rear_g).normalized()
 	# El "arriba" del arma es el eje Y de la corredera (hueso Slidder), no el UP
-	# del nodo: el Idle del asset sostiene la pistola con ~16 grados de canto
-	# (medido en el asset) y nivelar el nodo dejaba la corredera torcida en
-	# ADS. La referencia es el arma real.
+	# del nodo: el Idle del asset sostiene la pistola con ~16 grados de canto y
+	# nivelar el nodo deja la corredera torcida en ADS. La referencia es el arma.
 	var slide_up_g: Vector3 = (glock_inv.basis * (arms_skeleton.global_transform.basis * arms_skeleton.get_bone_global_pose(slide_bone).basis).y).normalized()
 	# Rotacion minima que lleva la linea de mira al eje, mas correccion de
 	# balanceo para que la corredera quede vertical (sin canto).
@@ -313,8 +304,10 @@ func get_front_sight_world_position() -> Vector3:
 ## matizan a tela oscura conservando sus texturas (ver _darken_arms).
 ## ---------------------------------------------------------------------------
 const ARMS_PATH := "res://assets/models/full9mm_2k.glb"
-# Escala uniforme del conjunto. Valor CALIBRADO de FlowFire para el encuadre
-# (el asset esta modelado ~1:1 en metros: corredera 29.4 mm como una real).
+# Escala uniforme del conjunto (manos + arma, un solo rig). CALIBRADA para el
+# encuadre: el asset esta modelado ~1:1 en metros (corredera 29.4 mm como una
+# real), asi que tambien agranda las manos; el encuadre y el ADS estan validados
+# sobre ella.
 const ARMS_SCALE := 1.362
 # Punto de la empunadura en espacio de recoil que fija el encuadre de cadera
 # validado, y distancia hueso-arma -> punto de referencia hacia la boca.
@@ -327,7 +320,7 @@ var arms_mount: Node3D  # soporte estatico bajo RecoilNode (escala uniforme)
 var arms_root: Node3D
 var arms_skeleton: Skeleton3D
 var arms_player: AnimationPlayer
-var arms_mesh_visible: MeshInstance3D  # manos (para diagnostico y benchmark)
+var arms_mesh_visible: MeshInstance3D  # malla de manos (la matiza _darken_arms)
 var arms_sleeve_visible: MeshInstance3D  # antebrazos/mangas (idem)
 var arms_ok := false
 
@@ -392,8 +385,6 @@ func _install_arms() -> void:
 	var arms_best: MeshInstance3D = null
 	var arms_most := -1
 	for m in meshes:
-		# Skybox de presentacion y ayudantes de apuntado: fuera. El skybox se
-		# detecta por su AABB de 2x2; los ayudantes por tener 4 caras.
 		var sz := (m.mesh as Mesh).get_aabb().size
 		var tris := 0
 		if m.mesh is ArrayMesh:
@@ -401,37 +392,28 @@ func _install_arms() -> void:
 				var ar: Array = m.mesh.surface_get_arrays(si)
 				if ar.size() > 0 and ar[Mesh.ARRAY_INDEX] != null:
 					tris += (ar[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
-		# Fuera: skybox de presentacion (AABB 2x2) y ayudantes de apuntado
-		# (4 caras). La pistola del asset SI se dibuja: es el arma de FlowFire.
-		var rn: String = m.mesh.resource_name
-		# El arma del propio pack se reconoce por el HUESO que la mueve (mucho
-		# mas fiable que el nombre de la malla, que el importador renombra).
-		# Solo el skybox de presentacion (AABB 2x2) y los ayudantes de apuntado
-		# (4 caras) se apagan. La pistola del asset SI se dibuja: es el arma
-		# visible de FlowFire, con sus animaciones.
+		# Skybox de presentacion (AABB 2x2) y ayudantes de apuntado (4 caras): no
+		# son personaje. La pistola del asset SI se dibuja: es el arma de FlowFire.
+		# Se reconoce por el HUESO que la mueve, no por el nombre de la malla (el
+		# importador lo renombra).
 		if (sz.x > 1.5 and sz.z > 1.5) or tris <= 16:
 			m.visible = false
 			hidden += 1
 			continue
-		# La malla de BRAZOS es la que deforman huesos de mano o antebrazo. NO
-		# vale elegir la de mas vertices: medido, este asset tiene una malla de
-		# 8 474 verts que no son los brazos, y el diagnostico medía esa.
+		# La malla de BRAZOS es la que deforman huesos de mano o antebrazo: elegir
+		# la de mas vertices daria una malla que no son los brazos.
 		var dom := _dominant_bone(m)
 		if (dom.findn("hand") >= 0 or dom.findn("forearm") >= 0 or dom.findn("arm") >= 0) and _mesh_vert_count(m) > arms_most:
 			arms_most = _mesh_vert_count(m)
 			arms_best = m
 	arms_mesh_visible = arms_best
-	# Mangas: la otra malla de brazos (antebrazos). Hace falta para matizar su
-	# tela (venia con metallic=1.0 de importacion y salia blanca) y para el
-	# diagnostico por familias.
+	# Mangas: la otra malla de brazos (antebrazos), para matizar su tela.
 	for m in meshes:
 		if m.visible and m != arms_best:
 			var dom2 := _dominant_bone(m)
 			if dom2.findn("forearm") >= 0 or dom2.findn("arm") >= 0:
 				arms_sleeve_visible = m
 				break
-	for m in meshes:
-		print("  MALLA ", m.name, " mesh=", m.mesh.resource_name, " visible=", m.visible, " tris~", 0, " dom=", _dominant_bone(m))
 	print("ARMS_MALLAS total=", meshes.size(), " ocultas=", hidden,
 		" brazos=", arms_best.name if arms_best else "NINGUNA",
 		" verts=", arms_most)
@@ -451,14 +433,13 @@ func _install_arms() -> void:
 	# delantera queda al fondo y la trasera cerca, como en su propia vista FPS.
 	# La posicion lleva el punto de referencia de la empunadura al ancla: es lo
 	# unico que fija el encuadre de cadera (residuo 0 por construccion).
-	arms_scale = ARMS_SCALE
-	var scaled_r := Basis(Vector3.UP, PI).scaled(Vector3(arms_scale, arms_scale, arms_scale))
+	var scaled_r := Basis(Vector3.UP, PI).scaled(Vector3(ARMS_SCALE, ARMS_SCALE, ARMS_SCALE))
 	var weapon_in_skel := arms_skeleton.get_bone_global_pose(weapon_bone).origin
 	var barrel_in_skel := arms_skeleton.get_bone_global_pose(barrel_bone).origin
 	var grip_ref: Vector3 = weapon_in_skel + (barrel_in_skel - weapon_in_skel).normalized() * GRIP_AHEAD
 	holder.transform = Transform3D(scaled_r, GRIP_ANCHOR - scaled_r * grip_ref)
 	var grip_err: float = (holder.transform * grip_ref - GRIP_ANCHOR).length() * 1000.0
-	print("ARMS_MONTAJE escala=", snappedf(arms_scale, 0.0001),
+	print("ARMS_MONTAJE escala=", snappedf(ARMS_SCALE, 0.0001),
 		" residuo_empunadura_mm=", snappedf(grip_err, 0.1))
 	# Reposos mecanicos: la pose local sin animar de corredera, gatillo, arma y
 	# cargador. El arma y el cargador son la base sobre la que se suma el
@@ -528,13 +509,6 @@ func _dominant_bone(mi: MeshInstance3D) -> String:
 	return arms_skeleton.get_bone_name(best)
 
 
-func _find_bone(prefix: String) -> int:
-	for b in range(arms_skeleton.get_bone_count()):
-		if arms_skeleton.get_bone_name(b).begins_with(prefix):
-			return b
-	return -1
-
-
 ## Hueso por nombre exacto (los del arma). Sin prefijos afortunados.
 func _exact_bone(bone_name: String) -> int:
 	return arms_skeleton.find_bone(bone_name)
@@ -567,65 +541,76 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 	return n
 
 
-## La logica es la unica autoridad de corredera, gatillo y RETROCESO DEL ARMA:
-## las pistas que los animaban se eliminan al cargar.
-##
-##  - Slidder_919 y Weapon_Trigger_921 en Fire, Reload y Reload_Empty: sin esto
-##    habria dos correderas, la simulada (slide_pos, 59 ms) y la animada
-##    (33.6 mm en 250 ms).
-##  - POSICION de Weapon_922 en Fire: el clip Fire del autor hunde el hueso del
-##    arma ~235 mm en el primer frame y lo devuelve al final. Como la animacion
-##    es la dueña de la posicion neutra del arma en la mano (es la pose con la
-##    que el asset se ve montado), lo que se hace no es borrar la pista sino
-##    CLONAR en ella la posicion de Idle: el arma se queda donde el tirador la
-##    tiene y no se separa de la mano al disparar. Borrarla del todo dejaba el
-##    hueso en su reposo, que NO es esa pose (el reposo del arma y el del
-##    cargador no estan montados entre si: se veia el cargador en la mano y el
-##    arma delante).
-##  - ROTACION de Weapon_922 SOLO en Fire: el autor la levanta en rampa hasta
-##    ~14 grados a 180 ms, un gesto dibujado y no un impulso.
-##  - Magazine_924 SOLO en Fire: el cargador NO es un gesto del disparo, es masa
-##    asentada en el brocal. En Fire el arma y el cargador van rigidos: el
-##    retroceso los mueve juntos. Las pistas de cargador de Reload y Reload_Empty
-##    SI se quedan, porque ahi el gesto de sacarlo y meterlo es real.
+## Aplica el OWNERSHIP del rig (ver cabecera) a los tres clips que la logica
+## controla, quitando de cada uno las pistas que no le pertenecen. Explicito a
+## proposito: al leerlo se ve que manda cada capa.
 func _strip_mechanical_tracks() -> void:
 	var idle_weapon: Variant = _sample_bone_position("Idle", WEAPON_BONE)
-	if idle_weapon != null:
-		print("ARMS_ARMA_POSE_NEUTRA ", idle_weapon)
-	for short_name in arms_player.get_animation_list():
-		var resolved := ""
-		for candidate in arms_player.get_animation_list():
-			if candidate == short_name or candidate.ends_with("|" + short_name):
-				resolved = candidate
-				break
-		if resolved == "":
-			continue
-		var anim: Animation = arms_player.get_animation(resolved)
-		var removed := 0
-		for ti in range(anim.get_track_count() - 1, -1, -1):
-			var tp := str(anim.track_get_path(ti))
-			var ttype: int = anim.track_get_type(ti)
-			var is_weapon_pos: bool = ttype == Animation.TYPE_POSITION_3D and tp.contains(":" + WEAPON_BONE)
-			if short_name == "Fire" and is_weapon_pos and idle_weapon != null:
-				# Clona la posicion neutra de Idle en toda la pista de Fire.
-				for k in range(anim.track_get_key_count(ti)):
-					anim.track_set_key_value(ti, k, idle_weapon)
-				removed += 1
-				continue
-			if _track_is_mechanical(tp, ttype, short_name):
-				anim.remove_track(ti)
-				removed += 1
-		print("ARMS_PISTA ", resolved, " pistas_tratadas=", removed)
+
+	# FIRE: la animacion manda en el humano; la logica en corredera y gatillo;
+	# GlockRecoil en la ROTACION del arma; el cargador va rigido con el arma.
+	# La POSICION del arma NO se borra: se clona la de Idle, porque el clip Fire
+	# la hunde y el reposo no es la pose montada (se veria el arma delante y el
+	# cargador en la mano).
+	var fire := _resolve_clip("Fire")
+	if fire != "":
+		if idle_weapon != null:
+			_set_bone_position(fire, WEAPON_BONE, idle_weapon)
+		_remove_bone_rotation(fire, WEAPON_BONE)
+		_remove_bone_tracks(fire, MAG_BONE)
+		_remove_bone_tracks(fire, SLIDE_BONE)
+		_remove_bone_tracks(fire, TRIGGER_BONE)
+		print("ARMS_PISTA ", fire, " neutralizada")
+
+	# RELOAD / RELOAD_EMPTY: el gesto de sacar y meter el cargador, y la posicion
+	# del arma, son de la animacion. La logica solo manda en corredera y gatillo.
+	for clip_name in ["Reload", "Reload_Empty"]:
+		var clip := _resolve_clip(clip_name)
+		if clip != "":
+			_remove_bone_tracks(clip, SLIDE_BONE)
+			_remove_bone_tracks(clip, TRIGGER_BONE)
+
+
+## Nombre real de un clip en el AnimationPlayer (el importador puede prefijarlo).
+func _resolve_clip(short_name: String) -> String:
+	if arms_player == null:
+		return ""
+	for candidate in arms_player.get_animation_list():
+		if candidate == short_name or candidate.ends_with("|" + short_name):
+			return candidate
+	return ""
+
+
+## Borra de un clip toda pista (posicion/rotacion/escala) de un hueso.
+func _remove_bone_tracks(resolved: String, bone: String) -> void:
+	var anim: Animation = arms_player.get_animation(resolved)
+	for ti in range(anim.get_track_count() - 1, -1, -1):
+		if str(anim.track_get_path(ti)).contains(":" + bone):
+			anim.remove_track(ti)
+
+
+## Borra solo la ROTACION de un hueso: su posicion la fija la logica por otra via.
+func _remove_bone_rotation(resolved: String, bone: String) -> void:
+	var anim: Animation = arms_player.get_animation(resolved)
+	for ti in range(anim.get_track_count() - 1, -1, -1):
+		if anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D and str(anim.track_get_path(ti)).contains(":" + bone):
+			anim.remove_track(ti)
+
+
+## Copia `value` en todas las claves de la pista de POSICION de un hueso.
+func _set_bone_position(resolved: String, bone: String, value: Vector3) -> void:
+	var anim: Animation = arms_player.get_animation(resolved)
+	for ti in range(anim.get_track_count()):
+		if anim.track_get_type(ti) == Animation.TYPE_POSITION_3D and str(anim.track_get_path(ti)).contains(":" + bone):
+			for k in range(anim.track_get_key_count(ti)):
+				anim.track_set_key_value(ti, k, value)
+			return
 
 
 ## Valor de la posicion de un hueso en un instante de un clip, para poder
 ## clonarlo o consultarlo sin duplicar la animacion.
 func _sample_bone_position(short_name: String, bone: String) -> Variant:
-	var resolved := ""
-	for candidate in arms_player.get_animation_list():
-		if candidate == short_name or candidate.ends_with("|" + short_name):
-			resolved = candidate
-			break
+	var resolved := _resolve_clip(short_name)
 	if resolved == "":
 		return null
 	arms_player.play(resolved, -1.0, 1.0)
@@ -637,23 +622,9 @@ func _sample_bone_position(short_name: String, bone: String) -> Variant:
 	return arms_skeleton.get_bone_pose_position(idx)
 
 
-## Decide si una pista la manda la logica en vez de la animacion del autor.
-func _track_is_mechanical(path: String, type: int, clip: String) -> bool:
-	if path.contains(":" + WEAPON_BONE):
-		# La rotacion del arma solo en Fire; la posicion la clona Fire aparte.
-		return type == Animation.TYPE_ROTATION_3D and clip == "Fire"
-	if clip == "Fire" and path.contains(":" + MAG_BONE):
-		return true
-	if clip in ["Fire", "Reload", "Reload_Empty"]:
-		return path.contains(":" + SLIDE_BONE) or path.contains(":" + TRIGGER_BONE)
-	return false
-
-
 ## Pivote del retroceso procedural: punto del agarre que sostiene el arma (35%
 ## del hueso del arma hacia el hueso de la mano), en el frame del ESQUELETO, que
-## es el frame donde el viewmodel escribe despues el hueso del arma. NO es el
-## frame del nodo de retroceso: la rotacion del arma ya no se aplica a los nodos
-## (eso arrastraba las manos hacia atras), sino al hueso.
+## es donde el viewmodel escribe el hueso del arma.
 func _measure_wrist(weapon_bone: int) -> void:
 	var hand := _exact_bone("DEF-hand.R_842")
 	if hand < 0:
@@ -667,27 +638,24 @@ func _measure_wrist(weapon_bone: int) -> void:
 	print("ARMS_MUNECA pivote=", pivot.snapped(Vector3(0.001, 0.001, 0.001)))
 
 
-## Deja una animacion de brazos aparcada en un instante exacto (medicion).
+## Deja una animacion de brazos aparcada en un instante exacto.
 func park_anim(short_name: String, t: float) -> bool:
-	if arms_player == null:
+	var resolved := _resolve_clip(short_name)
+	if resolved == "":
 		return false
-	for candidate in arms_player.get_animation_list():
-		if candidate == short_name or candidate.ends_with("|" + short_name):
-			arms_player.play(candidate)
-			arms_player.seek(t, true)
-			arms_skeleton.force_update_all_bone_transforms()
-			return true
-	return false
+	arms_player.play(resolved)
+	arms_player.seek(t, true)
+	arms_skeleton.force_update_all_bone_transforms()
+	return true
+
+
 ## Guantes y mangas como TELA/CUERO, conservando las texturas del autor.
 ##
-## El asset trae difusas reales (costuras, nudillos, tejido) y una textura
-## ORM donde el canal metalico del guante esta a 0.99, con lo que el material
-## sale cromado: reflejaba las luces del viewmodel como plastico negro pulido.
-## La tela y el cuero son dielectricos, asi que el cambio minimo es el que se
-## hace aqui: se tine el albedo (multiplica la difusa; el detalle sigue) y se
-## fuerza un DIELECTRICO con specular bajo y el emisivo del autor apagado (el
-## guante trae emissiveFactor=1.0 con una textura casi negra: no aporta nada y
-## bajo el glow del bodycam solo puede ensuciar las costuras).
+## El asset trae difusas reales (costuras, nudillos, tejido) y una textura ORM
+## donde el canal metalico del guante esta a 0.99, con lo que el material sale
+## cromado. La tela y el cuero son dielectricos, asi que el cambio minimo es:
+## se tine el albedo (multiplica la difusa; el detalle sigue) y se fuerza un
+## DIELECTRICO con specular bajo y el emisivo del autor apagado.
 ##
 ## No se toca ninguna luz de la escena: un material que no es metal no puede
 ## arreglarse iluminando menos.
@@ -720,22 +688,13 @@ func _darken_mesh(mi: MeshInstance3D, label: String, tint: Color, roughness: flo
 			fabric.roughness = roughness
 			fabric.emission_enabled = false
 			mi.set_surface_override_material(si, fabric)
-			print(label, " superficie ", si,
-				" albedo_tex=", src.albedo_texture != null,
-				" mr_tex=", src.metallic_texture != null,
-				" normal_tex=", src.normal_texture != null,
-				" metallic_origen=", src.metallic,
-				" -> dielectrico rough=", roughness, " tinte=", tint)
+			print(label, " -> dielectrico rough=", roughness, " tinte=", tint)
 
 
 func play_anim(short_name: String, loop := false) -> bool:
 	if not arms_ok or arms_player == null:
 		return false
-	var resolved := ""
-	for candidate in arms_player.get_animation_list():
-		if candidate == short_name or candidate.ends_with("|" + short_name):
-			resolved = candidate
-			break
+	var resolved := _resolve_clip(short_name)
 	if resolved == "":
 		return false
 	arms_player.play(resolved, -1.0, 1.0)
@@ -747,28 +706,23 @@ func play_anim(short_name: String, loop := false) -> bool:
 
 
 func resolve_idle() -> String:
-	if arms_player == null:
-		return ""
-	for candidate in arms_player.get_animation_list():
-		if candidate == "Idle" or candidate.ends_with("|Idle"):
-			return candidate
-	return ""
+	return _resolve_clip("Idle")
 
 
 ## Escribe en los huesos el estado mecanico que le pasa Glock. Es el unico
 ## punto donde la logica toca el esqueleto: una sola realidad, representada.
 ##
-## El ARMA retrocede AQUI, en su hueso, y no en los nodos del rig. La mano se
-## queda donde la animacion la pone: el arma gira sobre el pivote del agarre y
-## se hunde dentro de la mano, que es lo que hace un retroceso real. Rotar el
-## viewmodel entero (lo anterior) empujaba las manos hacia atras con el arma.
+## El ARMA retrocede AQUI, en su hueso, y no en los nodos del rig: la mano se
+## queda donde la animacion la pone y el arma gira sobre el pivote del agarre y
+## se hunde dentro de ella, que es lo que hace un retroceso real. (Rotar el
+## viewmodel entero empujaria las manos hacia atras con el arma.)
 ##
 ## El CARGADOR recibe el mismo offset porque es un hueso hermano (cuelga de la
 ## raiz, no del arma): en Fire va rigido en el brocal y se mueve exactamente
-## igual que el arma. Sin esto el cargador se quedaba atras al retroceder.
+## igual que el arma.
 ##
-## Escribir a mano sobrevive al AnimationPlayer: se probo que su pose se
-## conserva mientras corre un clip.
+## Escribir a mano en el hueso sobrevive al AnimationPlayer mientras corre el
+## clip; es lo que hace compatible la autoridad procedural con la animada.
 func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: float) -> void:
 	if not pistol_ok or arms_skeleton == null or slide_bone < 0:
 		return
@@ -781,8 +735,7 @@ func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: floa
 		arms_skeleton.set_bone_pose_position(weapon_bone, weapon_rest + kick)
 		arms_skeleton.set_bone_pose_position(mag_bone, mag_rest + kick)
 	# En recarga el cargador lo lleva la mano en la animacion, en fase con ella
-	# por construccion; la logica solo cuenta cartuchos en los instantes medidos
-	# (ver _seat_reload_mag). Aqui no se escribe nada suyo salvo el retroceso.
+	# por construccion; aqui solo se le suma el retroceso.
 
 
 ## Cadena de nodos del rig. Se crea aqui y no en Glock: es presentacion.

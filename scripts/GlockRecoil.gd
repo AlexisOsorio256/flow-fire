@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Retroceso del arma, en dos capas con escala de tiempo propia (mas la camara,
 ## que la lleva Player.gd):
-##   1) el ARMA en la mano: este objeto, girando sobre el pivote de la munece
+##   1) el ARMA en la mano: este objeto, girando sobre el pivote de la muneca
 ##      (~240 ms). Es el latigazo.
 ##   2) brazos/viewmodel: la pose entera, mas lenta y blanda (~660 ms).
 ##
@@ -13,23 +13,19 @@ extends RefCounted
 ## aplique su transformacion al rig.
 ##
 ## QUIEN SE MUEVE: en un disparo real la mano NO retrocede con el arma. El arma
-## gira y se hunde DENTRO del agarre (la munece absorbe) y el brazo entero
+## gira y se hunde DENTRO del agarre (la muneca absorbe) y el brazo entero
 ## acompana despues, blando. Por eso la capa rapida NO toca los brazos: `rot` es
 ## la rotacion del ARMA alrededor del pivote y el viewmodel la escribe en el
 ## hueso del arma (ver `bone_offset`); solo la capa lenta (`arm_rot`/`arm_pos`)
 ## mueve el viewmodel completo, manos incluidas, y siempre despues.
 
 # Impulso de cabeceo del ARMA en el disparo (rad/s). Es la unica fuente del
-# latigazo visible desde que el clip Fire no mueve el hueso del arma: medido
-# la animacion del asset daba 0.24 grados en los primeros 40 ms y subia en
-# rampa hasta 180 ms, que es lo que hacia que la vaina pareciese moverse mas
-# que la pistola. Con 4.2 rad/s la boca sube ~8 grados con pico
-# a ~50 ms.
+# latigazo visible: el clip Fire no mueve el hueso del arma. CALIBRADO a
+# 4.2 rad/s: la boca sube ~8 grados con pico a ~50 ms.
 const MAIN_RECOIL_KICK := 4.2
 # El pivote del giro va detras y debajo de la empunadura (lo mide el viewmodel
 # con el rig real), asi que la boca sube mientras la empunadura casi no se
-# mueve. Con k=700/zeta 0.75 el arma volvia a casa en 150 ms y no llegaba a
-# subir; con k=520/c=18 (zeta 0.39) el pico cae a ~50 ms y la recuperacion es
+# mueve. CALIBRADO a k=520/c=18 (zeta 0.39): pico a ~50 ms y recuperacion
 # controlada hacia 250 ms.
 const WEAPON_K := 520.0
 const WEAPON_C := 18.0
@@ -96,13 +92,7 @@ func apply(wrist: Node3D, node: Node3D) -> void:
 
 
 func update(delta: float) -> void:
-	# Capa 1: el arma gira y se hunde dentro de la mano. El pivote va detras y
-	# debajo de la empunadura (medido con el rig real), asi que la boca sube
-	# mientras la empunadura casi no se mueve: es lo que hace un retroceso real
-	# y lo que antes se sentia "forzado" (giro sobre el centro del arma).
-	# k=520/c=18 (zeta 0.39): pico del cabeceo a ~50 ms y recuperacion
-	# controlada hacia 250 ms. Con el resorte anterior (k=700, zeta 0.75) el
-	# arma volvia a casa en 150 ms y no llegaba a subir.
+	# Capa 1: el arma gira y se hunde dentro de la mano (ver constantes).
 	var res_p := Springs.vector(pos, vel, WEAPON_K, WEAPON_C, delta)
 	pos = res_p[0]
 	vel = res_p[1]

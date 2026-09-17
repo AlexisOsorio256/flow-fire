@@ -6,9 +6,9 @@ extends Node3D
 ##
 ## Cada impacto se compone de tres cosas que NO son lo mismo:
 ##   1. Agujero tallado: un embudo de dos anillos apoyado en la superficie, con
-##      el interior hundido y el labio enrasado. Antes era un quad con la
-##      textura de agujero, separado 4-7 mm de la pared: se veia como un sticker
-##      y ademas el alfa no llegaba al fragmento en este renderer.
+##      el interior hundido y el labio enrasado. Geometria OPACA: en este
+##      renderer ni el Decal nativo dibuja ni el alfa de una calcomania llega al
+##      fragmento.
 ##   2. Eyecciones: polvo y escombros por material (ver IMPACT_MATERIALS).
 ##
 ## Entrada y salida tienen CARACTER distinto (no es la entrada escalada): la
@@ -37,9 +37,6 @@ const HOLE_SIZE := {
 }
 
 var _holes: Array[Node] = []
-# Interruptor para aislar el coste de FX al perfilar. No cambia ninguna regla
-# ni el comportamiento por defecto.
-var spawning_enabled := true
 
 
 func _ready() -> void:
@@ -47,8 +44,6 @@ func _ready() -> void:
 
 
 func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool = false) -> void:
-    if not spawning_enabled:
-        return
     _spawn_decal(point, normal, collider, surface, is_exit)
     _spawn_particles(point, normal, surface, is_exit)
     _spawn_light(point, surface)
@@ -78,8 +73,6 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
 
 
 func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
-    if not spawning_enabled:
-        return
     var pm := ParticleProcessMaterial.new()
     pm.direction = direction.normalized()
     pm.spread = 24.0
@@ -107,15 +100,11 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
 
 ## Agujero del impacto: geometria OPACA, no una calcomania con alfa.
 ##
-## Las dos rutas "de libro" fallaron y estan probadas:
-##   - Decal nativo de Godot: en el renderer Mobile sobre GL no dibuja nada.
-##   - Quad con la textura del agujero: el alfa de la textura no llega al
-##     fragmento en este renderer (el import la recomprime al usarla en 3D, y
-##     al forzar sin compresion tampoco), asi que sale como un cuadrado negro.
-##
-## Lo que si funciona y ademas da profundidad es tallar el agujero: un embudo
-## de dos anillos con el interior hundido y un labio que sobresale una decima de
-## milimetro. El material interior es oscuro y sin shading (es un hueco, no una
+## El Decal nativo no dibuja en el renderer Mobile sobre GL, y el alfa de la
+## textura del agujero no llega al fragmento (sale un cuadrado negro). Lo que si
+## funciona y ademas da profundidad es tallar el agujero: un embudo de dos
+## anillos con el interior hundido y un labio que sobresale una decima de
+## milimetro. El interior es oscuro y sin shading (es un hueco, no una
 ## superficie iluminada); el labio si recibe luz. Nada de esto depende de alfa.
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
     var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])

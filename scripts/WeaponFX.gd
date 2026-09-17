@@ -19,10 +19,10 @@ extends Node3D
 ##              aporta nada, así que la silueta se apaga sola y no hay borde de
 ##              polígono.
 ##
-## Los quads con shader custom se eliminaron tras 20+ capturas A/B: en el
-## renderer Mobile sobre Mesa/Intel su rasterización no era determinista (runs
-## idénticos pintan o no pintan, sin errores de compilación). Malla normal =
-## la misma ruta que el resto del arma.
+## Malla normal, no quads con shader custom: en el renderer Mobile sobre
+## Mesa/Intel la rasterizacion de estos ultimos no era determinista (runs
+## identicos pintan o no, sin errores de compilacion), y la malla es la misma
+## ruta que el resto del arma.
 
 ## Duración visible del evento. 40 ms: extremadamente corto, no una llama que se
 ## pueda mirar.

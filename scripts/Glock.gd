@@ -21,45 +21,30 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ##   4. ciclo por frame y eventos fisicos
 ##   5. casquillo (cuerpo fisico real; su malla es procedural)
 const MAG_SIZE := 17
-# Ciclo mecánico de la corredera. El recorrido de 39 mm es el real de una
-# Glock 19 y está confirmado con la geometría del arma.
-#
-# Sobre el TIEMPO: no existe una medición pública verificable del ciclo completo
-# de una Glock 19 que se haya podido citar aquí, así que el valor no se presenta
-# como dato de ese modelo. Lo que sí está documentado en captura de alta
-# velocidad (50 924 fps, Sight Picture Media) es que la corredera EMPIEZA a
-# moverse en el momento del ignicionado y que puede recorrer 2-3 mm antes de que
-# el proyectil salga del cañón; eso justifica que el impulso se aplique en
-# _fire() y no después. El ciclo que sale de esta pareja k/c es de ~59 ms
-# medidos en el ciclo simulado: dentro del rango de una pistola de
-# servicio 9 mm y validado a ojo en cámara lenta. Es un valor CALIBRADO, no una
-# medición de Glock 19.
+# Ciclo mecanico de la corredera. 39 mm es el recorrido real de una Glock 19.
+# El ciclo que sale de esta pareja k/c es de ~59 ms, dentro del rango de una
+# pistola de servicio 9 mm. CALIBRADO, no una medicion de Glock 19. El impulso
+# se aplica en _fire() porque en captura de alta velocidad la corredera empieza
+# a moverse en el ignicionado, antes de que el proyectil salga del canon.
 const SLIDE_TRAVEL := 0.039
 const SLIDE_K := 4000.0        # rigidez equivalente del muelle recuperador
-const SLIDE_C := 80.0          # amortiguación (zeta 0.632)
-const SLIDE_IMPULSE := 5.90    # impulso CALIBRADO para tocar el tope trasero
-# (con 5.45 el pico medido en juego era 38.8 mm y la corredera NO llegaba al
-# tope: el evento trasero solo sonaba al bloquear en vacio y el disparo normal
-# no tenia mecanica audible; con 5.90 el tope llega a ~12 ms y la bateria a
-# ~54 ms (SLIDECYCLE con subpaso de 1 ms: pico 39+ mm; en juego el subpaso de
-# 2.5 ms amortigua mas y el margen es justo pero suficiente, verificado en
-# en juego la corredera toca 37+ mm entre frames y los eventos suenan)
+const SLIDE_C := 80.0          # amortiguacion (zeta 0.632)
+# CALIBRADO para tocar el tope trasero: con menos impulso la corredera no
+# llegaba al tope y el disparo normal no tenia mecanica audible.
+const SLIDE_IMPULSE := 5.90
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto (~8 ms)
 # Instantes de la recarga, MEDIDOS sobre la animacion real de cada clip
 # (posicion del hueso Magazine_924 y de la corredera frame a frame). Lo que
 # manda es el CONTACTO, no un reloj: el sonido va donde ocurre el gesto.
 #
-#   tactica (Reload, 3.125 s): el cargador empieza a salir a 0.30 s (74 mm bajo
-#     el arma), esta fuera del todo a ~0.93 s (265 mm) y el nuevo asienta a
-#     2.50 s, que es cuando la base vuelve al brocal (66 mm) y se queda ahi.
+#   tactica (Reload, 3.125 s): el cargador empieza a salir a 0.30 s, esta fuera
+#     del todo a ~0.93 s y el nuevo asienta a 2.50 s (la base vuelve al brocal).
 #   vacia (Reload_Empty, 3.917 s): el gesto es el mismo hasta 2.50 s; el
-#     cargador se empuja hasta 2.90 s (cuando la mano lo asienta) y la corredera
-#     se libera a 2.90 s, ya en bateria a 3.0 s.
+#     cargador se empuja hasta 2.90 s y la corredera se libera a 2.90 s.
 #
-# El instante de asiento NO puede ser el mismo para las dos: compartirlo ponia
-# el "click" del cargador en la recarga en vacio antes de que el cargador
-# llegase al brocal, que es la desincronia que se oia.
+# El instante de asiento NO puede ser el mismo para las dos: son clips distintos
+# y el contacto ocurre en momentos distintos.
 const RELOAD_MAG_OUT_T := 0.30
 const RELOAD_TACTICAL_MAG_IN_T := 2.50
 const RELOAD_EMPTY_MAG_IN_T := 2.90
@@ -112,8 +97,6 @@ var look_delta := Vector2.ZERO
 var player_velocity := Vector3.ZERO
 var _last_local_move := Vector2.ZERO
 
-var last_delta := 0.0
-
 # Pulso del disparo para la exposicion del bodycam (lo lee HUD.gd).
 var shot_pulse := 0.0
 
@@ -143,8 +126,7 @@ func setup(cam: Camera3D) -> void:
 
 
 ## Apuntado suavizado. Vive aqui (no en la pose) porque es estado de input
-## compartido: lo consumen la pose, la camara de Player, el post del HUD y
-## el laboratorio de diagnostico.
+## compartido: lo consumen la pose, la camara de Player y el post del HUD.
 func _update_aim(delta: float) -> void:
 	var target_sprint := 1.0 if sprinting else 0.0
 	sprint_blend += (target_sprint - sprint_blend) * (1.0 - exp(-5.5 * delta))
@@ -153,7 +135,6 @@ func _update_aim(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	last_delta = delta
 	_update_aim(delta)
 	_update_trigger(delta)
 	_update_slide(delta)
@@ -202,15 +183,14 @@ func start_reload() -> bool:
 		return false
 	reloading = true
 	reload_elapsed = 0.0
-	# Recarga en vacío = no hay cartucho en recámara: hay que soltar la
-	# corredera para alimentarlo. Antes exigía además slide_locked, así que una
-	# recarga con la recámara vacía y la corredera en batería dejaba el arma
-	# cargada pero sin cartucho listo (mag=17, chamber=0).
+	# Recarga en vacio = no hay cartucho en recamara: al terminar hay que soltar
+	# la corredera para alimentarlo. Basta con chamber <= 0; no se exige
+	# slide_locked, porque una recarga con la recamara vacia y la corredera en
+	# bateria quedaria cargada pero sin cartucho listo.
 	reload_empty = chamber <= 0
 	# La animacion la reproduce el viewmodel, una sola vez por recarga. Cada
 	# estado mecanico tiene su clip: `Reload` no contiene ningun gesto de
-	# corredera, asi que la recarga tactica no tiene que cortar nada para no
-	# ensenar algo que la mecanica no hace.
+	# corredera, asi que la recarga tactica no tiene que cortar nada.
 	reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TACTICAL_TOTAL
 	reload_slide_released = false
 	reload_mag_seated = false
@@ -232,8 +212,8 @@ func _update_trigger(delta: float) -> void:
 		_fire()
 		return
 
-	# Gatillo en seco: con la recámara vacía y la corredera en batería la aguja
-	# golpea en vacío. Antes no sonaba nada y el arma parecía muerta.
+	# Gatillo en seco: con la recamara vacia y la corredera en bateria la aguja
+	# golpea en vacio.
 	if trigger_held and trigger_ready and not reloading and chamber <= 0 and not slide_locked:
 		trigger_ready = false
 		trigger_latched = true
@@ -295,7 +275,7 @@ func _update_slide(delta: float) -> void:
 		# ("abrió", "volvió a batería", "tocó extraer") hay que verlos DENTRO del
 		# recorrido: a pocos FPS el ciclo entero de la corredera cabe en un frame
 		# y mirando solo el estado final no se recamarraba ni salía el casquillo.
-		# El subpaso de 2.5 ms es estable para k=2560 y c=70.8.
+		# El subpaso de 2.5 ms es estable para SLIDE_K y SLIDE_C.
 		const SUBSTEP := 0.0025
 		var span := minf(delta, SUBSTEP * 64.0)
 		var steps := maxi(1, ceili(span / SUBSTEP))
@@ -486,9 +466,6 @@ func _spawn_shell() -> void:
 	shell.angular_damp = 0.5
 
 	get_tree().current_scene.add_child(shell)
-	# Grupo de medición: la herramienta de captura en cámara lenta sigue a los
-	# casquillos para comprobar que se ven salir (igual que "targets").
-	shell.add_to_group("shells")
 	shell.global_transform = viewmodel.ejection_port.global_transform
 	var basis := viewmodel.ejection_port.global_transform.basis
 	# El puerto está en la cara derecha del arma: el casquillo sale a la derecha
