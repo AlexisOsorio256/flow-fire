@@ -1,6 +1,24 @@
 # Créditos de modelos 3D
 
-## 9mm Pistol | First Person Animations — 1Matzh  (VIEWMODEL ACTUAL)
+## 9mm Pistol — Urpo  (ARMA VISIBLE)
+
+- Archivo: `assets/models/glock_urpo.glb` (15,9 MB).
+- Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-30222f9a59104426ba526a6b20cd7532
+- Autor: **Urpo** — https://sketchfab.com/Urpo
+- Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
+  Atribución: *"9mm Pistol" by Urpo, licensed under CC-BY 4.0, via Sketchfab*.
+- La pistola llega ya separada en tres nodos por el autor: `Gun_Slide`,
+  `Gun_Body` y `Magazine`. `tools/make_weapon_parts.py` les da a cada uno su
+  propio origen y añade los puntos de boca, miras y puerto de expulsión medidos
+  sobre la malla. Resultado: el arma es un árbol de piezas rígidas, sin
+  esqueleto, y mover una pieza es escribir un `transform`.
+
+Es la MISMA geometría de pistola que trae el asset de 1Matzh de abajo (que la
+usa como base), así que la sustitución no cambia el aspecto del arma.
+
+---
+
+## 9mm Pistol | First Person Animations — 1Matzh  (BRAZOS)
 
 - Archivo: `assets/models/full9mm_2k.glb` (38,26 MB).
 - Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f
@@ -13,10 +31,13 @@
   `9mm Pistol` de **Urpo** (`30222f9a59104426ba526a6b20cd7532`, CC-BY 4.0) y los
   brazos, `Modern Soldier` de **Blue-Spirit**
   (`358b4fb07f0146cb9b9063342db5897a`, CC-BY 4.0). Acreditar también a ambos.
+- Del asset se usan **solo los brazos**: la malla de la pistola que trae dentro
+  se apaga en runtime, porque el arma visible es la de Urpo.
 - 29 321 triángulos: brazos 6 164 (`Object_0`, antebrazos) + 14 312 (`Object_1`,
   manos con guantes), pistola 8 357 (`Object_2/3/4`). **928 huesos** y **10
   animaciones**: Equip, Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty,
   Inspect, Unequip. Materiales con albedo, metallic-roughness y normal.
+- Ese esqueleto es SOLO de los brazos: el arma ya no cuelga de él.
 - Procesado reproducible con `tools/trim_glb.py` (materiales y texturas
   huérfanas fuera) y `tools/downscale_glb_textures.py` (4096 -> 2048 para el
   perfil Mobile). El skybox de presentación y los ayudantes de apuntado se apagan

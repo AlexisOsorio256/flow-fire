@@ -43,8 +43,9 @@ rendimiento → calidad audiovisual → features.
 |---|---|
 | Arranque y escena | `scripts/Main.gd` |
 | Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga | `scripts/Glock.gd` |
-| Viewmodel: rig, huesos, ADS, pose, animación, materiales | `scripts/GlockViewmodel.gd` |
-| Retroceso: el arma dentro de la mano | `scripts/GlockRecoil.gd` |
+| Piezas del arma: corredera, gatillo, cargador, boca, miras | `scripts/GlockWeapon.gd` |
+| Viewmodel: brazos, ADS, pose, animación, sockets | `scripts/GlockViewmodel.gd` |
+| Retroceso y peso: el arma en el agarre + cesión de las manos | `scripts/GlockRecoil.gd` |
 | Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
 | Audio | `scripts/GameAudio.gd` |
 | Balística | `scripts/Ballistics.gd` |
@@ -58,7 +59,16 @@ rendimiento → calidad audiovisual → features.
 
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
-El ownership de huesos concretos vive al principio de `scripts/GlockViewmodel.gd`.
+
+**El arma no está en el esqueleto.** Es un árbol de piezas rígidas
+(`assets/models/glock_urpo.glb`): `Frame`, `Slide`, `Magazine` y los puntos de
+boca, miras y puerto. Los brazos son el único esqueleto y su pose la manda el
+`AnimationPlayer`. El ownership de cada nodo vive al principio de
+`scripts/GlockViewmodel.gd`.
+
+Los eventos de la recarga (agarre del cargador, entrega, sonidos) no usan
+tiempos escritos a mano: se disparan sobre los mínimos reales de la distancia
+mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
 
 ## Workflow IA + usuario
 
