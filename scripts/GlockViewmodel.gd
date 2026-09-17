@@ -330,14 +330,17 @@ func _colocar_arma_en_la_mano() -> void:
 		push_warning("Gatillo sobre el eje del mango; el arma queda sin asentar")
 		return
 	delante = delante.normalized()
-	var origen: Vector3 = base + eje * (cabeza_corredera - base).dot(eje)
+	var union_autor: Vector3 = base + eje * (cabeza_corredera - base).dot(eje)
 	# Columnas del marco en el espacio del arma: +Y sube por el mango y la
 	# boca mira segun `adelante` de la tabla ARMAS (glock -Z, de +Z).
 	var z := delante * weapon.adelante.z
 	var x := eje.cross(z).normalized()
 	var y := z.cross(x).normalized()
-	var marco := Basis(x, y, z)
-	weapon.global_transform = Transform3D(marco.scaled(Vector3.ONE * weapon.escala * ARMS_SCALE), origen)
+	var marco := Basis(x, y, z).scaled(Vector3.ONE * weapon.escala * ARMS_SCALE)
+	# El origen del Frame NO es la union: se mide la boca del cargador (labios,
+	# arriba del mango sobre su eje) en espacio local del arma y se lleva ahi.
+	var origen: Vector3 = union_autor - marco * _boca_cargador_local()
+	weapon.global_transform = Transform3D(marco, origen)
 
 
 ## Hueso del arma del autor por prefijo ("Magazine", "Weapon_Trigger",
@@ -354,6 +357,21 @@ func _hueso_del_arma(prefijo: String) -> int:
 		if n.begins_with(prefijo) and not n.begins_with("Magazine_2"):
 			return i
 	return -1
+
+
+## Boca del cargador (labios) en espacio LOCAL del arma. Es el punto del arma
+## que coincide con la union del autor: arriba del mango, sobre su eje.
+func _boca_cargador_local() -> Vector3:
+	if weapon == null or weapon.magazine == null:
+		return Vector3.ZERO
+	var malla := weapon.magazine as MeshInstance3D
+	if malla == null or malla.mesh == null:
+		malla = weapon.magazine.find_child("*", true, false) as MeshInstance3D
+	if malla == null or malla.mesh == null:
+		return Vector3.ZERO
+	var caja: AABB = malla.mesh.get_aabb()
+	var labios: Vector3 = Vector3(caja.get_center().x, caja.position.y + caja.size.y, caja.get_center().z)
+	return weapon.global_transform.affine_inverse() * (malla.global_transform * labios)
 
 
 ## Cabeza de un hueso en espacio global, con la pose actual del esqueleto.
