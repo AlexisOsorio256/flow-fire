@@ -187,8 +187,8 @@ func _bench_bind_nodes() -> void:
                 _bench_stage_omnis.append(child)
             elif child is DirectionalLight3D:
                 _bench_sun = child
-    if _player.weapon != null and _player.weapon.pose_root != null:
-        for child in _player.weapon.pose_root.get_children():
+    if _player.weapon != null and _player.weapon.viewmodel.pose_root != null:
+        for child in _player.weapon.viewmodel.pose_root.get_children():
             if child is OmniLight3D:
                 _bench_viewmodel_lights.append(child)
     print("FPSBENCH_BIND stage_omnis=", _bench_stage_omnis.size(),
@@ -240,9 +240,9 @@ func _viewmodel_meshes(w) -> Array:
 ## Subconjunto de mallas del viewmodel por nombre de nodo.
 func _gun_family_meshes(w, names: Array) -> Array:
     var out: Array = []
-    if w.arms_root == null:
+    if w.viewmodel.arms_root == null:
         return out
-    var stack: Array = [w.arms_root]
+    var stack: Array = [w.viewmodel.arms_root]
     while not stack.is_empty():
         var n = stack.pop_back()
         if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null and names.has(n.name):
@@ -297,8 +297,8 @@ func _bench_apply_variant(variant_id: String) -> void:
     # Pausar la animación deja la última pose en pantalla: el delta contra base
     # es el coste de evaluar el esqueleto cada frame, sin tocar ni meshes ni
     # luces ni script de mecánica.
-    if w.arms_player != null:
-        w.arms_player.stream_paused = variant_id == "vm_anim_off"
+    if w.viewmodel.arms_player != null:
+        w.viewmodel.arms_player.stream_paused = variant_id == "vm_anim_off"
 
 
 ## Guarda una captura del estado exacto de la variante, a la misma resolución
@@ -626,9 +626,9 @@ func _visual_reset_weapon() -> void:
     w.player_velocity = Vector3.ZERO
     w.look_delta = Vector2.ZERO
     w._last_local_move = Vector2.ZERO
-    w.sway = Vector2.ZERO
-    w.bob_phase = 0.0
-    w.idle_phase = 0.0
+    w.viewmodel.sway = Vector2.ZERO
+    w.viewmodel.bob_phase = 0.0
+    w.viewmodel.idle_phase = 0.0
     w.sprinting = false
     w.sprint_blend = 0.0
     w.aim = false
@@ -637,14 +637,14 @@ func _visual_reset_weapon() -> void:
     w.trigger_ready = true
     w.trigger_latched = false
     w.trigger_visual = 0.0
-    w.recoil_pos = Vector3.ZERO
-    w.recoil_vel = Vector3.ZERO
-    w.recoil_rot = Vector3.ZERO
-    w.recoil_rot_vel = Vector3.ZERO
-    w.arm_recoil_pos = Vector3.ZERO
-    w.arm_recoil_vel = Vector3.ZERO
-    w.arm_recoil_rot = Vector3.ZERO
-    w.arm_recoil_rot_vel = Vector3.ZERO
+    w.recoil.pos = Vector3.ZERO
+    w.recoil.vel = Vector3.ZERO
+    w.recoil.rot = Vector3.ZERO
+    w.recoil.rot_vel = Vector3.ZERO
+    w.recoil.arm_pos = Vector3.ZERO
+    w.recoil.arm_vel = Vector3.ZERO
+    w.recoil.arm_rot = Vector3.ZERO
+    w.recoil.arm_rot_vel = Vector3.ZERO
     w.fx.timer = 0.0
     w.shot_pulse = 0.0
     w.reloading = false
@@ -727,14 +727,14 @@ func _visual_apply_state(state: String) -> void:
 ## dejando la animación viva donde estuviera.
 func _visual_park_animation(anim_name: String, t: float) -> void:
     var w = _player.weapon
-    if w.arms_player != null:
+    if w.viewmodel.arms_player != null:
         var arms_anim := "Idle"
         if anim_name == "Shoot":
             arms_anim = "Fire"
         elif anim_name == "Reload":
             arms_anim = "Reload"
-        if w._play_arms_anim(arms_anim, true):
-            w.arms_player.seek(t, true)
+        if w.viewmodel.play_anim(arms_anim, true):
+            w.viewmodel.arms_player.seek(t, true)
 
 
 ## Vaina en una posición de vuelo fija. La trayectoria real dura milisegundos y
@@ -752,7 +752,7 @@ func _visual_place_shell() -> void:
         shell.freeze = true
         shell.linear_velocity = Vector3.ZERO
         shell.angular_velocity = Vector3.ZERO
-    var port: Transform3D = w.ejection_port.global_transform
+    var port: Transform3D = w.viewmodel.ejection_port.global_transform
     var offset := Vector3(0.055, 0.042, 0.018)
     var spin := Basis(Vector3(0.35, 0.9, 0.25).normalized(), 1.15)
     shell.global_transform = Transform3D(port.basis * spin, port * offset)
@@ -784,9 +784,9 @@ func _visual_pin_post(state: String) -> void:
     _process(0.0)
     if state == "shot" or state == "casing":
         await get_tree().process_frame
-    if w.sight_marker != null and w.muzzle != null:
+    if w.viewmodel.sight_marker != null and w.muzzle != null:
         var camv: Camera3D = _player.camera
-        var pm: Vector2 = camv.unproject_position((w.sight_marker as Node3D).global_position)
+        var pm: Vector2 = camv.unproject_position((w.viewmodel.sight_marker as Node3D).global_position)
         var pb: Vector2 = camv.unproject_position((w.muzzle as Node3D).global_position)
         print("VISUAL_MIRA ", state, " mira_px=(", snappedf(pm.x, 1.0), ",", snappedf(pm.y, 1.0),
             ") boca_px=(", snappedf(pb.x, 1.0), ",", snappedf(pb.y, 1.0), ")")
@@ -843,7 +843,7 @@ const ARM_BONES := [
 ## tiene sentido.
 func _print_bone_axes(label: String) -> void:
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     if sk == null:
         return
     var cam: Camera3D = _player.camera
@@ -912,13 +912,13 @@ func _skinned_verts(mi: MeshInstance3D, sk: Skeleton3D, space: Node3D) -> Packed
 func run_sightdiag() -> void:
     await get_tree().create_timer(0.8).timeout
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
-    if sk == null or w.arms_root == null:
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
+    if sk == null or w.viewmodel.arms_root == null:
         print("SIGHTDIAG sin brazos")
         get_tree().quit()
         return
     var mallas: Array = []
-    var stack: Array = [w.arms_root]
+    var stack: Array = [w.viewmodel.arms_root]
     var mayor := -1
     var brazos: MeshInstance3D = null
     while not stack.is_empty():
@@ -939,7 +939,7 @@ func run_sightdiag() -> void:
             stack.append(c)
     for m in mallas:
         var mi := m as MeshInstance3D
-        var vv := _skinned_verts(mi, sk, w.arms_root)
+        var vv := _skinned_verts(mi, sk, w.viewmodel.arms_root)
         var tris := 0
         for si in range(mi.mesh.get_surface_count()):
             var idx: PackedInt32Array = mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_INDEX]
@@ -952,7 +952,7 @@ func run_sightdiag() -> void:
     for m in mallas:
         if m == brazos:
             continue
-        pv.append_array(_skinned_verts(m as MeshInstance3D, sk, w.arms_root))
+        pv.append_array(_skinned_verts(m as MeshInstance3D, sk, w.viewmodel.arms_root))
     if pv.is_empty():
         print("SIGHTDIAG sin malla de pistola")
         get_tree().quit()
@@ -973,7 +973,7 @@ func run_sightdiag() -> void:
         dentro += 1
     print("SIGHTDIAG pistola_px min=(", snappedf(smin.x, 1.0), ",", snappedf(smin.y, 1.0),
         ") max=(", snappedf(smax.x, 1.0), ",", snappedf(smax.y, 1.0), ") visibles=", dentro, "/", pv.size())
-    var marc: Vector3 = (w.sight_marker as Node3D).global_position
+    var marc: Vector3 = (w.viewmodel.sight_marker as Node3D).global_position
     var mp := camv.unproject_position(marc)
     print("SIGHTDIAG marcador_px=(", snappedf(mp.x, 1.0), ",", snappedf(mp.y, 1.0), ") mire_en_caja=",
         marc.x > -1e9, " dist_marcador_pistola=", snappedf(marc.distance_to(_bounds_of(pv).get_center() + (sk.global_transform.origin - sk.global_transform.origin)), 0.001))
@@ -1007,9 +1007,9 @@ func run_sightdiag() -> void:
     if pmag >= 0 and rif >= 0:
         var pm: Vector3 = sk.get_bone_global_pose(rif).affine_inverse() * sk.get_bone_global_pose(pmag).origin
         print("SIGHTDIAG Pmag_en_Rif=", pm.snapped(Vector3(0.001, 0.001, 0.001)))
-    if w.sight_marker != null and w.pistol_holder != null:
-        var a: Transform3D = sk.global_transform.affine_inverse() * (w.pistol_holder as Node3D).global_transform
-        var m: Vector3 = a * (w.sight_marker as Node3D).position
+    if w.viewmodel.sight_marker != null and w.viewmodel.pistol_holder != null:
+        var a: Transform3D = sk.global_transform.affine_inverse() * (w.viewmodel.pistol_holder as Node3D).global_transform
+        var m: Vector3 = a * (w.viewmodel.sight_marker as Node3D).position
         print("SIGHTDIAG sight_marker_en_esqueleto=", m.snapped(Vector3(0.001, 0.001, 0.001)),
             " dentro_de_caja=", caja.has_point(m))
     print("SIGHTDIAG_DONE")
@@ -1045,7 +1045,7 @@ func run_armdiag() -> void:
 ## ocupa en pantalla.
 func _print_silhouette(label: String) -> void:
     var w = _player.weapon
-    if w.arms_root == null or w.arms_skeleton == null or w.arms_mesh_visible == null:
+    if w.viewmodel.arms_root == null or w.viewmodel.arms_skeleton == null or w.viewmodel.arms_mesh_visible == null:
         return
     var cam: Camera3D = _player.camera
     var vp := get_viewport().get_visible_rect().size
@@ -1053,9 +1053,9 @@ func _print_silhouette(label: String) -> void:
     const GH := 54
     var gun_meshes: Array = []
     for m in _viewmodel_meshes(w):
-        if m != w.arms_mesh_visible:
+        if m != w.viewmodel.arms_mesh_visible:
             gun_meshes.append(m)
-    var arms := _raster_instances([w.arms_mesh_visible], cam, GW, GH)
+    var arms := _raster_instances([w.viewmodel.arms_mesh_visible], cam, GW, GH)
     var gun := _raster_instances(gun_meshes, cam, GW, GH)
     var total := float(GW * GH)
     # Franjas laterales inferiores: es donde aterrizan los hombros cuando el
@@ -1103,8 +1103,8 @@ func _raster_instances(meshes: Array, cam: Camera3D, gw: int, gh: int) -> Dictio
         # como skeleton.global * (pose * rest^-1) * v, asi que falta ese paso.
         # Las mallas RIGIDAS (la OWK) no tienen huesos y su sitio es su propio
         # transform global.
-        var skel_xf: Transform3D = _player.weapon.arms_skeleton.global_transform
-        var local: PackedVector3Array = _skinned_verts(m, _player.weapon.arms_skeleton, m)
+        var skel_xf: Transform3D = _player.weapon.viewmodel.arms_skeleton.global_transform
+        var local: PackedVector3Array = _skinned_verts(m, _player.weapon.viewmodel.arms_skeleton, m)
         var world := PackedVector3Array()
         if local.is_empty():
             var xf: Transform3D = m.global_transform
@@ -1197,7 +1197,7 @@ func _fill_tri(mask: Array, gw: int, gh: int, vp: Vector2, pts: PackedVector2Arr
 
 func _print_arm_frame(label: String) -> void:
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     var cam: Camera3D = _player.camera
     if sk == null:
         print("ARM ", label, " sin esqueleto de brazos")
@@ -1235,11 +1235,11 @@ func _print_arm_frame(label: String) -> void:
 ## sube hacia el horizonte aunque el arma este inclinada hacia el suelo.
 func _print_bore(label: String) -> void:
     var w = _player.weapon
-    if w.muzzle == null or w.sight_marker == null:
+    if w.muzzle == null or w.viewmodel.sight_marker == null:
         return
     var cam: Camera3D = _player.camera
     var world_muzzle: Vector3 = (w.muzzle as Node3D).global_transform.origin
-    var world_sight: Vector3 = (w.sight_marker as Node3D).global_transform.origin
+    var world_sight: Vector3 = (w.viewmodel.sight_marker as Node3D).global_transform.origin
     var dir := (world_muzzle - world_sight)
     if dir.length() < 0.0001:
         return
@@ -1258,10 +1258,10 @@ func _print_bore(label: String) -> void:
 ## asoma por algun borde, que es lo que se ve como "sale el hombro".
 func _print_arm_screen_box(label: String) -> void:
     var w = _player.weapon
-    if w.arms_root == null:
+    if w.viewmodel.arms_root == null:
         return
     var cam: Camera3D = _player.camera
-    var stack: Array = [w.arms_root]
+    var stack: Array = [w.viewmodel.arms_root]
     var vp := get_viewport().get_visible_rect().size
     while not stack.is_empty():
         var n = stack.pop_back()
@@ -1300,7 +1300,7 @@ func run_recoilprobe() -> void:
         _recoil_time += w.last_delta
         var cam: Camera3D = _player.camera
         var cam_inv := cam.global_transform.affine_inverse()
-        var gun_xf: Transform3D = w.arms_skeleton.global_transform * w.arms_skeleton.get_bone_global_pose(w.slide_bone)
+        var gun_xf: Transform3D = w.viewmodel.arms_skeleton.global_transform * w.viewmodel.arms_skeleton.get_bone_global_pose(w.viewmodel.slide_bone)
         var up: Vector3 = (cam_inv.basis * gun_xf.basis.y).normalized()
         var fwd: Vector3 = (cam_inv.basis * gun_xf.basis.z).normalized()
         if fwd0 == Vector3.ZERO:
@@ -1312,7 +1312,7 @@ func run_recoilprobe() -> void:
         print("RECOIL %02d t=%5.1fms elev=%6.2f (d=%6.2f) azim=%6.2f (d=%6.2f) roll=%6.2f slide=%5.1fmm proc(wrist=%5.2f° arm=%5.2f°) cam=%5.2f°" % [
             i, _recoil_time * 1000.0, elev, elev - elev0, azim, azim - azim0,
             rad_to_deg(atan2(up.x, up.y)),
-            w.slide_pos * 1000.0, rad_to_deg(w.recoil_rot.x), rad_to_deg(w.arm_recoil_rot.x),
+            w.slide_pos * 1000.0, rad_to_deg(w.recoil.rot.x), rad_to_deg(w.recoil.arm_rot.x),
             rad_to_deg(_player.recoil_pitch)])
     Engine.time_scale = 1.0
     print("RECOILPROBE_DONE")
@@ -1335,19 +1335,19 @@ func run_firecurve() -> void:
     w.force_fire_once()
     Engine.time_scale = 0.08
     for i in range(46):
-        w.recoil_pos = Vector3.ZERO
-        w.recoil_vel = Vector3.ZERO
-        w.recoil_rot = Vector3.ZERO
-        w.recoil_rot_vel = Vector3.ZERO
-        w.arm_recoil_pos = Vector3.ZERO
-        w.arm_recoil_vel = Vector3.ZERO
-        w.arm_recoil_rot = Vector3.ZERO
-        w.arm_recoil_rot_vel = Vector3.ZERO
+        w.recoil.pos = Vector3.ZERO
+        w.recoil.vel = Vector3.ZERO
+        w.recoil.rot = Vector3.ZERO
+        w.recoil.rot_vel = Vector3.ZERO
+        w.recoil.arm_pos = Vector3.ZERO
+        w.recoil.arm_vel = Vector3.ZERO
+        w.recoil.arm_rot = Vector3.ZERO
+        w.recoil.arm_rot_vel = Vector3.ZERO
         await get_tree().process_frame
         _recoil_time += w.last_delta
         var cam: Camera3D = _player.camera
         var cam_inv := cam.global_transform.affine_inverse()
-        var gun_xf: Transform3D = w.arms_skeleton.global_transform * w.arms_skeleton.get_bone_global_pose(w.slide_bone)
+        var gun_xf: Transform3D = w.viewmodel.arms_skeleton.global_transform * w.viewmodel.arms_skeleton.get_bone_global_pose(w.viewmodel.slide_bone)
         var fwd: Vector3 = (cam_inv.basis * gun_xf.basis.z).normalized()
         if fwd0 == Vector3.ZERO:
             fwd0 = fwd
@@ -1446,7 +1446,7 @@ func _print_timeline_metrics(index: int, t: float) -> void:
     var center := get_viewport().get_visible_rect().size * 0.5
     var sight_px := cam.unproject_position(w.get_sight_world_position())
     var muzzle_px := cam.unproject_position(w.muzzle.global_position)
-    var bbox := _screen_bbox(w.gun_box, (w.pistol_holder as Node3D).global_transform, cam)
+    var bbox := _screen_bbox(w.viewmodel.gun_box, (w.viewmodel.pistol_holder as Node3D).global_transform, cam)
     print("TL %03d t=%.1f aim=%.2f mag=%.0f cham=%.0f sight=(%.0f,%.0f) dy_sight=%.0f muzzle=(%.0f,%.0f) gun_top=%.0f gun_bottom=%.0f gun_h=%.0f slide=%.3f reload=%s" % [
         index, t, w.aim_blend, w.mag, w.chamber,
         sight_px.x, sight_px.y, sight_px.y - center.y,
@@ -1518,10 +1518,10 @@ func _force_reloadable_state() -> void:
 ## Posición viva de los huesos del arma (pose actual) en espacio de recoil.
 func _print_live_bones(label: String) -> void:
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     if sk == null:
         return
-    var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
+    var recoil_inv: Transform3D = (w.viewmodel.recoil_node as Node3D).global_transform.affine_inverse()
     for bone_name in ["Slidder_919", "Magazine_924", "Weapon_Trigger_921", "Barrel_920"]:
         var bi := sk.find_bone(bone_name)
         if bi < 0:
@@ -1536,13 +1536,13 @@ func _print_live_bones(label: String) -> void:
 ## desde slide_pos, asi que esto vigila la autoridad mecanica real.
 func _print_bone_travel() -> Dictionary:
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
-    var rest: Vector3 = sk.get_bone_pose_position(w.slide_bone)
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
+    var rest: Vector3 = sk.get_bone_pose_position(w.viewmodel.slide_bone)
     w.slide_pos = w.SLIDE_TRAVEL
-    w._apply_pistol_parts()
-    var posed: Vector3 = sk.get_bone_pose_position(w.slide_bone)
+    w.viewmodel.apply_mechanics(w.slide_pos, w.SLIDE_TRAVEL, w.trigger_visual)
+    var posed: Vector3 = sk.get_bone_pose_position(w.viewmodel.slide_bone)
     w.slide_pos = 0.0
-    w._apply_pistol_parts()
+    w.viewmodel.apply_mechanics(w.slide_pos, w.SLIDE_TRAVEL, w.trigger_visual)
     var delta: Vector3 = posed - rest
     print("TRAVEL Slidder rest=", rest.snapped(Vector3(0.0001, 0.0001, 0.0001)),
         " posed=", posed.snapped(Vector3(0.0001, 0.0001, 0.0001)),
@@ -1556,7 +1556,7 @@ func _print_bone_travel() -> Dictionary:
 ## referencia de reposo: la animacion manda el gesto, la logica los cartuchos).
 func _measure_reload_mag() -> Dictionary:
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     if sk == null:
         return {}
     var mag_bone := sk.find_bone("Magazine_924")
@@ -1590,28 +1590,28 @@ func _measure_reload_mag() -> Dictionary:
 func _print_geometry(label: String) -> void:
     var cam: Camera3D = _player.camera
     var w = _player.weapon
-    if w.slide_attach == null:
+    if w.viewmodel.slide_attach == null:
         print("GEOMETRY ", label, " sin arma")
         return
-    var recoil_inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
+    var recoil_inv: Transform3D = (w.viewmodel.recoil_node as Node3D).global_transform.affine_inverse()
     # La caja de la corredera real (SLIDE_BOX, en su espacio) proyectada por el
     # global del attachment que la sigue.
-    var bbox := _screen_bbox(w.gun_box, (w.slide_attach as Node3D).global_transform, cam)
+    var bbox := _screen_bbox(w.viewmodel.gun_box, (w.viewmodel.slide_attach as Node3D).global_transform, cam)
     var sight_screen: Vector2 = cam.unproject_position(w.get_sight_world_position())
     var muzzle_screen: Vector2 = cam.unproject_position(w.muzzle.global_position)
     var sight_cam: Vector3 = cam.global_transform.affine_inverse() * w.get_sight_world_position()
     var muzzle_cam: Vector3 = cam.global_transform.affine_inverse() * w.muzzle.global_position
     var pm: Vector3 = recoil_inv * (w.muzzle as Node3D).global_position
-    var pe: Vector3 = recoil_inv * (w.ejection_port as Node3D).global_position
+    var pe: Vector3 = recoil_inv * (w.viewmodel.ejection_port as Node3D).global_position
     var ps: Vector3 = recoil_inv * w.get_sight_world_position()
-    print("MOUNT ", label, " escala_brazos=", snappedf(w.arms_scale, 0.0001),
-        " ads_offset=", w.ads_offset.snapped(Vector3(0.001, 0.001, 0.001)),
-        " ads_rot_deg=", (w.ads_rot * 180.0 / PI).snapped(Vector3(0.1, 0.1, 0.1)))
+    print("MOUNT ", label, " escala_brazos=", snappedf(w.viewmodel.arms_scale, 0.0001),
+        " ads_offset=", w.viewmodel.ads_offset.snapped(Vector3(0.001, 0.001, 0.001)),
+        " ads_rot_deg=", (w.viewmodel.ads_rot * 180.0 / PI).snapped(Vector3(0.1, 0.1, 0.1)))
     print("GUNBOX ", label,
-        " min=", w.gun_box.position.snapped(Vector3(0.0001, 0.0001, 0.0001)),
-        " size=", w.gun_box.size.snapped(Vector3(0.0001, 0.0001, 0.0001)))
-    if w.arms_skeleton != null:
-        var sk: Skeleton3D = w.arms_skeleton
+        " min=", w.viewmodel.gun_box.position.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+        " size=", w.viewmodel.gun_box.size.snapped(Vector3(0.0001, 0.0001, 0.0001)))
+    if w.viewmodel.arms_skeleton != null:
+        var sk: Skeleton3D = w.viewmodel.arms_skeleton
         for bone_name in ["Slidder_919", "Barrel_920", "Weapon_922", "Magazine_924", "DEF-hand.R_842"]:
             var bi := sk.find_bone(bone_name)
             if bi >= 0:
@@ -1807,10 +1807,10 @@ func _finish_geometrydebug(travel: Dictionary, cycle: Dictionary, mag: Dictionar
     var failures: Array[String] = []
     var viewport := get_viewport().get_visible_rect().size
     var low_res_headless := viewport.x < 256.0 or viewport.y < 256.0
-    if not w.pistol_ok:
+    if not w.viewmodel.pistol_ok:
         failures.append("los huesos mecanicos no quedaron utilizables")
     # Caja de la corredera real (SLIDE_BOX del asset: 29.4 x 42.4 x 176.3 mm).
-    var size: Vector3 = w.gun_box.size
+    var size: Vector3 = w.viewmodel.gun_box.size
     if absf(size.x - 0.0294) > 0.004 or absf(size.y - 0.0424) > 0.004 or absf(size.z - 0.1763) > 0.004:
         failures.append("caja del arma %s (esperado ~0.029 x 0.042 x 0.176)" % size)
     # La corredera viaja hacia atras en su espacio local (-Z): con el recorrido
@@ -1924,10 +1924,10 @@ func _slowmo_shot() -> void:
         var cam: Camera3D = _player.camera
         # Cada capa del retroceso se mide por separado: no deben ser el mismo
         # movimiento disfrazado.
-        var back: float = w.recoil_pos.z
-        var pitch := rad_to_deg(w.recoil_rot.x)
-        var arm_back: float = w.arm_recoil_pos.z
-        var arm_pitch := rad_to_deg(w.arm_recoil_rot.x)
+        var back: float = w.recoil.pos.z
+        var pitch := rad_to_deg(w.recoil.rot.x)
+        var arm_back: float = w.recoil.arm_pos.z
+        var arm_pitch := rad_to_deg(w.recoil.arm_rot.x)
         peak_back = maxf(peak_back, back)
         peak_pitch = maxf(peak_pitch, pitch)
         if w.slide_pos > 0.010:
@@ -1971,7 +1971,7 @@ func _slowmo_shot() -> void:
 ## espacio). Aproximacion honesta para el slowmo, no geometria por vertice.
 func _mag_screen_box() -> Dictionary:
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     if sk == null:
         return {}
     var mag_bone := sk.find_bone("Magazine_924")
@@ -2140,19 +2140,19 @@ const GUNDIAG_GUN_BONES := ["Slidder_919", "Barrel_920", "Weapon_922",
 func run_gundiag() -> void:
     await get_tree().create_timer(0.8).timeout
     var w = _player.weapon
-    var sk: Skeleton3D = w.arms_skeleton
-    if sk == null or w.arms_root == null:
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
+    if sk == null or w.viewmodel.arms_root == null:
         print("GUNDIAG sin esqueleto")
         get_tree().quit(1)
         return
     print("GUNDIAG huesos=", sk.get_bone_count(),
-        " anims=", w.arms_player.get_animation_list() if w.arms_player != null else [])
-    if w.arms_player != null:
-        for an in w.arms_player.get_animation_list():
-            var a: Animation = w.arms_player.get_animation(an)
+        " anims=", w.viewmodel.arms_player.get_animation_list() if w.viewmodel.arms_player != null else [])
+    if w.viewmodel.arms_player != null:
+        for an in w.viewmodel.arms_player.get_animation_list():
+            var a: Animation = w.viewmodel.arms_player.get_animation(an)
             print("GUNDIAG anim=", an, " dur=", snappedf(a.length, 0.001),
                 "s pistas=", a.get_track_count())
-        var af: Animation = w.arms_player.get_animation(w.arms_player.get_animation_list()[1])
+        var af: Animation = w.viewmodel.arms_player.get_animation(w.viewmodel.arms_player.get_animation_list()[1])
         for ti in range(af.get_track_count()):
             var tp := str(af.track_get_path(ti))
             if "lidder" in tp or "rigger" in tp or "agazine" in tp or "eapon" in tp or "arrel" in tp or "ullet" in tp:
@@ -2161,9 +2161,9 @@ func run_gundiag() -> void:
     for pose in ["hip", "ads"]:
         w.set_aim(pose == "ads")
         await _settle_pose()
-        if w.arms_player != null:
-            w.arms_player.play(w._resolve_arms_idle())
-            w.arms_player.seek(0.0, true)
+        if w.viewmodel.arms_player != null:
+            w.viewmodel.arms_player.play(w.viewmodel.resolve_idle())
+            w.viewmodel.arms_player.seek(0.0, true)
         await get_tree().process_frame
         await get_tree().process_frame
         _gundiag_bones(w, pose)
@@ -2178,7 +2178,7 @@ func run_gundiag() -> void:
 
 
 func _gun_bone(w, bone_name: String) -> int:
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     for b in range(sk.get_bone_count()):
         if sk.get_bone_name(b) == bone_name:
             return b
@@ -2187,7 +2187,7 @@ func _gun_bone(w, bone_name: String) -> int:
 
 ## Cómo está montado el conjunto bajo la cámara: escala y giro totales.
 func _gundiag_mount(w) -> void:
-    var m: Transform3D = (w.arms_mount as Node3D).transform
+    var m: Transform3D = (w.viewmodel.arms_mount as Node3D).transform
     var s := m.basis.get_scale()
     var e := m.basis.get_rotation_quaternion().get_euler()
     print("GUNDIAG montaje escala=", s.snapped(Vector3(0.0001, 0.0001, 0.0001)),
@@ -2199,7 +2199,7 @@ func _gundiag_mount(w) -> void:
 ## z=hacia atrás): aquí "corredera vertical" y "cañón al frente" se leen
 ## sin ambigüedad.
 func _gundiag_bones(w, label: String) -> void:
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     var cam: Camera3D = _player.camera
     var inv_cam := cam.global_transform.basis.inverse()
     for bn in GUNDIAG_GUN_BONES:
@@ -2221,9 +2221,9 @@ func _gundiag_bones(w, label: String) -> void:
 ## AABB de piel por familia de malla, en espacio del ESQUELETO (misma pose,
 ## misma escala, mismos transforms): la única comparación de tamaños honesta.
 func _gundiag_skin(w, label: String) -> void:
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     var fams := {"arma": [], "manos": [], "antebrazos": []}
-    var stack: Array = [w.arms_root]
+    var stack: Array = [w.viewmodel.arms_root]
     while not stack.is_empty():
         var n = stack.pop_back()
         if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
@@ -2241,7 +2241,7 @@ func _gundiag_skin(w, label: String) -> void:
     for key in ["arma", "manos", "antebrazos"]:
         var pts := PackedVector3Array()
         for m in fams[key]:
-            pts.append_array(_skinned_verts(m, sk, w.arms_root))
+            pts.append_array(_skinned_verts(m, sk, w.viewmodel.arms_root))
         # _skinned_verts devuelve en espacio del esqueleto: es el marco común.
         var box := _bounds_of(pts)
         print("GUNDIAG piel ", label, " ", key, " verts=", pts.size(),
@@ -2251,9 +2251,9 @@ func _gundiag_skin(w, label: String) -> void:
     var pa := PackedVector3Array()
     var pm := PackedVector3Array()
     for m in fams["arma"]:
-        pa.append_array(_skinned_verts(m, sk, w.arms_root))
+        pa.append_array(_skinned_verts(m, sk, w.viewmodel.arms_root))
     for m in fams["manos"]:
-        pm.append_array(_skinned_verts(m, sk, w.arms_root))
+        pm.append_array(_skinned_verts(m, sk, w.viewmodel.arms_root))
     if not pa.is_empty() and not pm.is_empty():
         var ba := _bounds_of(pa)
         var bm := _bounds_of(pm)
@@ -2265,7 +2265,7 @@ func _gundiag_skin(w, label: String) -> void:
 ## Línea de mira real (hueso corredera + puntos offline) frente al eje óptico:
 ## desvío en mm/mrad y canto de la corredera. Es lo que el ADS debe anular.
 func _gundiag_sight(w, label: String) -> void:
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     var cam: Camera3D = _player.camera
     var idx := _gun_bone(w, "Slidder_919")
     if idx < 0:
@@ -2298,14 +2298,14 @@ func _gundiag_sight(w, label: String) -> void:
 ## supera el criterio del aimtest, la pose de ADS no puede resolverse en un
 ## instante y olvidarse; hay que saberlo antes de prometer 6 mm.
 func _gundiag_idle_drift(w) -> void:
-    var sk: Skeleton3D = w.arms_skeleton
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
     var idx := _gun_bone(w, "Slidder_919")
-    if idx < 0 or w.arms_player == null:
+    if idx < 0 or w.viewmodel.arms_player == null:
         return
-    w.arms_player.play(w._resolve_arms_idle())
+    w.viewmodel.arms_player.play(w.viewmodel.resolve_idle())
     var pts: Array[Vector3] = []
     for t in [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]:
-        w.arms_player.seek(t, true)
+        w.viewmodel.arms_player.seek(t, true)
         sk.force_update_all_bone_transforms()
         pts.append(sk.global_transform * sk.get_bone_global_pose(idx).origin)
     var diam := 0.0
@@ -2319,8 +2319,8 @@ func _gundiag_idle_drift(w) -> void:
 ## Dónde está la muñeca que sostiene el arma, en espacio de recoil_node: es el
 ## punto físicamente razonable para el pivote del retroceso procedural.
 func _gundiag_wrist(w) -> void:
-    var sk: Skeleton3D = w.arms_skeleton
-    var inv: Transform3D = (w.recoil_node as Node3D).global_transform.affine_inverse()
+    var sk: Skeleton3D = w.viewmodel.arms_skeleton
+    var inv: Transform3D = (w.viewmodel.recoil_node as Node3D).global_transform.affine_inverse()
     for bn in ["DEF-hand.R_842", "hand_ik.R_871", "DEF-forearm.R_844", "Weapon_922"]:
         var idx := _gun_bone(w, bn)
         if idx < 0:

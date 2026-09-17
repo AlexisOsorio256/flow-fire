@@ -288,7 +288,7 @@ func _run_aimtest() -> void:
     var worst_mm := 0.0
     var worst_mrad := 0.0
     var idx := 0
-    for sight in [player.weapon.get_sight_world_position(), player.weapon.get_front_sight_world_position()]:
+    for sight in [player.weapon.viewmodel.get_sight_world_position(), player.weapon.viewmodel.get_front_sight_world_position()]:
         var to_sight: Vector3 = (sight - eye)
         var angle_mrad: float = acos(clampf(to_sight.normalized().dot(forward), -1.0, 1.0)) * 1000.0
         var offset_mm: float = tan(angle_mrad * 0.001) * to_sight.length() * 1000.0

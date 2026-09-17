@@ -86,8 +86,8 @@ func _ready() -> void:
 
 func _print_measurements() -> void:
     var names: Array[String] = []
-    if gun.arms_root != null:
-        var stack: Array = [gun.arms_root]
+    if gun.viewmodel.arms_root != null:
+        var stack: Array = [gun.viewmodel.arms_root]
         while not stack.is_empty():
             var n = stack.pop_back()
             if n is MeshInstance3D and (n as MeshInstance3D).visible and (n as MeshInstance3D).mesh != null:
@@ -100,4 +100,4 @@ func _print_measurements() -> void:
             for c in n.get_children():
                 stack.append(c)
     print("PREVIEW piezas: ", ", ".join(names))
-    print("PREVIEW caja=", gun.gun_box.size, " usable=", gun.pistol_ok)
+    print("PREVIEW caja=", gun.viewmodel.gun_box.size, " usable=", gun.viewmodel.pistol_ok)
