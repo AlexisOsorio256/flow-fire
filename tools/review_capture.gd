@@ -14,6 +14,7 @@ var out_dir := "/tmp/review_frames"
 var warmup := 40
 var total := 50
 var time_scale := 1.0
+var _burst_left := 0
 
 var _frame := 0
 var _t0 := 0
@@ -57,6 +58,9 @@ func _trigger() -> void:
 	match action:
 		"fire":
 			weapon.force_fire_once()
+		"burst":
+			weapon.force_fire_once()
+			_burst_left = 3
 		"reload":
 			weapon.set("mag", 10)
 			weapon.start_reload()
@@ -78,6 +82,12 @@ func _process(_delta: float) -> void:
 	if _frame == warmup:
 		_trigger()
 	if _frame >= warmup and (_frame - warmup) < total:
+		# Rafaga: 3 disparos mas separados ~90 ms de juego.
+		if action == "burst" and _burst_left > 0 and (_frame - warmup) % 3 == 0:
+			var weapon := _player_weapon()
+			if weapon != null and (_frame - warmup) > 0:
+				weapon.force_fire_once()
+				_burst_left -= 1
 		var img := get_viewport().get_texture().get_image()
 		# Etiqueta en ms DE JUEGO (con camara lenta, el reloj real miente).
 		var ms := int((Time.get_ticks_msec() - _t0) * time_scale)

@@ -234,7 +234,9 @@ func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> vo
     var body := _static_box(root, "DrywallSheet", Vector3(panel_size.x, panel_size.y, 0.06), Vector3(0.0, panel_size.y * 0.5, 0.0), drywall_mat)
     body.set_meta("surface", "drywall")
     body.set_meta("penetrable", true)
-    body.set_meta("penetration_resistance", 5.95)
+    # Una hoja (6 cm) la atraviesa una 9 mm; DOS hojas pegadas (12 cm) la
+    # detienen: v_sale = v·exp(-R·t/2) < 75 m/s exige R ≳ 26.7 /m.
+    body.set_meta("penetration_resistance", 27.0)
 
 
 func _make_drum(x: float, z: float) -> void:

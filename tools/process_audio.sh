@@ -422,6 +422,22 @@ process_mag magin 0.210 0.400 -1.5 0.05
 echo "== Disparos (cortados de la grabacion original en su ataque real) =="
 for cut in "${SHOT_CUTS[@]}"; do process_shot $cut; done
 
+echo "== Cuerpo grave bajo el blast (UNA percepcion, no dos capas) =="
+# El blast es la Glock 18c (crack); el cuerpo, el tiro limpio de una Beretta
+# 93R 9 mm a 1 m (mismo bundle, micro al frente). Se alinean por pico de
+# muestra (<1 ms: fusionan en un solo evento) con el cuerpo 4 dB bajo el pico
+# del blast: medido, el sube grave de 6,9% a 10,8% sin ensuciar el crack
+# (60%) ni el ataque (crest sube) y sin recortes. Mas cuerpo taparia el crack
+# con un segundo transitorio; aislar el grave con filtro retrasaba el cuerpo
+# y se oia tarde (probado y descartado con medicion).
+BODY_SRC="$AUDIO_DIR/source/beretta93r_body_excerpt.wav"
+BODY_WIN="$BACKUP_DIR/shot_body.win.wav"
+ffmpeg -v error -y -ss 0.040 -t 0.220 -i "$BODY_SRC" -ac 1 -ar 44100 -c:a pcm_s16le "$BODY_WIN"
+for n in 1 2 3 4 5; do
+    python3 "$(dirname "$0")/fuse_shot_body.py" "$AUDIO_DIR/shot_$n.wav" "$BODY_WIN" -4.0 "$AUDIO_DIR/shot_$n.fused.wav"
+    mv "$AUDIO_DIR/shot_$n.fused.wav" "$AUDIO_DIR/shot_$n.wav"
+done
+
 echo "== Impactos =="
 for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 transient; done
 

@@ -6,6 +6,7 @@ suficientes FPS y reune los frames en UNA sola PNG para mirarla de una vez.
 
     python3 tools/review_contact_sheet.py fire
     python3 tools/review_contact_sheet.py reload | reload_empty | inspect | idle
+    python3 tools/review_contact_sheet.py burst   (rafaga de 4, apila retroceso)
 
 Sale en captures/review/<accion>_sheet.png. Los frames temporales se borran.
 Para fuego usa burst denso (~60 FPS durante ~0.8 s); para acciones lentas,
@@ -30,6 +31,7 @@ OUT_DIR = os.path.join(REPO, "captures", "review")
 PRESETS = {
     # Burst denso: ~30 frames en ~0.8 s de juego (pico ~50 ms, vuelta ~250 ms).
     "fire": (30, 0.08, lambda fs: fs, 6),
+    "burst": (40, 0.08, lambda fs: fs, 8),
     "reload": (46, 0.25, lambda fs: fs[::3], 7),
     "reload_empty": (46, 0.25, lambda fs: fs[::3], 7),
     "inspect": (46, 0.30, lambda fs: fs[::3], 6),
@@ -49,7 +51,7 @@ def parse_ms(name):
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else "fire"
     if action not in PRESETS:
-        print("accion desconocida:", action, "(fire|reload|reload_empty|inspect|idle)")
+        print("accion desconocida:", action, "(fire|burst|reload|reload_empty|inspect|idle)")
         return 1
     total, ts, select, cols = PRESETS[action]
     tmp = tempfile.mkdtemp(prefix="review_frames_")
