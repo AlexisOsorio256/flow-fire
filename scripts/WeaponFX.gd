@@ -12,11 +12,12 @@ extends Node3D
 ## todo el ciclo, incluido su retroceso.
 ##
 ## Dos volúmenes, dos trabajos:
-##   FlashCore  ~20 mm emisivos sobre el eje del cañón. Es el fogonazo: cae a
+##   FlashCore  ~10 mm emisivos sobre el eje del cañón. Es el fogonazo: cae a
 ##              plomo en pocos milisegundos y es lo único que brilla (glow).
-##   FlashGas   lengua irregular de hasta ~70 mm con blend aditivo. Sus colores
-##              por vértice SON su opacidad: la cola casi negra no aporta nada,
-##              así que la silueta se apaga sola y no hay borde de polígono.
+##   FlashGas   nube irregular de ~18 mm alrededor de la boca con blend aditivo.
+##              Sus colores por vértice SON su opacidad: la cola casi negra no
+##              aporta nada, así que la silueta se apaga sola y no hay borde de
+##              polígono.
 ##
 ## Los quads con shader custom se eliminaron tras 20+ capturas A/B: en el
 ## renderer Mobile sobre Mesa/Intel su rasterización no era determinista (runs
@@ -49,6 +50,11 @@ func build() -> void:
 	muzzle_light.light_energy = 0.0
 	muzzle_light.omni_range = 1.6
 	muzzle_light.shadow_enabled = false
+	# Ilumina el viewmodel, que es de quien es la luz: ni siquiera el fogonazo
+	# puede alumbrar el mundo, o al disparar pegado a una pared el pulso se ve
+	# como una linterna encendida. El fogonazo se ve por sus MALLAS, que están
+	# en la capa del mundo delante de la boca; la luz solo define el arma.
+	muzzle_light.light_cull_mask = GlockViewmodel.VIEWMODEL_LAYER_BIT
 	add_child(muzzle_light)
 
 	_gas_mat = StandardMaterial3D.new()
@@ -131,9 +137,8 @@ func pop_flash() -> void:
 	var roll := randf_range(-0.32, 0.32)
 	flash_mesh.rotation = Vector3(0.0, 0.0, roll)
 	core_mesh.rotation = Vector3(0.0, 0.0, roll)
-	# Mantiene el máximo físico de ocho centímetros incluso en la variante más
-	# grande; la aleatoriedad es de gesto, no un fogonazo que cambia de escala a
-	# cada tiro.
+	# La aleatoriedad es de gesto, no un fogonazo que cambia de escala a cada
+	# tiro: la nube siempre muere a la misma distancia de la boca.
 	var s := randf_range(0.90, 1.05)
 	flash_mesh.scale = Vector3(s, randf_range(0.90, 1.08), randf_range(0.90, 1.00))
 	core_mesh.scale = Vector3.ONE * randf_range(0.85, 1.15)
@@ -143,23 +148,26 @@ func pop_flash() -> void:
 	core_mesh.visible = true
 
 
-## Gas: lengua irregular sobre el eje del cañón. Las ocho puntas van a radios y
-## alturas DESIGUALES a propósito (ni hexágono ni estrella), y el brillo cae del
-## EJE hacia fuera: raíz caliente en la boca, anillo interior ámbar y anillo
-## exterior casi negro. Con blend aditivo eso significa que el contorno del
-## poliedro no dibuja nada, que es lo que convierte la silueta en humo/gas y no
-## en una pieza recortada. Un cono con el borde brillante (lo anterior) seguía
-## leyéndose como flecha naranja.
+## Gas: nube corta e irregular pegada a la boca. Los ocho vértices de cada anillo
+## van a radios y alturas DESIGUALES a propósito (ni hexágono ni estrella) y el
+## brillo cae del EJE hacia fuera: raíz caliente en la boca, anillo interior
+## ámbar y anillo exterior casi negro. Con blend aditivo eso significa que el
+## contorno del poliedro no dibuja nada, que es lo que convierte la silueta en
+## gas y no en una pieza recortada.
+##
+## No hay punta ni aguja: el volumen muere a 18 mm delante de la boca, así que
+## ninguna silueta puede leerse como un objeto alargado (estrella, flecha, cono
+## o lápiz). Lo que se ve es resplandor alrededor de la boca.
 func _build_gas_mesh() -> ArrayMesh:
 	var inner := PackedVector3Array([
-		Vector3(-0.0085, 0.0105, 0.014),
-		Vector3(-0.0060, 0.0025, 0.018),
-		Vector3(0.0012, 0.0002, 0.015),
-		Vector3(0.0080, 0.0040, 0.019),
-		Vector3(0.0072, 0.0148, 0.014),
-		Vector3(0.0014, 0.0225, 0.020),
-		Vector3(-0.0055, 0.0195, 0.016),
-		Vector3(-0.0092, 0.0135, 0.017),
+		Vector3(-0.0060, 0.0072, 0.004),
+		Vector3(-0.0042, 0.0020, 0.008),
+		Vector3(0.0008, 0.0004, 0.003),
+		Vector3(0.0056, 0.0030, 0.009),
+		Vector3(0.0050, 0.0102, 0.004),
+		Vector3(0.0010, 0.0155, 0.010),
+		Vector3(-0.0038, 0.0134, 0.005),
+		Vector3(-0.0064, 0.0094, 0.007),
 	])
 	var inner_colors := PackedColorArray([
 		Color(0.50, 0.17, 0.030), Color(0.34, 0.10, 0.016),
@@ -168,14 +176,14 @@ func _build_gas_mesh() -> ArrayMesh:
 		Color(0.24, 0.07, 0.010), Color(0.46, 0.15, 0.026),
 	])
 	var outer := PackedVector3Array([
-		Vector3(-0.0190, 0.0100, 0.024),
-		Vector3(-0.0130, -0.0040, 0.030),
-		Vector3(0.0026, -0.0105, 0.025),
-		Vector3(0.0180, -0.0015, 0.032),
-		Vector3(0.0160, 0.0175, 0.023),
-		Vector3(0.0030, 0.0290, 0.031),
-		Vector3(-0.0120, 0.0245, 0.025),
-		Vector3(-0.0200, 0.0150, 0.028),
+		Vector3(-0.0130, 0.0070, 0.010),
+		Vector3(-0.0088, -0.0028, 0.016),
+		Vector3(0.0018, -0.0072, 0.011),
+		Vector3(0.0122, -0.0010, 0.017),
+		Vector3(0.0108, 0.0120, 0.009),
+		Vector3(0.0020, 0.0198, 0.016),
+		Vector3(-0.0082, 0.0168, 0.010),
+		Vector3(-0.0136, 0.0102, 0.014),
 	])
 	var outer_colors := PackedColorArray([
 		Color(0.14, 0.035, 0.006), Color(0.06, 0.013, 0.002),
@@ -184,19 +192,16 @@ func _build_gas_mesh() -> ArrayMesh:
 		Color(0.03, 0.006, 0.001), Color(0.12, 0.030, 0.005),
 	])
 	var n := inner.size()
-	var tip_index := 1 + 2 * n
 	var verts := PackedVector3Array()
 	var colors := PackedColorArray()
-	# La boca es el origen: raíz caliente y pegada al cañón, y la cola a 50 mm
-	# locales (~70 mm ya escalado con arms_scale) que muere por debajo del umbral de glow.
+	# La boca es el origen: raíz caliente pegada al cañón, anillo interior a
+	# media llama y exterior ya casi negro (el contorno no dibuja).
 	verts.append(Vector3(0.0, 0.0085, 0.000))
 	colors.append(Color(0.95, 0.42, 0.10))
 	verts.append_array(inner)
 	colors.append_array(inner_colors)
 	verts.append_array(outer)
 	colors.append_array(outer_colors)
-	verts.append(Vector3(0.003, 0.0140, 0.050))
-	colors.append(Color(0.05, 0.012, 0.002))
 	var idx := PackedInt32Array()
 	for i in range(n):
 		var a := 1 + i
@@ -212,9 +217,6 @@ func _build_gas_mesh() -> ArrayMesh:
 		idx.append(a)
 		idx.append(d)
 		idx.append(c)
-		idx.append(tip_index)
-		idx.append(c)
-		idx.append(d)
 	return _mesh_from(verts, colors, idx)
 
 
@@ -223,17 +225,17 @@ func _build_gas_mesh() -> ArrayMesh:
 func _build_core_mesh() -> ArrayMesh:
 	var verts := PackedVector3Array()
 	var idx := PackedInt32Array()
-	# Nace EN la boca y crece hacia delante (nada hacia atrás: lo que queda
-	# dentro de la corredera no se ve). Cuatro caras irregulares bastan: lo que
-	# se ve es el resplandor, no su forma.
+	# Nace EN la boca y crece hacia delante, poco más de la mitad que el gas: lo
+	# que queda dentro de la corredera no se ve y una punta larga se lee como
+	# geometría. Cuatro caras irregulares bastan: lo que se ve es el resplandor.
 	var root := Vector3(0.0, 0.008, -0.001)
 	var ring := PackedVector3Array([
-		Vector3(-0.0085, 0.0075, 0.006),
-		Vector3(-0.0030, 0.0010, 0.004),
-		Vector3(0.0080, 0.0028, 0.008),
-		Vector3(0.0040, 0.0155, 0.005),
+		Vector3(-0.0062, 0.0060, 0.004),
+		Vector3(-0.0022, 0.0012, 0.002),
+		Vector3(0.0058, 0.0022, 0.005),
+		Vector3(0.0030, 0.0122, 0.003),
 	])
-	var tip := Vector3(0.001, 0.0110, 0.022)
+	var tip := Vector3(0.0008, 0.0088, 0.011)
 	verts.append(root)
 	for p in ring:
 		verts.append(p)

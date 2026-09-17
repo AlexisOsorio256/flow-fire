@@ -102,11 +102,25 @@ var trigger_rest := Vector3.ZERO
 var slide_attach: BoneAttachment3D  # la mira/boca van con la corredera real
 
 
+## Capa de render EXCLUSIVA del viewmodel. El rig de brazos se dibuja en ella y
+## las luces del viewmodel solo la iluminan a ella (`light_cull_mask`): la
+## pistola se lee igual de bien, pero el mundo no recibe NINGUNA luz constante
+## del jugador. Antes estas dos luces eran OmniLight3D normales, así que al
+## acercarse a una pared la bañaban y el personaje parecía llevar una linterna.
+## La cámara las ve porque su `cull_mask` es el de defecto (capas 1..20).
+const VIEWMODEL_LAYER := 13
+const VIEWMODEL_LAYER_BIT := 1 << (VIEWMODEL_LAYER - 1)
+
 ## Luces del viewmodel: el arma vive en un interior oscuro y con su albedo real
 ## (polímero ~0.08) se leía como una mancha negra: medido, 5/255 de luminancia
 ## media sobre los píxeles del arma. Dos luces cortas y sin sombras (clave
-## arriba-izquierda y relleno desde la cámara) la definen sin tocar la escena.
-## Cuelgan de pose_root para que acompañen al arma en recarga y apuntado.
+## arriba-izquierda y relleno desde la cámara) la definen. Cuelgan de pose_root
+## para que acompañen al arma en recarga y apuntado.
+##
+## AÍSLAN su influencia, no se apagan: `light_cull_mask` las limita a
+## VIEWMODEL_LAYER, así que mundo y viewmodel viven en dos regímenes de luz
+## separados (el fogonazo es la única luz del arma que toca el mundo, y solo
+## durante el disparo).
 func _build_viewmodel_light() -> void:
 	viewmodel_light = OmniLight3D.new()
 	viewmodel_light.name = "ViewmodelKey"
@@ -115,6 +129,7 @@ func _build_viewmodel_light() -> void:
 	viewmodel_light.omni_range = 1.5
 	viewmodel_light.omni_attenuation = 1.35
 	viewmodel_light.shadow_enabled = false
+	viewmodel_light.light_cull_mask = VIEWMODEL_LAYER_BIT
 	# Detrás y arriba: la cara que ve la cámara al apuntar (el dorso de la
 	# corredera y la mira) tiene que estar iluminada, o el punto de mira se lee
 	# negro y no se puede apuntar con él.
@@ -128,8 +143,24 @@ func _build_viewmodel_light() -> void:
 	fill.omni_range = 1.3
 	fill.omni_attenuation = 1.2
 	fill.shadow_enabled = false
+	fill.light_cull_mask = VIEWMODEL_LAYER_BIT
 	fill.position = Vector3(0.28, -0.08, 0.46)
 	pose_root.add_child(fill)
+
+
+## El viewmodel entero (mallas y huesos) vive en VIEWMODEL_LAYER: las luces del
+## viewmodel iluminan esa capa y las del mundo (sun y lámparas, cull_mask por
+## defecto = todas las capas) NO, así que el arma no recibe la luz de la sala ni
+## devuelve ninguna. Un VisualInstance3D sin `layers` explícitos (el caso del GLB
+## importado) usa el valor por defecto, así que hay que escribirlo a mano.
+func _apply_viewmodel_layer(root_node: Node) -> void:
+	var stack: Array = [root_node]
+	while not stack.is_empty():
+		var n = stack.pop_back()
+		if n is VisualInstance3D:
+			(n as VisualInstance3D).layers = VIEWMODEL_LAYER_BIT
+		for c in n.get_children():
+			stack.append(c)
 
 
 func _build_viewmodel() -> void:
@@ -345,6 +376,9 @@ func _install_arms() -> void:
 	recoil_node.add_child(holder)
 	holder.add_child(arms_root)
 	arms_mount = holder
+	# Aísla el rig en su capa: ni las luces del mundo lo alcanzan ni las suyas
+	# tocan el mundo (ver _apply_viewmodel_layer).
+	_apply_viewmodel_layer(arms_root)
 
 	# TODAS las mallas se dibujan: este rig trae brazos Y arma ya montada y
 	# animada. Solo se apaga el skybox de presentacion (AABB 2x2) y los
@@ -510,6 +544,8 @@ func _mount_slide_attachments() -> void:
 	front_marker = _attach_point(att, "SightFront", SIGHT_FRONT_SLIDE)
 	muzzle = _attach_point(att, "Muzzle", MUZZLE_SLIDE)
 	ejection_port = _attach_point(att, "EjectionPort", EJECT_SLIDE)
+	# Los ayudantes de la boca (fogonazo y su luz) también son viewmodel.
+	_apply_viewmodel_layer(att)
 	print("ARMS_MIRA corredera_real lista")
 
 
@@ -534,8 +570,14 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 ##    corredera ya habia ido y vuelto, y por eso el casquillo parecia tener mas
 ##    movimiento que la pistola. El arma visible pasa a moverse solo por la
 ##    fisica (ver _update_recoil), con la animacion aportando el gesto humano
-##    (manos, munecas, brazos). Las pistas del cargador y del canon se quedan:
-##    son parte de ese gesto y no hay autoridad que las contradiga.
+##    (manos, munecas, brazos).
+##  - Magazine_924 SOLO en Fire: el cargador NO es un gesto del disparo, es masa
+##    asentada en el brocal. Su pista de Fire mueve la base del cargador respecto
+##    al arma (medido, hasta ~11 mm en Z y ~7 mm en Y en 167 ms) y se veia el
+##    cargador saliendo solo al disparar. En Fire el arma y el cargador van
+##    rigidos: el recoil los mueve juntos. Las pistas de cargador de Reload y
+##    Reload_Empty SI se quedan, porque ahi el gesto de sacarlo y meterlo es real
+##    y no hay ninguna autoridad que lo contradiga.
 func _strip_mechanical_tracks() -> void:
 	var clips := ["Fire", "Reload", "Reload_Empty"]
 	for short_name in clips:
@@ -550,6 +592,7 @@ func _strip_mechanical_tracks() -> void:
 		var targets := [SLIDE_BONE, TRIGGER_BONE]
 		if short_name == "Fire":
 			targets.append(WEAPON_BONE)
+			targets.append(MAG_BONE)
 		var removed := 0
 		for ti in range(anim.get_track_count() - 1, -1, -1):
 			var tp := str(anim.track_get_path(ti))
