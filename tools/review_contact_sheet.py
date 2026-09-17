@@ -34,6 +34,7 @@ PRESETS = {
     "burst": (40, 0.08, lambda fs: fs, 8),
     "pen": (30, 0.25, lambda fs: fs, 6),
     "ads": (30, 0.25, lambda fs: fs, 6),
+    "crate": (30, 0.25, lambda fs: fs, 6),
     "reload": (46, 0.25, lambda fs: fs[::3], 7),
     "reload_empty": (46, 0.25, lambda fs: fs[::3], 7),
     "inspect": (46, 0.30, lambda fs: fs[::3], 6),
@@ -45,7 +46,7 @@ CELL_W = 320
 CROP = (230, 250, 730, 540)
 # Pen entra por los ojos del tirador: cuadro completo para leer el blanco.
 # Ads mira por las miras: centro del encuadre.
-CROPS = {"pen": (0, 0, 960, 540), "ads": (330, 150, 630, 390)}
+CROPS = {"pen": (0, 0, 960, 540), "ads": (330, 150, 630, 390), "crate": (0, 0, 960, 540)}
 
 
 def parse_ms(name):
@@ -56,7 +57,7 @@ def parse_ms(name):
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else "fire"
     if action not in PRESETS:
-        print("accion desconocida:", action, "(fire|burst|pen|ads|reload|reload_empty|inspect|idle)")
+        print("accion desconocida:", action, "(fire|burst|pen|ads|crate|reload|reload_empty|inspect|idle)")
         return 1
     total, ts, select, cols = PRESETS[action]
     tmp = tempfile.mkdtemp(prefix="review_frames_")

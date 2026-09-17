@@ -73,6 +73,12 @@ func _trigger() -> void:
 			weapon.set_aim(true)
 			_burst_left = 2
 			_burst_gap = 8
+		"crate":
+			# Delante de las cajas: dos tiros para ver empuje, vuelco y
+			# agujeros viajando con la caja.
+			weapon.force_fire_once()
+			_burst_left = 1
+			_burst_gap = 14
 		"reload":
 			weapon.set("mag", 10)
 			weapon.start_reload()
@@ -84,6 +90,10 @@ func _trigger() -> void:
 			weapon.set("slide_pos", 0.039)
 			weapon.start_reload()
 		"inspect":
+			# Con la corredera atras: verifica que la logica la sujeta durante
+			# el gesto (el clip manda solo con la corredera en casa).
+			weapon.set("slide_locked", true)
+			weapon.set("slide_pos", 0.039)
 			weapon.inspect_weapon()
 		"idle":
 			pass
@@ -91,12 +101,21 @@ func _trigger() -> void:
 
 func _process(_delta: float) -> void:
 	_frame += 1
-	if _frame == warmup - 4 and action == "pen":
+	if _frame == warmup - 4 and (action == "pen" or action == "crate"):
 		var player := _game.get_node_or_null("Player")
 		if player != null:
-			# Delante del blanco de papel x=0: blanco sobre fondo, oscila al
-			# recibir, y el papel se atraviesa (entrada + salida + paso).
-			(player as Node3D).global_position = Vector3(0.0, 0.05, -16.5)
+			if action == "pen":
+				# Delante del blanco de papel x=0: blanco sobre fondo, oscila al
+				# recibir, y el papel se atraviesa (entrada + salida + paso).
+				(player as Node3D).global_position = Vector3(0.0, 0.05, -16.5)
+			else:
+				# Ligeramente a un lado de las cajas: se ven junto al arma y
+				# el tiro les da de lleno (centradas quedarian tras el arma).
+				(player as Node3D).global_position = Vector3(4.7, 0.05, -7.0)
+				# Pica la vista: a 2.5 m el tiro de pie pasa por encima de
+				# las cajas si no se apunta hacia abajo, como haria un tirador.
+				player.set("pitch", -0.12)
+				player.set("pitch_target", -0.12)
 			player.set("yaw", 0.0)
 			player.set("yaw_target", 0.0)
 	if _frame == warmup:
@@ -105,7 +124,7 @@ func _process(_delta: float) -> void:
 		# Rafaga: disparos extra separados _burst_gap frames (~90 ms de juego).
 		# En ads el primero cae con el blend ya asentado (el del trigger no
 		# existe: (frame-warmup)>0 lo excluye en el instante cero).
-		if (action == "burst" or action == "pen" or action == "ads") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
+		if (action == "burst" or action == "pen" or action == "ads" or action == "crate") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
 			var weapon := _player_weapon()
 			if weapon != null and (_frame - warmup) > 0:
 				weapon.force_fire_once()

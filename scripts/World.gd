@@ -139,8 +139,12 @@ func _build_props() -> void:
     _make_barrier(3.0, -24.5, deg_to_rad(-18.0))
 
     _make_plank_wall(-2.5, -12.0, deg_to_rad(15.0))
+    # Torre de 4: el tiro de pie (~1.37 m a 2.5 m) da al cajon alto, que
+    # vuelca espectacular; el sencillo queda para tiro picado.
     _make_crate(Vector3(4.8, 0.0, -9.5), 0.35)
     _make_crate(Vector3(4.8, 0.35, -9.5), 0.35)
+    _make_crate(Vector3(4.8, 0.70, -9.5), 0.35)
+    _make_crate(Vector3(4.8, 1.05, -9.5), 0.35)
     _make_crate(Vector3(-7.2, 0.0, -20.5), 0.35)
 
     _make_drum(6.6, -11.0)
@@ -274,11 +278,27 @@ func _make_plank_wall(x: float, z: float, rot_y: float) -> void:
 
 ## Caja de madera (35 cm): la 9 mm la pasa saliendo lenta (~110 m/s, al limite
 ## del modelo); dos cajas pegadas ya la detienen. Entrenamiento de libro.
+## Son cuerpos rigidos (ver Crate.gd): el impacto las empuja y voltea, y los
+## agujeros viajan con ellas.
 func _make_crate(base: Vector3, size: float) -> void:
-    var box := _static_box(self, "WoodCrate", Vector3(size, size, size), base + Vector3(0, size * 0.5, 0), wood_mat)
-    box.set_meta("surface", "wood")
-    box.set_meta("penetrable", true)
-    box.set_meta("penetration_resistance", 7.0)
+    var box := Crate.new()
+    box.name = "WoodCrate"
+    box.mass = 6.0
+    box.position = base + Vector3(0, size * 0.5, 0)
+    add_child(box)
+
+    var mesh_instance := MeshInstance3D.new()
+    var mesh := BoxMesh.new()
+    mesh.size = Vector3(size, size, size)
+    mesh.material = wood_mat
+    mesh_instance.mesh = mesh
+    box.add_child(mesh_instance)
+
+    var shape := CollisionShape3D.new()
+    var box_shape := BoxShape3D.new()
+    box_shape.size = Vector3(size, size, size)
+    shape.shape = box_shape
+    box.add_child(shape)
 
 
 func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> void:
