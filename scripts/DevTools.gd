@@ -537,8 +537,8 @@ func _process(_delta: float) -> void:
     if not _visual_pin_active:
         return
     var w = _player.weapon
-    if w.muzzle_light != null:
-        w.muzzle_light.light_energy = float(_visual_pin["flash_energy"])
+    if w.fx != null and w.fx.muzzle_light != null:
+        w.fx.muzzle_light.light_energy = float(_visual_pin["flash_energy"])
     _hud.post_mat.set_shader_parameter("time", float(_visual_pin["post_time"]))
     _hud.post_mat.set_shader_parameter("aim_amount", float(_visual_pin["aim_amount"]))
     _hud.post_mat.set_shader_parameter("exposure_pulse", float(_visual_pin["shot_pulse"]))
@@ -645,7 +645,7 @@ func _visual_reset_weapon() -> void:
     w.arm_recoil_vel = Vector3.ZERO
     w.arm_recoil_rot = Vector3.ZERO
     w.arm_recoil_rot_vel = Vector3.ZERO
-    w.muzzle_timer = 0.0
+    w.fx.timer = 0.0
     w.shot_pulse = 0.0
     w.reloading = false
     w.reload_elapsed = 0.0
@@ -682,11 +682,10 @@ func _visual_apply_state(state: String) -> void:
             # abierto el puerto. Es el frame que ve el jugador al disparar.
             w.aim_blend = 1.0
             _player.camera.fov = VISUAL_FOV_ADS
-            w.muzzle_timer = 0.04
             w.shot_pulse = 1.0
             w.slide_pos = 0.010
             w.trigger_visual = 1.0
-            w._pop_flash()
+            w.fx.pop_flash()
             _visual_park_animation("Shoot", 0.05)
         "casing":
             # Vaina en vuelo, puerto ya abierto: es el frame en el que el
@@ -776,7 +775,7 @@ func _visual_pin_post(state: String) -> void:
     elif state == "casing":
         t += 0.04
     _visual_pin = {
-        "flash_energy": VISUAL_FLASH_ENERGY if w.muzzle_timer > 0.0 else 0.0,
+        "flash_energy": VISUAL_FLASH_ENERGY if w.fx.timer > 0.0 else 0.0,
         "post_time": t,
         "aim_amount": w.aim_blend,
         "shot_pulse": w.shot_pulse,
