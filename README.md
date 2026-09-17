@@ -106,8 +106,11 @@ Se alinea la línea de mira con el eje de cámara y se corrige el balanceo usand
 la orientación del hueso `Slidder`. `--aimtest` mide **5,3 mm / 9,79 mrad** de
 desvío máximo: está en verde frente al criterio de **6 mm**; no es error cero.
 
-**Pendiente de revisión perceptual:** tamaño/encuadre del fogonazo con captura
-lateral, peso de los contactos de recarga y brillo del casquillo.
+**Revisión perceptual cerrada:** la llama facetada cuelga de la boca de la
+corredera (no del marco), llega a un máximo de 80 mm ya escalada y se verificó
+en lateral y ADS; el asentamiento del cargador añade al mismo evento `magin` un
+rebote de muñeca calibrado a ~1 mm / 0,2°; el casquillo se conservó tras la
+revisión (14--17 px durante `--slowmo`).
 
 Otra limitación medida: en este archivo la pistola mide 0,074 de ancho y las
 manos 0,908 (**12×**), así que no existe un factor de escala uniforme que las

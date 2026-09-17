@@ -686,7 +686,6 @@ func _visual_apply_state(state: String) -> void:
             w.shot_pulse = 1.0
             w.slide_pos = 0.010
             w.trigger_visual = 1.0
-            w._anchor_flash()
             w._pop_flash()
             _visual_park_animation("Shoot", 0.05)
         "casing":
@@ -785,7 +784,6 @@ func _visual_pin_post(state: String) -> void:
     _visual_pin_active = true
     _process(0.0)
     if state == "shot" or state == "casing":
-        w._anchor_flash()
         await get_tree().process_frame
     if w.sight_marker != null and w.muzzle != null:
         var camv: Camera3D = _player.camera

@@ -439,7 +439,6 @@ func _fire() -> void:
 	arm_recoil_rot_vel += Vector3(0.8 + randf() * 0.16, 0.0, (randf() - 0.5) * 0.16)
 
 	muzzle_timer = 0.04
-	_anchor_flash()
 	_pop_flash()
 
 	GameAudio.play_shot()
@@ -585,6 +584,13 @@ func _update_reload(delta: float) -> void:
 
 	if not reload_mag_seated and reload_elapsed >= RELOAD_MAG_IN_T:
 		_seat_reload_mag()
+		# El cargador deja de ser una cifra abstracta en el mismo instante en
+		# que su base golpea el brocal: el gesto del rig ya lo lleva hasta ahí,
+		# y este rebote breve transmite la reacción de esa masa a la muñeca.
+		# Es deliberadamente una fracción del retroceso de un disparo (~1 mm /
+		# ~0,2° de pico, no otro latigazo) y reutiliza el resorte físico existente.
+		recoil_vel += Vector3(0.0, -0.012, 0.040)
+		recoil_rot_vel.x -= 0.14
 		GameAudio.play_2d("magin", 0.0, randf_range(0.95, 1.05))
 
 	# Corredera: en una recarga en vacío se libera a mano en el mismo momento en
@@ -803,7 +809,7 @@ func _build_flash() -> void:
 	# Los quads con SHADER CUSTOM se eliminaron tras 20+ capturas A/B: en el
 	# renderer Mobile sobre Mesa/Intel de esta maquina su rasterizacion no era
 	# determinista (runs identicos pintan o no pintan, sin errores de
-	# compilacion). Aqui no hay shader ni quad: son DOS octaedros cruzados en una
+	# compilacion). Aqui no hay shader ni quad: es una llama facetada en una
 	# sola ArrayMesh (12 triangulos, 1 sola llamada de dibujo) con un
 	# StandardMaterial3D emisivo sin sombreado. Eso es rasterizacion de malla
 	# normal, la misma que el resto del arma, asi que no depende del fragmento
@@ -814,8 +820,12 @@ func _build_flash() -> void:
 	# irregular y breve, no una estrella amarilla fija.
 	flash_anchor = Node3D.new()
 	flash_anchor.name = "FlashAnchor"
-	pistol_holder.add_child(flash_anchor)
-	_anchor_flash()
+	# La boca ya cuelga del BoneAttachment de la corredera. El fogonazo debe
+	# colgar de ella, no copiar sólo su posición al GunFrame: antes conservaba
+	# el eje +Z del marco (hacia el jugador), de modo que sus 10 cm crecían
+	# DENTRO del arma y quedaban tapados en ADS. Como hijo de Muzzle hereda
+	# posición Y orientación de la corredera durante todo el ciclo.
+	muzzle.add_child(flash_anchor)
 	muzzle_light = OmniLight3D.new()
 	# La luz de flash sólo aclara el volumen cercano. Una fuente cálida grande
 	# convertía la tela negra en cuero dorado durante el disparo.
@@ -830,69 +840,92 @@ func _build_flash() -> void:
 	flash_mesh.mesh = _build_flash_mesh()
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.86, 0.52)
-	mat.albedo_color = Color(1.0, 0.86, 0.52)
-	# Por encima del umbral de glow (1.25) para que florezca un instante, pero
-	# muy lejos de un blanco plano que se lea como sprite.
+	# Un núcleo HDR amarillo pálido se comprimía a blanco bajo ACES y parecía
+	# una lámina junto al alza. El rojo sigue por encima del umbral de glow, pero
+	# verde/azul bajos conservan una llama ámbar legible.
+	mat.albedo_color = Color.WHITE
+	# El color por vértice concentra amarillo en el cuerpo y apaga la punta:
+	# conserva volumen desde la lateral sin otra malla ni textura.
+	mat.vertex_color_use_as_albedo = true
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.72, 0.30)
-	mat.emission_energy_multiplier = 2.4
+	mat.emission = Color(1.0, 0.20, 0.01)
+	mat.emission_energy_multiplier = 0.65
 	mat.disable_receive_shadows = true
+	# Son volúmenes muy cortos vistos desde cualquier lado durante el retroceso;
+	# no se puede perder la mitad por el orden de las caras del ArrayMesh.
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	flash_mesh.material_override = mat
 	flash_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	flash_mesh.visible = false
 	flash_anchor.add_child(flash_mesh)
 
 
-## Dos octaedros alargados en cruz dentro de una sola malla. Uno vertical corto
-## (el nucleo de la boca) y otro mas largo que sale hacia delante por el eje del
-## cañon. La irregularidad entre disparos la pone el roll aleatorio de _fire().
+## Llama hexagonal dentro de una sola malla. Un anillo irregular, desplazado
+## sobre el cañón, se estrecha hasta la punta; así la lateral lee una lengua y
+## no un rombo plano. La irregularidad entre disparos la pone _pop_flash().
 func _build_flash_mesh() -> ArrayMesh:
 	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
 	var idx := PackedInt32Array()
-	_add_octahedron(verts, idx, Vector3(0.013, 0.017, 0.032), Vector3(0, 0, 0.028))
-	_add_octahedron(verts, idx, Vector3(0.006, 0.006, 0.048), Vector3(0.004, 0.0, 0.050))
+	# La boca es el origen. El anillo ancho queda a 18 mm y ligeramente arriba;
+	# la punta llega a 55 mm locales (máximo 80 mm ya escalado), con 28 mm de
+	# alto. La mitad baja cae tras la corredera: en ADS se ve la llama, no una
+	# tapa que oculte la mira.
+	var root := Vector3(0.0, 0.010, 0.002)
+	var ring := PackedVector3Array([
+		Vector3(-0.011, 0.010, 0.018),
+		Vector3(-0.006, 0.003, 0.018),
+		Vector3(0.007, 0.004, 0.018),
+		Vector3(0.012, 0.014, 0.018),
+		Vector3(0.004, 0.028, 0.018),
+		Vector3(-0.008, 0.024, 0.018),
+	])
+	var ring_colors := PackedColorArray([
+		Color(1.0, 0.34, 0.035), Color(0.78, 0.12, 0.008),
+		Color(0.92, 0.20, 0.012), Color(1.0, 0.46, 0.055),
+		Color(1.0, 0.78, 0.20), Color(1.0, 0.58, 0.09),
+	])
+	var tip := Vector3(0.001, 0.016, 0.055)
+	verts.append(root)
+	colors.append(Color(1.0, 0.55, 0.10))
+	for i in range(ring.size()):
+		verts.append(ring[i])
+		colors.append(ring_colors[i])
+	verts.append(tip)
+	colors.append(Color(0.62, 0.07, 0.004))
+	# Cono hacia la boca y cono hacia la punta: seis caras de cada uno.
+	for i in range(ring.size()):
+		var a: int = 1 + i
+		var b: int = 1 + ((i + 1) % ring.size())
+		idx.append(0)
+		idx.append(b)
+		idx.append(a)
+		idx.append(7)
+		idx.append(a)
+		idx.append(b)
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_INDEX] = idx
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
 
 
-## Octaedro de 6 vertices en `center` con semiejes `half`. 8 caras.
-func _add_octahedron(verts: PackedVector3Array, idx: PackedInt32Array, half: Vector3, center: Vector3) -> void:
-	var base := verts.size()
-	verts.append(center + Vector3(0.0, half.y, 0.0))
-	verts.append(center + Vector3(half.x, 0.0, 0.0))
-	verts.append(center + Vector3(0.0, 0.0, half.z))
-	verts.append(center + Vector3(-half.x, 0.0, 0.0))
-	verts.append(center + Vector3(0.0, 0.0, -half.z))
-	verts.append(center + Vector3(0.0, -half.y, 0.0))
-	for tri in [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1], [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]]:
-		idx.append(base + tri[0])
-		idx.append(base + tri[1])
-		idx.append(base + tri[2])
-
-
-## Muestra el fogonazo con roll y tamaño irregulares. Se llama en cada disparo.
+## Muestra el fogonazo con tamaño y una desviación leve irregulares. La llama
+## nace por encima del cañón; un roll de 360° la metía de nuevo detrás de la
+## corredera en algunos disparos de ADS.
 func _pop_flash() -> void:
 	if flash_mesh == null:
 		return
-	flash_mesh.rotation = Vector3(0.0, 0.0, randf_range(0.0, TAU))
-	var s := randf_range(0.82, 1.25)
-	flash_mesh.scale = Vector3(s, randf_range(0.85, 1.15), randf_range(0.75, 1.1))
+	flash_mesh.rotation = Vector3(0.0, 0.0, randf_range(-0.32, 0.32))
+	# Mantiene el máximo físico de ocho centímetros incluso en la variante más
+	# grande; la aleatoriedad es de gesto, no un fogonazo que cambia de escala a
+	# cada tiro.
+	var s := randf_range(0.90, 1.05)
+	flash_mesh.scale = Vector3(s, randf_range(0.90, 1.08), randf_range(0.90, 1.00))
 	flash_mesh.visible = true
-
-
-## Lleva el ancla de la luz a la boca real (en espacio del marco). Se llama al
-## montar y en cada disparo: la luz acompana a la corredera sin codigo por frame.
-func _anchor_flash() -> void:
-	if flash_anchor == null or muzzle == null or pistol_holder == null:
-		return
-	var inv: Transform3D = (pistol_holder as Node3D).global_transform.affine_inverse()
-	flash_anchor.position = inv * (muzzle as Node3D).global_position
 
 
 func _solve_ads() -> void:
@@ -1198,7 +1231,7 @@ func _mount_slide_attachments() -> void:
 	muzzle = _attach_point(att, "Muzzle", MUZZLE_SLIDE)
 	ejection_port = _attach_point(att, "EjectionPort", EJECT_SLIDE)
 	_build_flash()
-	print("ARMS_MIRA corredera_real lista, flash_en_marco")
+	print("ARMS_MIRA corredera_real lista, flash_en_boca")
 
 
 func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3D:
