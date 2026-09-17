@@ -44,15 +44,17 @@ rendimiento → calidad audiovisual → features.
 | Arranque y escena | `scripts/Main.gd` |
 | Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga | `scripts/Glock.gd` |
 | Viewmodel: rig, huesos, ADS, pose, animación, materiales | `scripts/GlockViewmodel.gd` |
-| Retroceso: el arma dentro de la mano, y el brazo | `scripts/GlockRecoil.gd` |
+| Retroceso: el arma dentro de la mano | `scripts/GlockRecoil.gd` |
 | Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
 | Audio | `scripts/GameAudio.gd` |
 | Balística | `scripts/Ballistics.gd` |
 | Impactos | `scripts/ImpactFX.gd` |
+| Vaina expulsada | `scripts/Shell.gd` |
 | Jugador y cámara | `scripts/Player.gd` |
 | HUD y post bodycam | `scripts/HUD.gd` + `shaders/bodycam.gdshader` |
 | Mundo y rango | `scripts/World.gd` |
 | Blancos | `scripts/Target.gd` |
+| Cajas de madera reactivas | `scripts/Crate.gd` |
 
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
