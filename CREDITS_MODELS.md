@@ -18,6 +18,20 @@ usa como base), así que la sustitución no cambia el aspecto del arma.
 
 ---
 
+## Desert Eagle — ELIZION  (SEGUNDA ARMA)
+
+- Archivo: `assets/models/desert_eagle.glb`.
+- Fuente: Sketchfab — https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95
+- Autor: **ELIZION**
+- Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
+  Atribución: *"Desert Eagle" by ELIZION, licensed under CC-BY 4.0, via
+  Sketchfab*.
+- 13 279 triángulos, PBR con texturas de hasta 4096². Llega con cada pieza en su
+  propio nodo (armazón, corredera, cañón, gatillo, cargador, miras, aguja).
+  `tools/make_weapon_parts.py` la agrupa en las piezas que entiende el juego.
+
+---
+
 ## 9mm Pistol | First Person Animations — 1Matzh  (BRAZOS)
 
 - Archivo: `assets/models/full9mm_2k.glb` (38,26 MB).
