@@ -9,6 +9,9 @@ const MAX_DISTANCE := 520.0
 const COLLISION_MASK := 1
 const PENETRATION_EPSILON := 0.0015
 const PENETRATION_SEARCH_DISTANCE := 4.0
+# Velocidad mínima para EMERGER con carácter de proyectil y no de gravilla.
+# CALIBRADO: por debajo, la bala se queda dentro del material.
+const EXIT_SPEED_MIN := 75.0
 
 var bullets: Array = []
 var tracer_pool: Array[MeshInstance3D] = []
@@ -155,12 +158,20 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             b.active = false
             return
 
-        ImpactFX.spawn_impact(exit_point, exit_normal, collider, surface, true)
         # La resistencia es material; el espesor recorrido viene de la
         # geometría. La pérdida, por tanto, cambia de forma continua si el
-        # panel se rota o el tiro entra oblicuo.
+        # panel se rota o el tiro entra oblicuo. La decisión de perforar o
+        # quedarse dentro se toma ANTES de dibujar la salida: un proyectil que
+        # no conserva energía al salir no tiene salida visible.
         var retained_energy := exp(-penetration_resistance * actual_thickness)
-        b.vel *= clampf(sqrt(retained_energy), 0.05, 0.98)
+        var exit_speed := speed * sqrt(retained_energy)
+        if exit_speed < EXIT_SPEED_MIN:
+            # Se queda dentro: no hay cara de salida que representar.
+            b.active = false
+            return
+
+        ImpactFX.spawn_impact(exit_point, exit_normal, collider, surface, true)
+        b.vel *= sqrt(retained_energy)
         # Dejamos sólo una separación numérica de la cara de salida: la próxima
         # colisión debe ser con la geometría que haya detrás, no con el mismo
         # panel por redondeo del raycast.
@@ -168,7 +179,7 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         b.distance += actual_thickness + PENETRATION_EPSILON
         b.penetrations += 1
         penetration_events += 1
-        if b.penetrations > 4 or b.vel.length() < 75.0:
+        if b.penetrations > 4:
             b.active = false
         return
 
