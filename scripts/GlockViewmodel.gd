@@ -573,24 +573,26 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 ##  - Slidder_919 y Weapon_Trigger_921 en Fire, Reload y Reload_Empty: sin esto
 ##    habria dos correderas, la simulada (slide_pos, 59 ms) y la animada
 ##    (33.6 mm en 250 ms).
-##  - Weapon_922 SOLO en Fire (rotacion y traslacion): medido en el asset,
-##    la animacion del autor sube el arma 0.24 grados en los primeros 40 ms y
-##    luego la levanta en rampa casi lineal hasta 14 grados a 180 ms. Eso es un
-##    gesto dibujado, no un impulso: el arma se quedaba clavada justo cuando la
-##    corredera ya habia ido y vuelto, y por eso el casquillo parecia tener mas
-##    movimiento que la pistola. El arma visible pasa a moverse solo por la
-##    fisica (ver _update_recoil), con la animacion aportando el gesto humano
-##    (manos, munecas, brazos).
+##  - POSICION de Weapon_922 en Fire: el clip Fire del autor hunde el hueso del
+##    arma ~235 mm en el primer frame y lo devuelve al final. Como la animacion
+##    es la dueña de la posicion neutra del arma en la mano (es la pose con la
+##    que el asset se ve montado), lo que se hace no es borrar la pista sino
+##    CLONAR en ella la posicion de Idle: el arma se queda donde el tirador la
+##    tiene y no se separa de la mano al disparar. Borrarla del todo dejaba el
+##    hueso en su reposo, que NO es esa pose (el reposo del arma y el del
+##    cargador no estan montados entre si: se veia el cargador en la mano y el
+##    arma delante).
+##  - ROTACION de Weapon_922 SOLO en Fire: el autor la levanta en rampa hasta
+##    ~14 grados a 180 ms, un gesto dibujado y no un impulso.
 ##  - Magazine_924 SOLO en Fire: el cargador NO es un gesto del disparo, es masa
-##    asentada en el brocal. Su pista de Fire mueve la base del cargador respecto
-##    al arma (medido, hasta ~11 mm en Z y ~7 mm en Y en 167 ms) y se veia el
-##    cargador saliendo solo al disparar. En Fire el arma y el cargador van
-##    rigidos: el recoil los mueve juntos. Las pistas de cargador de Reload y
-##    Reload_Empty SI se quedan, porque ahi el gesto de sacarlo y meterlo es real
-##    y no hay ninguna autoridad que lo contradiga.
+##    asentada en el brocal. En Fire el arma y el cargador van rigidos: el
+##    retroceso los mueve juntos. Las pistas de cargador de Reload y Reload_Empty
+##    SI se quedan, porque ahi el gesto de sacarlo y meterlo es real.
 func _strip_mechanical_tracks() -> void:
-	var clips := ["Fire", "Reload", "Reload_Empty"]
-	for short_name in clips:
+	var idle_weapon: Variant = _sample_bone_position("Idle", WEAPON_BONE)
+	if idle_weapon != null:
+		print("ARMS_ARMA_POSE_NEUTRA ", idle_weapon)
+	for short_name in arms_player.get_animation_list():
 		var resolved := ""
 		for candidate in arms_player.get_animation_list():
 			if candidate == short_name or candidate.ends_with("|" + short_name):
@@ -599,19 +601,52 @@ func _strip_mechanical_tracks() -> void:
 		if resolved == "":
 			continue
 		var anim: Animation = arms_player.get_animation(resolved)
-		var targets := [SLIDE_BONE, TRIGGER_BONE]
-		if short_name == "Fire":
-			targets.append(WEAPON_BONE)
-			targets.append(MAG_BONE)
 		var removed := 0
 		for ti in range(anim.get_track_count() - 1, -1, -1):
 			var tp := str(anim.track_get_path(ti))
-			for b in targets:
-				if tp.contains(":" + b):
-					anim.remove_track(ti)
-					removed += 1
-					break
-		print("ARMS_PISTA ", resolved, " mecanicas_eliminadas=", removed)
+			var ttype: int = anim.track_get_type(ti)
+			var is_weapon_pos: bool = ttype == Animation.TYPE_POSITION_3D and tp.contains(":" + WEAPON_BONE)
+			if short_name == "Fire" and is_weapon_pos and idle_weapon != null:
+				# Clona la posicion neutra de Idle en toda la pista de Fire.
+				for k in range(anim.track_get_key_count(ti)):
+					anim.track_set_key_value(ti, k, idle_weapon)
+				removed += 1
+				continue
+			if _track_is_mechanical(tp, ttype, short_name):
+				anim.remove_track(ti)
+				removed += 1
+		print("ARMS_PISTA ", resolved, " pistas_tratadas=", removed)
+
+
+## Valor de la posicion de un hueso en un instante de un clip, para poder
+## clonarlo o consultarlo sin duplicar la animacion.
+func _sample_bone_position(short_name: String, bone: String) -> Variant:
+	var resolved := ""
+	for candidate in arms_player.get_animation_list():
+		if candidate == short_name or candidate.ends_with("|" + short_name):
+			resolved = candidate
+			break
+	if resolved == "":
+		return null
+	arms_player.play(resolved, -1.0, 1.0)
+	arms_player.seek(0.0, true)
+	arms_skeleton.force_update_all_bone_transforms()
+	var idx := _exact_bone(bone)
+	if idx < 0:
+		return null
+	return arms_skeleton.get_bone_pose_position(idx)
+
+
+## Decide si una pista la manda la logica en vez de la animacion del autor.
+func _track_is_mechanical(path: String, type: int, clip: String) -> bool:
+	if path.contains(":" + WEAPON_BONE):
+		# La rotacion del arma solo en Fire; la posicion la clona Fire aparte.
+		return type == Animation.TYPE_ROTATION_3D and clip == "Fire"
+	if clip == "Fire" and path.contains(":" + MAG_BONE):
+		return true
+	if clip in ["Fire", "Reload", "Reload_Empty"]:
+		return path.contains(":" + SLIDE_BONE) or path.contains(":" + TRIGGER_BONE)
+	return false
 
 
 ## Pivote del retroceso procedural: punto del agarre que sostiene el arma (35%
