@@ -79,6 +79,11 @@ func _trigger() -> void:
 			weapon.force_fire_once()
 			_burst_left = 1
 			_burst_gap = 14
+		"steel":
+			# Delante del acero: chispa + luz + clang + oscilacion del plato.
+			weapon.force_fire_once()
+			_burst_left = 1
+			_burst_gap = 14
 		"reload":
 			weapon.set("mag", 10)
 			weapon.start_reload()
@@ -101,13 +106,15 @@ func _trigger() -> void:
 
 func _process(_delta: float) -> void:
 	_frame += 1
-	if _frame == warmup - 4 and (action == "pen" or action == "crate"):
+	if _frame == warmup - 4 and (action == "pen" or action == "crate" or action == "steel"):
 		var player := _game.get_node_or_null("Player")
 		if player != null:
 			if action == "pen":
 				# Delante del blanco de papel x=0: blanco sobre fondo, oscila al
 				# recibir, y el papel se atraviesa (entrada + salida + paso).
 				(player as Node3D).global_position = Vector3(0.0, 0.05, -16.5)
+			elif action == "steel":
+				(player as Node3D).global_position = Vector3(0.0, 0.05, -24.0)
 			else:
 				# Ligeramente a un lado de las cajas: se ven junto al arma y
 				# el tiro les da de lleno (centradas quedarian tras el arma).
@@ -124,7 +131,7 @@ func _process(_delta: float) -> void:
 		# Rafaga: disparos extra separados _burst_gap frames (~90 ms de juego).
 		# En ads el primero cae con el blend ya asentado (el del trigger no
 		# existe: (frame-warmup)>0 lo excluye en el instante cero).
-		if (action == "burst" or action == "pen" or action == "ads" or action == "crate") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
+		if (action == "burst" or action == "pen" or action == "ads" or action == "crate" or action == "steel") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
 			var weapon := _player_weapon()
 			if weapon != null and (_frame - warmup) > 0:
 				weapon.force_fire_once()
