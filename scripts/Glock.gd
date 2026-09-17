@@ -6,13 +6,26 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## AUTORIDAD MECANICA del arma: el estado fisico de la pistola.
 ##
 ## Aqui viven municion, recamara, gatillo, cadencia, corredera, recarga y los
-## eventos fisicos (disparo, extraccion, asiento del cargador). Nada mas.
+## eventos fisicos (disparo, extraccion, asiento del cargador, agarre del
+## cargador). Nada mas.
 ##
 ## La presentacion esta fuera y NO tiene copia de este estado:
-##   scripts/GlockViewmodel.gd  rig, huesos, ADS, pose, materiales, animacion
-##   scripts/GlockRecoil.gd     resortes de retroceso y su transform
+##   scripts/GlockViewmodel.gd  rig, brazos, animacion, pose, sockets
+##   scripts/GlockWeapon.gd     las PIEZAS del arma (corredera, gatillo, cargador)
+##   scripts/GlockRecoil.gd     retroceso y peso
 ##   scripts/WeaponFX.gd        fogonazo, luz de boca y humo
 ## Glock los compone y les PASA el estado ya decidido; ellos lo representan.
+##
+## EL ARMA NO ESTA EN EL ESQUELETO. Es un arbol de piezas (GlockWeapon), asi que
+## mover la corredera o el cargador es escribir un transform, no una pose de
+## hueso.
+##
+## EL CARGADOR no usa tiempos escritos a mano. `_update_reload` mide, frame a
+## frame, la distancia entre la MANO IZQUIERDA y el BROCAL, y dispara el agarre
+## y la entrega en el instante de minimo local de esa distancia. Si el clip
+## cambia, los eventos siguen cayendo en el gesto. Los valores de abajo son solo
+## una red de seguridad.
+
 const MAG_SIZE := 17
 const SLIDE_TRAVEL := 0.039
 const SLIDE_K := 4000.0
@@ -21,37 +34,19 @@ const SLIDE_IMPULSE := 6.50
 const SLIDE_RESTITUTION := 0.25
 const SLIDE_EJECT_AT := 0.030
 
-# Tiempos vistos en la grabacion del usuario. El magout anterior (0.10 s)
-# sonaba mientras el cargador seguia dentro; el contacto visible empieza cerca
-# de medio segundo. El asiento ya coincidia razonablemente y se conserva.
-const RELOAD_MAG_OUT_T := 0.48
-const RELOAD_TACTICAL_MAG_IN_T := 2.25
-const RELOAD_EMPTY_MAG_IN_T := 3.36
-const RELOAD_SLIDE_T := 2.87
+## Red de seguridad de la recarga, en segundos, para clips inesperados.
+const RELOAD_TOTAL := 3.20
 const RELOAD_EMPTY_TOTAL := 4.00
-const RELOAD_TACTICAL_TOTAL := 3.20
-const RELOAD_POSE_START := 0.34
-const RELOAD_POSE_RISE := 0.52
-const RELOAD_POSE_FALL := 0.42
-
-# Correccion del staging del clip tactico. El asset deja Magazine_924 flotando
-# aproximadamente un segundo. Se usa LA MANO IZQUIERDA DEL MISMO RIG: antes de
-# reproducir el clip se muestrea una pose donde ya sostiene el cargador y se
-# guarda el transform mano->cargador. Durante el hueco se mezcla hacia esa
-# relacion rigida; antes del asiento se devuelve suavemente a la pista original.
-const RELOAD_MAG_PICKUP_SAMPLE_T := 2.02
-const RELOAD_MAG_CARRY_START := 1.05
-const RELOAD_MAG_CARRY_FULL := 1.38
-const RELOAD_MAG_RETURN_START := 2.02
-const RELOAD_MAG_RETURN_END := 2.24
-
-# Inspect (clip ~5.2 s). En el video el foley existia en codigo, pero quedaba
-# perceptualmente enterrado.
+const RELOAD_SLIDE_T := 2.87
+const RELOAD_MAG_OUT_T := 0.70
+const RELOAD_MAG_IN_T := 2.25
+const RELOAD_EMPTY_MAG_IN_T := 3.36
+## Instantes del clip Inspect.
+const INSPECT_TOTAL := 5.30
 const INSPECT_GRAB_T := 0.90
 const INSPECT_SHIFT_T := 2.25
 const INSPECT_SLIDE_GRAB_T := 3.15
 const INSPECT_SLIDE_HOME_T := 4.12
-const INSPECT_TOTAL := 5.30
 
 # --- Estado mecanico -------------------------------------------------------
 var camera: Camera3D
@@ -82,14 +77,7 @@ var reload_total := 0.0
 var reload_empty := false
 var reload_slide_released := false
 var reload_mag_seated := false
-var mag_sound_out := false
 var reload_pose_blend := 0.0
-
-# Estado de la correccion mano<->cargador. No es gameplay: solo una relacion
-# espacial de presentacion para reparar un tramo defectuoso del asset.
-var _reload_left_hand_bone := -1
-var _reload_mag_hand_offset := Transform3D.IDENTITY
-var _reload_mag_carry_ready := false
 
 var inspecting := false
 var inspect_elapsed := 0.0
@@ -109,6 +97,14 @@ var player_velocity := Vector3.ZERO
 var _last_local_move := Vector2.ZERO
 
 var shot_pulse := 0.0
+
+# --- Cargador: eventos medidos, no cronometrados ---------------------------
+var _mag_grab_done := false
+var _mag_handoff_done := false
+var _mag_out_sound := false
+var _mag_in_sound := false
+var _dist_prev := 1e9
+var _dist_rising := 0
 
 
 func _ready() -> void:
@@ -150,12 +146,11 @@ func _process(delta: float) -> void:
 	recoil.update(delta)
 	viewmodel.set_pose_inputs(aim_blend, sprint_blend, player_speed, look_delta, _last_local_move, reload_pose_blend)
 	viewmodel.update(delta)
-	viewmodel.apply_mechanics(slide_pos, SLIDE_TRAVEL, trigger_visual, not slide_locked and slide_pos < 0.02)
-	# AnimationPlayer vive dentro del rig y puede escribir sus huesos despues del
-	# proceso del padre. Aplicar el carry diferido garantiza que la correccion se
-	# compone SOBRE la pose animada del frame, no pelea contra ella.
-	if reloading and not reload_empty and _reload_mag_carry_ready:
-		call_deferred("_apply_reload_mag_carry")
+	# El arma dibuja el estado ya decidido: una sola direccion, sin correcciones
+	# posteriores sobre el esqueleto ni sobre los huesos de nadie.
+	if viewmodel.weapon != null:
+		viewmodel.weapon.set_slide(slide_pos / maxf(SLIDE_TRAVEL, 0.0001))
+		viewmodel.weapon.set_trigger(trigger_visual)
 
 	shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
 	if fx != null:
@@ -198,106 +193,21 @@ func start_reload() -> bool:
 	inspecting = false
 	reload_elapsed = 0.0
 	reload_empty = chamber <= 0
-	reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TACTICAL_TOTAL
+	reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TOTAL
 	reload_slide_released = false
 	reload_mag_seated = false
-	mag_sound_out = false
 	reload_pose_blend = 0.0
+	_mag_grab_done = false
+	_mag_handoff_done = false
+	_mag_out_sound = false
+	_mag_in_sound = false
+	_dist_prev = 1e9
+	_dist_rising = 0
 	aim = false
 	trigger_held = false
-
-	_reload_mag_carry_ready = false
-	if not reload_empty:
-		_prepare_reload_mag_carry()
 	viewmodel.play_reload(reload_empty)
 	_emit_ammo()
 	return true
-
-
-## Busca la mano izquierda sin depender del sufijo numerico del importador.
-## El rig conocido usa nombres Blender tipo DEF-hand.R_842; se favorece DEF + L.
-func _find_left_hand_bone() -> int:
-	if viewmodel == null or viewmodel.arms_skeleton == null:
-		return -1
-	var sk: Skeleton3D = viewmodel.arms_skeleton
-	var best := -1
-	var best_score := -1
-	for i in range(sk.get_bone_count()):
-		var name := sk.get_bone_name(i).to_lower()
-		if not name.contains("hand"):
-			continue
-		var left := name.contains(".l") or name.contains("_l") or name.contains("-l") or name.contains("left")
-		if not left:
-			continue
-		var score := 1
-		if name.contains("def"):
-			score += 4
-		if name.begins_with("def-hand"):
-			score += 3
-		if score > best_score:
-			best = i
-			best_score = score
-	return best
-
-
-## Muestra el propio clip en una pose donde la mano ya agarro el cargador y
-## obtiene la relacion mano->mag. Inmediatamente despues start_reload reproduce
-## el clip desde cero, asi que esta medicion nunca aparece en pantalla.
-func _prepare_reload_mag_carry() -> void:
-	if viewmodel == null or viewmodel.arms_player == null or viewmodel.arms_skeleton == null:
-		return
-	if viewmodel.mag_bone < 0:
-		return
-	_reload_left_hand_bone = _find_left_hand_bone()
-	if _reload_left_hand_bone < 0:
-		return
-	var clip := viewmodel._resolve_clip("Reload")
-	if clip == "":
-		return
-	var player: AnimationPlayer = viewmodel.arms_player
-	var sk: Skeleton3D = viewmodel.arms_skeleton
-	player.play(clip)
-	player.seek(RELOAD_MAG_PICKUP_SAMPLE_T, true)
-	sk.force_update_all_bone_transforms()
-	var hand_global: Transform3D = sk.get_bone_global_pose(_reload_left_hand_bone)
-	var mag_global: Transform3D = sk.get_bone_global_pose(viewmodel.mag_bone)
-	_reload_mag_hand_offset = hand_global.affine_inverse() * mag_global
-	_reload_mag_carry_ready = true
-
-
-## Re-coreografia SOLO el hueco defectuoso de Reload. La pose original del
-## cargador se conserva en los extremos; en medio se mezcla hacia la mano con
-## la relacion medida del propio clip. No se inventa un offset manual.
-func _apply_reload_mag_carry() -> void:
-	if not reloading or reload_empty or not _reload_mag_carry_ready:
-		return
-	if reload_elapsed < RELOAD_MAG_CARRY_START or reload_elapsed > RELOAD_MAG_RETURN_END:
-		return
-	if viewmodel == null or viewmodel.arms_skeleton == null or viewmodel.mag_bone < 0:
-		return
-	var sk: Skeleton3D = viewmodel.arms_skeleton
-	if _reload_left_hand_bone < 0 or _reload_left_hand_bone >= sk.get_bone_count():
-		return
-
-	sk.force_update_all_bone_transforms()
-	var hand_global: Transform3D = sk.get_bone_global_pose(_reload_left_hand_bone)
-	var desired_global: Transform3D = hand_global * _reload_mag_hand_offset
-	var parent := sk.get_bone_parent(viewmodel.mag_bone)
-	var desired_local := desired_global
-	if parent >= 0:
-		desired_local = sk.get_bone_global_pose(parent).affine_inverse() * desired_global
-
-	var acquire := clampf((reload_elapsed - RELOAD_MAG_CARRY_START) / maxf(RELOAD_MAG_CARRY_FULL - RELOAD_MAG_CARRY_START, 0.001), 0.0, 1.0)
-	var release := clampf((reload_elapsed - RELOAD_MAG_RETURN_START) / maxf(RELOAD_MAG_RETURN_END - RELOAD_MAG_RETURN_START, 0.001), 0.0, 1.0)
-	var weight := _smooth(acquire) * (1.0 - _smooth(release))
-	if weight <= 0.0001:
-		return
-
-	var current_pos := sk.get_bone_pose_position(viewmodel.mag_bone)
-	var current_rot := sk.get_bone_pose_rotation(viewmodel.mag_bone)
-	var desired_rot := desired_local.basis.get_rotation_quaternion().normalized()
-	sk.set_bone_pose_position(viewmodel.mag_bone, current_pos.lerp(desired_local.origin, weight))
-	sk.set_bone_pose_rotation(viewmodel.mag_bone, current_rot.slerp(desired_rot, weight))
 
 
 func _can_fire() -> bool:
@@ -402,19 +312,47 @@ func _emit_slide_rear_event() -> void:
 	GameAudio.play_2d("slide_rear", 0.0, randf_range(0.98, 1.06))
 
 
+## RECARGA guiada por el GESTO, no por el reloj.
+##
+## Cada frame se mide la distancia MANO IZQUIERDA <-> BROCOL en el espacio del
+## arma. El agarre del cargador se dispara cuando esa distancia deja de bajar
+## (la mano llego y empieza a llevarselo) y la entrega cuando vuelve a bajar
+## (la mano regresa al brocal). Asi el sonido y el movimiento del cargador
+## caen siempre sobre lo que se ve, aunque el clip cambie de velocidad.
 func _update_reload(delta: float) -> void:
 	if not reloading:
 		return
 	reload_elapsed += delta
-	if not mag_sound_out and reload_elapsed >= RELOAD_MAG_OUT_T:
-		mag_sound_out = true
+	var dist := _distancia_mano_brocal()
+	if dist < _dist_prev:
+		_dist_prev = dist
+		_dist_rising = 0
+	else:
+		_dist_rising += 1
+
+	# Agarre: la mano toca el cargador y empieza a bajarlo.
+	if not _mag_grab_done and _dist_rising >= 2:
+		_mag_grab_done = true
+		_mag_out_sound = true
+		viewmodel.magazine_to_hand()
 		GameAudio.play_2d("magout", 1.0, randf_range(0.96, 1.03))
 
-	var mag_in_t: float = RELOAD_EMPTY_MAG_IN_T if reload_empty else RELOAD_TACTICAL_MAG_IN_T
-	if not reload_mag_seated and reload_elapsed >= mag_in_t:
+	# Entrega: la mano vuelve al brocal. Si el clic no llego por un clip raro, se
+	# fuerza al final (red de seguridad, no cronometro).
+	var entrega_forzada := reload_elapsed >= _mag_in_t() - 0.35
+	if not _mag_handoff_done and (dist < _dist_prev - 0.02 or entrega_forzada):
+		_mag_handoff_done = true
+		viewmodel.magazine_to_weapon()
 		_seat_reload_mag()
 		recoil.kick_mag_seat()
+		_mag_in_sound = true
 		GameAudio.play_2d("magin", 1.0, randf_range(0.96, 1.03))
+
+	# Red de seguridad: sin gesto detectable, se mantiene el ritmo nominal.
+	if not _mag_grab_done and reload_elapsed >= RELOAD_MAG_OUT_T:
+		_mag_grab_done = true
+		viewmodel.magazine_to_hand()
+		GameAudio.play_2d("magout", 1.0, randf_range(0.96, 1.03))
 
 	if reload_empty and not reload_slide_released and reload_elapsed >= RELOAD_SLIDE_T:
 		reload_slide_released = true
@@ -424,11 +362,28 @@ func _update_reload(delta: float) -> void:
 		slide_battery_emitted = false
 		GameAudio.play_2d("slide_hand", 0.0, randf_range(0.98, 1.04))
 
-	var up_t := clampf((reload_elapsed - RELOAD_POSE_START) / RELOAD_POSE_RISE, 0.0, 1.0)
-	var down_t := clampf((reload_elapsed - (mag_in_t + 0.06)) / RELOAD_POSE_FALL, 0.0, 1.0)
+	var mag_in_t := _mag_in_t()
+	var up_t := clampf((reload_elapsed - 0.34) / 0.52, 0.0, 1.0)
+	var down_t := clampf((reload_elapsed - (mag_in_t + 0.06)) / 0.42, 0.0, 1.0)
 	reload_pose_blend = _smooth(up_t) * (1.0 - _smooth(down_t))
 	if reload_elapsed >= reload_total:
 		_finish_reload()
+
+
+func _mag_in_t() -> float:
+	return RELOAD_EMPTY_MAG_IN_T if reload_empty else RELOAD_MAG_IN_T
+
+
+## Distancia entre la mano izquierda y el brocal, medida en el frame real.
+func _distancia_mano_brocal() -> float:
+	var sk := viewmodel.arms_skeleton
+	var hand := viewmodel.hand_bone_index()
+	if sk == null or hand < 0 or viewmodel.weapon == null:
+		return 1e9
+	sk.force_update_all_bone_transforms()
+	var mano := sk.global_transform * sk.get_bone_global_pose(hand).origin
+	var brocal := viewmodel.weapon.global_position
+	return mano.distance_to(brocal)
 
 
 func inspect_weapon() -> void:
@@ -482,7 +437,8 @@ func _finish_reload() -> void:
 		chamber = 1
 	reloading = false
 	reload_pose_blend = 0.0
-	_reload_mag_carry_ready = false
+	# El cargador vuelve al arma pase lo que pase, y la mano suelta.
+	viewmodel.magazine_to_weapon()
 	viewmodel.blend_to_idle(0.14)
 	_emit_ammo()
 
