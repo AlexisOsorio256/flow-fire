@@ -88,13 +88,16 @@ mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
 Invariantes objetivas: `tools/check_weapon.gd` (orientación y montaje),
 `tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
 `tools/check_weapon_parts.py` (piezas, tamaño real y puntos mecánicos). Lo
-visual se comprueba con capturas del Godot del usuario, no headless.
+visual se comprueba abriendo Godot directamente en la pantalla del usuario
+(`:0`, X11) y tomando capturas ahí. Prohibido headless, display virtual y
+GPU virtual: no concuerdan con lo que ve el usuario.
 
 ## Workflow IA + usuario
 
-- **La IA abre el juego, toma capturas y juzga.** Si algo se ve mal, la
-  IA ejecuta el juego en Godot, saca sus propias capturas y juzga sobre ellas.
-  Nunca pide al usuario imágenes de lo que puede ver sola.
+- **La IA abre el juego en tu pantalla, toma capturas y juzga.** Si algo
+  se ve mal, la IA ejecuta Godot en `:0`, saca sus propias capturas de esa
+  pantalla y juzga sobre ellas. Nunca pide al usuario imágenes de lo que
+  puede ver sola. Prohibido verificar en headless o en GPU/display virtual.
 - **Ciclo:** cambio pequeño → la IA lo verifica en el juego con capturas →
   commit/push → el usuario valida en su Godot → feedback → corregir.
 - **Honestidad antes que avance.** Si algo atrasa el proyecto, la IA lo dice y
