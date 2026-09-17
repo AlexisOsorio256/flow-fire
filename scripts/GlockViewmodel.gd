@@ -542,25 +542,29 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 
 
 ## Aplica el OWNERSHIP del rig (ver cabecera) a los tres clips que la logica
-## controla, quitando de cada uno las pistas que no le pertenecen. Explicito a
-## proposito: al leerlo se ve que manda cada capa.
+## controla: borra de cada uno las pistas que no le pertenecen y clona en Fire
+## la pose neutra del arma. Explicito a proposito: al leerlo se ve que manda
+## cada capa.
 func _strip_mechanical_tracks() -> void:
-	var idle_weapon: Variant = _sample_bone_position("Idle", WEAPON_BONE)
+	var idle_weapon := _sample_bone_pose("Idle", WEAPON_BONE)
 
 	# FIRE: la animacion manda en el humano; la logica en corredera y gatillo;
-	# GlockRecoil en la ROTACION del arma; el cargador va rigido con el arma.
-	# La POSICION del arma NO se borra: se clona la de Idle, porque el clip Fire
-	# la hunde y el reposo no es la pose montada (se veria el arma delante y el
-	# cargador en la mano).
+	# GlockRecoil en el retroceso; el cargador va rigido con el arma.
+	# La POSE NEUTRA del arma (posicion Y rotacion) se CLONA de Idle, no se
+	# borra: el clip Fire la hunde y ademas el autor le dibuja un gesto. Borrar
+	# la rotacion dejaba el hueso en su REST (recto), asi que el arma pasaba del
+	# canto de Idle (~15 grados) a recta al disparar y volvia: un giro visible
+	# en cada tiro. Clonando Idle el arma se queda como la sostiene el tirador y
+	# el retroceso procedural se suma encima.
 	var fire := _resolve_clip("Fire")
 	if fire != "":
-		if idle_weapon != null:
-			_set_bone_position(fire, WEAPON_BONE, idle_weapon)
-		_remove_bone_rotation(fire, WEAPON_BONE)
+		if not idle_weapon.is_empty():
+			_set_bone_position(fire, WEAPON_BONE, idle_weapon["position"])
+			_set_bone_rotation(fire, WEAPON_BONE, idle_weapon["rotation"])
 		_remove_bone_tracks(fire, MAG_BONE)
 		_remove_bone_tracks(fire, SLIDE_BONE)
 		_remove_bone_tracks(fire, TRIGGER_BONE)
-		print("ARMS_PISTA ", fire, " neutralizada")
+		print("ARMS_PISTA ", fire, " neutralizada (pose de Idle clonada)")
 
 	# RELOAD / RELOAD_EMPTY: el gesto de sacar y meter el cargador, y la posicion
 	# del arma, son de la animacion. La logica solo manda en corredera y gatillo.
@@ -589,14 +593,6 @@ func _remove_bone_tracks(resolved: String, bone: String) -> void:
 			anim.remove_track(ti)
 
 
-## Borra solo la ROTACION de un hueso: su posicion la fija la logica por otra via.
-func _remove_bone_rotation(resolved: String, bone: String) -> void:
-	var anim: Animation = arms_player.get_animation(resolved)
-	for ti in range(anim.get_track_count() - 1, -1, -1):
-		if anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D and str(anim.track_get_path(ti)).contains(":" + bone):
-			anim.remove_track(ti)
-
-
 ## Copia `value` en todas las claves de la pista de POSICION de un hueso.
 func _set_bone_position(resolved: String, bone: String, value: Vector3) -> void:
 	var anim: Animation = arms_player.get_animation(resolved)
@@ -607,19 +603,33 @@ func _set_bone_position(resolved: String, bone: String, value: Vector3) -> void:
 			return
 
 
-## Valor de la posicion de un hueso en un instante de un clip, para poder
-## clonarlo o consultarlo sin duplicar la animacion.
-func _sample_bone_position(short_name: String, bone: String) -> Variant:
+## Copia `value` en todas las claves de la pista de ROTACION de un hueso.
+func _set_bone_rotation(resolved: String, bone: String, value: Quaternion) -> void:
+	var anim: Animation = arms_player.get_animation(resolved)
+	for ti in range(anim.get_track_count()):
+		if anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D and str(anim.track_get_path(ti)).contains(":" + bone):
+			for k in range(anim.track_get_key_count(ti)):
+				anim.track_set_key_value(ti, k, value)
+			return
+
+
+## Pose local (posicion + rotacion) de un hueso en el instante inicial de un
+## clip, para clonarla en otro sin duplicar la animacion. Devuelve {} si el clip
+## o el hueso no existen.
+func _sample_bone_pose(short_name: String, bone: String) -> Dictionary:
 	var resolved := _resolve_clip(short_name)
 	if resolved == "":
-		return null
+		return {}
 	arms_player.play(resolved, -1.0, 1.0)
 	arms_player.seek(0.0, true)
 	arms_skeleton.force_update_all_bone_transforms()
 	var idx := _exact_bone(bone)
 	if idx < 0:
-		return null
-	return arms_skeleton.get_bone_pose_position(idx)
+		return {}
+	return {
+		"position": arms_skeleton.get_bone_pose_position(idx),
+		"rotation": arms_skeleton.get_bone_pose_rotation(idx),
+	}
 
 
 ## Pivote del retroceso procedural: punto del agarre que sostiene el arma (35%
