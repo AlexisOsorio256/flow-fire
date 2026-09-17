@@ -156,10 +156,13 @@ Señales públicas: `ammo_changed(mag, chamber, reserve, reloading)`,
 
 ### Problemas realmente abiertos
 
-- **Fogonazo.** Cuelga de la boca de la corredera (correcto), pero todavía se lee
-  como **pieza geométrica naranja sólida**, no como combustión. Es el trabajo en
-  curso: núcleo breve y caliente, forma irregular, gases que nacen de la boca,
-  duración extremadamente corta, viable en Mobile.
+- **Fogonazo.** Cuelga de la boca de la corredera (correcto) y su presentación
+  vive en `scripts/WeaponFX.gd`: núcleo emisivo breve sobre el eje del cañón +
+  gases irregulares con blend aditivo cuyo brillo cae del eje hacia fuera (así
+  el contorno del poliedro no dibuja nada). Sustituye a la pieza naranja sólida
+  anterior; **pendiente del veredicto perceptual del usuario** en hip y ADS.
+  Sigue en curso: núcleo más breve/caliente, forma irregular, volumen pequeño,
+  gases que nacen de la boca, viable en Mobile.
 - **Sensación de disparo / peso.** Recoil, muñeca, recuperación, cámara y sonido
   mecánico se profundizan **por iteración humana**, una cosa cada vez.
 - **Recarga:** el rebote al asentar está; falta saber si el conjunto se siente
