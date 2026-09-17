@@ -97,8 +97,14 @@ var arms_scale := 1.362
 # Huesos mecanicos (autoridad de la logica) y sus reposos locales.
 var slide_bone := -1
 var trigger_bone := -1
+var weapon_bone := -1
+var mag_bone := -1
 var slide_rest := Vector3.ZERO
 var trigger_rest := Vector3.ZERO
+# Reposo del arma y del cargador: sobre ellos se suma el retroceso (ver
+# apply_mechanics). El cargador es hueso hermano del arma, no hijo.
+var weapon_rest := Vector3.ZERO
+var mag_rest := Vector3.ZERO
 var slide_attach: BoneAttachment3D  # la mira/boca van con la corredera real
 
 
@@ -433,12 +439,14 @@ func _install_arms() -> void:
 		" verts=", arms_most)
 
 	park_anim("Idle", 0.0)
-	var weapon_bone := _exact_bone(WEAPON_BONE)
+	var weapon_idx := _exact_bone(WEAPON_BONE)
 	var barrel_bone := _exact_bone(BARREL_BONE)
-	var mag_bone := _exact_bone(MAG_BONE)
+	var mag_idx := _exact_bone(MAG_BONE)
 	slide_bone = _exact_bone(SLIDE_BONE)
 	trigger_bone = _exact_bone(TRIGGER_BONE)
-	if weapon_bone < 0 or barrel_bone < 0 or mag_bone < 0 or slide_bone < 0 or trigger_bone < 0:
+	weapon_bone = weapon_idx
+	mag_bone = mag_idx
+	if weapon_idx < 0 or barrel_bone < 0 or mag_idx < 0 or slide_bone < 0 or trigger_bone < 0:
 		push_warning("El rig no trae los huesos del arma (Weapon/Barrel/Magazine/Slidder/Trigger)")
 		holder.queue_free(); arms_root = null; return
 	# El modelo apunta a +Z y la camara mira a -Z: giro 180 en Y. Asi el alza
@@ -454,9 +462,13 @@ func _install_arms() -> void:
 	var grip_err: float = (holder.transform * grip_ref - GRIP_ANCHOR).length() * 1000.0
 	print("ARMS_MONTAJE escala=", snappedf(arms_scale, 0.0001),
 		" residuo_empunadura_mm=", snappedf(grip_err, 0.1))
-	# Reposos mecanicos: la pose local sin animar de corredera y gatillo.
+	# Reposos mecanicos: la pose local sin animar de corredera, gatillo, arma y
+	# cargador. El arma y el cargador son la base sobre la que se suma el
+	# retroceso (apply_mechanics).
 	slide_rest = arms_skeleton.get_bone_rest(slide_bone).origin
 	trigger_rest = arms_skeleton.get_bone_rest(trigger_bone).origin
+	weapon_rest = arms_skeleton.get_bone_rest(weapon_bone).origin
+	mag_rest = arms_skeleton.get_bone_rest(mag_bone).origin
 	_mount_slide_attachments()
 	_strip_mechanical_tracks()
 	_measure_wrist(weapon_bone)
@@ -604,18 +616,18 @@ func _strip_mechanical_tracks() -> void:
 		print("ARMS_PISTA ", resolved, " mecanicas_eliminadas=", removed)
 
 
-## Pivote del retroceso procedural: punto de la mano que sostiene el arma
-## (35% del hueso del arma hacia el hueso de la mano), medido en el rig NUEVO
-## en Idle. Antes era el origen por defecto (giro sobre el centro del arma).
+## Pivote del retroceso procedural: punto del agarre que sostiene el arma (35%
+## del hueso del arma hacia el hueso de la mano), en el frame del ESQUELETO, que
+## es el frame donde el viewmodel escribe despues el hueso del arma. NO es el
+## frame del nodo de retroceso: la rotacion del arma ya no se aplica a los nodos
+## (eso arrastraba las manos hacia atras), sino al hueso.
 func _measure_wrist(weapon_bone: int) -> void:
 	var hand := _exact_bone("DEF-hand.R_842")
 	if hand < 0:
 		return
 	arms_skeleton.force_update_all_bone_transforms()
-	var inv: Transform3D = (recoil_node as Node3D).global_transform.affine_inverse()
-	var skel_xf: Transform3D = arms_skeleton.global_transform
-	var weapon_p: Vector3 = inv * (skel_xf * arms_skeleton.get_bone_global_pose(weapon_bone).origin)
-	var hand_p: Vector3 = inv * (skel_xf * arms_skeleton.get_bone_global_pose(hand).origin)
+	var weapon_p: Vector3 = arms_skeleton.get_bone_global_pose(weapon_bone).origin
+	var hand_p: Vector3 = arms_skeleton.get_bone_global_pose(hand).origin
 	var pivot := weapon_p + (hand_p - weapon_p) * 0.35
 	if recoil != null:
 		recoil.set_wrist_pivot(pivot)
@@ -712,6 +724,18 @@ func resolve_idle() -> String:
 
 ## Escribe en los huesos el estado mecanico que le pasa Glock. Es el unico
 ## punto donde la logica toca el esqueleto: una sola realidad, representada.
+##
+## El ARMA retrocede AQUI, en su hueso, y no en los nodos del rig. La mano se
+## queda donde la animacion la pone: el arma gira sobre el pivote del agarre y
+## se hunde dentro de la mano, que es lo que hace un retroceso real. Rotar el
+## viewmodel entero (lo anterior) empujaba las manos hacia atras con el arma.
+##
+## El CARGADOR recibe el mismo offset porque es un hueso hermano (cuelga de la
+## raiz, no del arma): en Fire va rigido en el brocal y se mueve exactamente
+## igual que el arma. Sin esto el cargador se quedaba atras al retroceder.
+##
+## Escribir a mano sobrevive al AnimationPlayer: se probo que su pose se
+## conserva mientras corre un clip.
 func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: float) -> void:
 	if not pistol_ok or arms_skeleton == null or slide_bone < 0:
 		return
@@ -719,9 +743,13 @@ func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: floa
 	arms_skeleton.set_bone_pose_position(slide_bone, slide_rest + Vector3(0.0, 0.0, -slide_pos * ratio))
 	if trigger_bone >= 0:
 		arms_skeleton.set_bone_pose_position(trigger_bone, trigger_rest + TRIGGER_PULL * trigger_visual)
-	# Cargador: sin escritura por frame. Lo lleva la mano en la animacion de
-	# recarga, en fase con las manos por construccion; la logica solo cuenta
-	# cartuchos en los instantes medidos (ver _seat_reload_mag).
+	if recoil != null:
+		var kick := recoil.bone_offset(recoil.rot, weapon_rest)
+		arms_skeleton.set_bone_pose_position(weapon_bone, weapon_rest + kick)
+		arms_skeleton.set_bone_pose_position(mag_bone, mag_rest + kick)
+	# En recarga el cargador lo lleva la mano en la animacion, en fase con ella
+	# por construccion; la logica solo cuenta cartuchos en los instantes medidos
+	# (ver _seat_reload_mag). Aqui no se escribe nada suyo salvo el retroceso.
 
 
 ## Cadena de nodos del rig. Se crea aqui y no en Glock: es presentacion.
