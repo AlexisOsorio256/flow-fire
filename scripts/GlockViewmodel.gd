@@ -527,7 +527,7 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 ##  - Slidder_919 y Weapon_Trigger_921 en Fire, Reload y Reload_Empty: sin esto
 ##    habria dos correderas, la simulada (slide_pos, 59 ms) y la animada
 ##    (33.6 mm en 250 ms).
-##  - Weapon_922 SOLO en Fire (rotacion y traslacion): MEDIDO con --firecurve,
+##  - Weapon_922 SOLO en Fire (rotacion y traslacion): MEDIDO con --recoilprobe,
 ##    la animacion del autor sube el arma 0.24 grados en los primeros 40 ms y
 ##    luego la levanta en rampa casi lineal hasta 14 grados a 180 ms. Eso es un
 ##    gesto dibujado, no un impulso: el arma se quedaba clavada justo cuando la

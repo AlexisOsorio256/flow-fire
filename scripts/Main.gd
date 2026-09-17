@@ -19,8 +19,6 @@ func _ready() -> void:
     _build_hud()
     if OS.get_cmdline_user_args().has("--autotest"):
         _run_autotest()
-    if OS.get_cmdline_user_args().has("--capture"):
-        _run_capture()
     if OS.get_cmdline_user_args().has("--aimtest"):
         _run_aimtest()
     if OS.get_cmdline_user_args().has("--pentest"):
@@ -32,38 +30,15 @@ func _ready() -> void:
     _run_dev_tools()
 
 
-## Comandos de diagnóstico (capturas, timeline, benchmark, medidas y audio).
-## Están en DevTools.gd para que este archivo siga siendo el juego y sus tests.
+## Comandos de diagnóstico y medida. El laboratorio vive en DevTools.gd (que
+## reparte por responsabilidad) para que este archivo siga siendo el juego y sus
+## tests. `--devhelp` lista todo lo disponible.
 func _run_dev_tools() -> void:
-    var args := OS.get_cmdline_user_args()
     var tools := DEV_TOOLS.new()
     tools.name = "DevTools"
     add_child(tools)
     tools.setup(self, player, hud)
-    if args.has("--fpsbench"):
-        tools.run_fpsbench()
-    if args.has("--visualab"):
-        tools.run_visualab()
-    if args.has("--probe"):
-        tools.run_probe()
-    if args.has("--firecurve"):
-        tools.run_firecurve()
-    if args.has("--recoilprobe"):
-        tools.run_recoilprobe()
-    if args.has("--geometrydebug"):
-        tools.run_geometrydebug()
-    if args.has("--armdiag"):
-        tools.run_armdiag()
-    if args.has("--sightdiag"):
-        tools.run_sightdiag()
-    if args.has("--gundiag"):
-        tools.run_gundiag()
-    if args.has("--timeline"):
-        tools.run_timeline()
-    if args.has("--slowmo"):
-        tools.run_slowmo()
-    if args.has("--audiocapture"):
-        tools.run_audiocapture()
+    tools.run(OS.get_cmdline_user_args())
 
 
 func _setup_environment() -> void:
@@ -315,26 +290,6 @@ func _run_aimtest() -> void:
     if not passed:
         push_error("AIMTEST falló: alguna mira se desvía más de %d mm del centro" % int(MAX_OFFSET_MM))
     get_tree().quit(0 if passed else 1)
-
-
-func _run_capture() -> void:
-    await get_tree().create_timer(1.0).timeout
-    var cam: Camera3D = player.camera
-    var eye: Vector3 = cam.global_position
-    var target_pos := Vector3(-4.0, 1.35, -18.0)
-    var to_target: Vector3 = (target_pos - eye).normalized()
-    player.yaw_target = atan2(-to_target.x, -to_target.z)
-    player.pitch_target = asin(clampf(to_target.y, -1.0, 1.0))
-    player.yaw = player.yaw_target
-    player.pitch = player.pitch_target
-    await get_tree().create_timer(0.35).timeout
-    player.weapon.force_fire_once()
-    await get_tree().create_timer(0.35).timeout
-    await RenderingServer.frame_post_draw
-    var image := get_viewport().get_texture().get_image()
-    image.save_png("/tmp/godot_frame.png")
-    print("CAPTURE saved /tmp/godot_frame.png ", image.get_size())
-    get_tree().quit()
 
 
 func _run_autotest() -> void:
