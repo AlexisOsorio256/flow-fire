@@ -15,6 +15,7 @@ var warmup := 40
 var total := 50
 var time_scale := 1.0
 var _burst_left := 0
+var _burst_gap := 3
 
 var _frame := 0
 var _t0 := 0
@@ -61,6 +62,12 @@ func _trigger() -> void:
 		"burst":
 			weapon.force_fire_once()
 			_burst_left = 3
+		"pen":
+			# El teletransporte va 2 frames ANTES del disparo: el global_transform
+			# tiene que asentarse o la bala nace de la posicion anterior.
+			weapon.force_fire_once()
+			_burst_left = 1
+			_burst_gap = 14
 		"reload":
 			weapon.set("mag", 10)
 			weapon.start_reload()
@@ -79,11 +86,19 @@ func _trigger() -> void:
 
 func _process(_delta: float) -> void:
 	_frame += 1
+	if _frame == warmup - 2 and action == "pen":
+		var player := _game.get_node_or_null("Player")
+		if player != null:
+			# Delante del blanco de papel x=0: blanco sobre fondo, oscila al
+			# recibir, y el papel se atraviesa (entrada + salida + paso).
+			(player as Node3D).global_position = Vector3(0.0, 0.05, -16.5)
+			player.set("yaw", 0.0)
+			player.set("yaw_target", 0.0)
 	if _frame == warmup:
 		_trigger()
 	if _frame >= warmup and (_frame - warmup) < total:
-		# Rafaga: 3 disparos mas separados ~90 ms de juego.
-		if action == "burst" and _burst_left > 0 and (_frame - warmup) % 3 == 0:
+		# Rafaga: disparos extra separados _burst_gap frames (~90 ms de juego).
+		if (action == "burst" or action == "pen") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
 			var weapon := _player_weapon()
 			if weapon != null and (_frame - warmup) > 0:
 				weapon.force_fire_once()

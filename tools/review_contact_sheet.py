@@ -32,6 +32,7 @@ PRESETS = {
     # Burst denso: ~30 frames en ~0.8 s de juego (pico ~50 ms, vuelta ~250 ms).
     "fire": (30, 0.08, lambda fs: fs, 6),
     "burst": (40, 0.08, lambda fs: fs, 8),
+    "pen": (30, 0.25, lambda fs: fs, 6),
     "reload": (46, 0.25, lambda fs: fs[::3], 7),
     "reload_empty": (46, 0.25, lambda fs: fs[::3], 7),
     "inspect": (46, 0.30, lambda fs: fs[::3], 6),
@@ -41,6 +42,8 @@ PRESETS = {
 CELL_W = 320
 # Recorte a la zona del arma (el viewmodel vive abajo-centro del encuadre).
 CROP = (230, 250, 730, 540)
+# Pen entra por los ojos del tirador: cuadro completo para leer el blanco.
+CROPS = {"pen": (0, 0, 960, 540)}
 
 
 def parse_ms(name):
@@ -51,7 +54,7 @@ def parse_ms(name):
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else "fire"
     if action not in PRESETS:
-        print("accion desconocida:", action, "(fire|burst|reload|reload_empty|inspect|idle)")
+        print("accion desconocida:", action, "(fire|burst|pen|reload|reload_empty|inspect|idle)")
         return 1
     total, ts, select, cols = PRESETS[action]
     tmp = tempfile.mkdtemp(prefix="review_frames_")
@@ -76,10 +79,11 @@ def main():
             print("no se capturo ningun frame")
             return 1
         chosen = select(frames)
+        crop = CROPS.get(action, CROP)
         cells = []
         for f in chosen:
             img = Image.open(os.path.join(tmp, f)).convert("RGB")
-            img = img.crop(CROP)
+            img = img.crop(crop)
             # Descarta frames del apagado (viewport ya cerrada al salir).
             thumb = img.resize((32, 32))
             if sum(thumb.convert("L").getdata()) / (32 * 32) < 8:

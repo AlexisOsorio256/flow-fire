@@ -15,25 +15,24 @@ extends Node3D
 ## salida es mas ancha, mas plana y revienta hacia fuera, y en pladur y madera
 ## se lleva material.
 
-const HOLE_ENTRY: Texture2D = preload("res://assets/textures/bullet_hole_entry.png")
-const HOLE_EXIT: Texture2D = preload("res://assets/textures/bullet_hole_exit.png")
 const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png")
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
 
-## Tope de impactos visibles. Mobile no aguanta miles de marcas eternas y una
-## lista pequena basta: al pasarse, la mas vieja se libera. Sin pool manager.
-const MAX_HOLES := 96
-## Diametro EXTERIOR del agujero por material. Es exagerado respecto al real (un
-## 9 mm deja ~9 mm): a tamano fisico el agujero es un punto de 4 mm ilegible a
-## dos metros, que es lo que se ve como nada. El interior (lo que se lee como
-## hueco) es el 34% de esto. La exageracion es del agujero, no de la profundidad.
+## Tope de impactos visibles. Los agujeros son geometria real y barata (unos
+## 25 tris): caben de sobra y tienen que persistir para leer el entrenamiento.
+const MAX_HOLES := 128
+## Diametro EXTERIOR del agujero por material. Exagerado respecto al real (un
+## 9 mm deja ~9 mm) a proposito: a tamano fisico el agujero es un punto de
+## 4 mm ilegible a dos metros, que es lo que se ve como nada. El interior (lo
+## que se lee como hueco) es el 34% de esto. La exageracion es del agujero,
+## no de la profundidad; la geometria sigue siendo real (embudo tallado).
 const HOLE_SIZE := {
-    "concrete": 0.055,
-    "drywall": 0.050,
-    "wood": 0.050,
-    "metal": 0.038,
-    "paper": 0.030,
-    "flesh": 0.045,
+    "concrete": 0.070,
+    "drywall": 0.064,
+    "wood": 0.064,
+    "metal": 0.048,
+    "paper": 0.040,
+    "flesh": 0.056,
 }
 
 var _holes: Array[Node] = []
@@ -146,8 +145,11 @@ func _hole_mesh(size: float, surface: String, is_exit: bool) -> ArrayMesh:
     var inner := size * 0.34
     # Profundidad: la salida revienta hacia fuera (casi plana); la entrada se
     # hunde segun el material. El metal no se hunde: marca y ya.
+    # El labio de ENTRADA va 0.4 mm POR FUERA de la superficie: a ras o por
+    # dentro el embudo quedaba enterrado y el agujero era invisible (el
+    # comentario antiguo decia "enrasado" pero el codigo lo hundia).
     var depth := 0.0012
-    var bulge := -0.0004
+    var bulge := 0.0004
     if not is_exit:
         depth = float(IMPACT_MATERIALS.get(surface, {}).get("crater", 0.004))
     else:
@@ -251,7 +253,7 @@ const IMPACT_MATERIALS := {
     },
     "paper": {
         "dust": {"amount": 4, "color": Color(0.84, 0.81, 0.74, 0.50), "vel": [0.2, 0.8], "gravity": -1.0, "scale": [0.30, 0.90], "life": 0.35, "size": 0.020, "spread": 44.0},
-        "exit_scale": 1.10,
+        "exit_scale": 1.60,
         "crater": 0.0,
     },
     "flesh": {

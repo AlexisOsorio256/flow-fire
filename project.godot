@@ -25,6 +25,10 @@ Ballistics="*res://scripts/Ballistics.gd"
 window/size/viewport_width=1920
 window/size/viewport_height=1080
 
+[audio]
+
+driver/output_latency=8
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

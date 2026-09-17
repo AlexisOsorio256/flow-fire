@@ -15,9 +15,13 @@ render_mode unshaded;
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
 uniform float distortion = 0.030;    // barril suave de lente ancha
-uniform float chroma = 0.00045;      // aberración cromática hacia los bordes
+uniform float chroma = 0.00020;      // aberración cromática hacia los bordes
+                                     // (0.00045 emplastaba los bordes a 1px+ y
+                                     // se leía como pixelado; identidad intacta)
 uniform float vignette = 0.30;       // viñeta óptica, suave
-uniform float grain_amount = 0.012;  // ruido de sensor (sólo sombras)
+uniform float grain_amount = 0.006;  // ruido de sensor (sólo sombras; 0.012
+                                     // parpadeaba por pixel y se leia como
+                                     // pixelado: la textura barata sigue)
 uniform float exposure_pulse = 0.0;  // reacción del AGC al disparo
 uniform float aim_amount = 0.0;
 uniform float time = 0.0;

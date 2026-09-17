@@ -131,6 +131,16 @@ func _build_props() -> void:
     _make_barrier(-5.8, -8.0, deg_to_rad(-8.0))
     _make_barrier(5.6, -14.5, deg_to_rad(10.0))
     _make_barrier(-5.4, -22.0, deg_to_rad(-6.0))
+    # Coberturas deliberadas: la de x=-2 cubre el blanco de papel de x=-2
+    # (se tira A TRAVES de la tabla: 55 mm de pino los pasa sobrados) y la
+    # de x=3 cubre el acero (ahi no hay paso: chispa y nada mas).
+    _make_barrier(-2.0, -16.5, deg_to_rad(20.0))
+    _make_barrier(3.0, -24.5, deg_to_rad(-18.0))
+
+    _make_plank_wall(-2.5, -12.0, deg_to_rad(15.0))
+    _make_crate(Vector3(4.8, 0.0, -9.5), 0.35)
+    _make_crate(Vector3(4.8, 0.35, -9.5), 0.35)
+    _make_crate(Vector3(-7.2, 0.0, -20.5), 0.35)
 
     _make_drum(6.6, -11.0)
     _make_drum(-6.8, -25.0)
@@ -223,6 +233,35 @@ func _make_barrier(x: float, z: float, rot_y: float) -> void:
     for leg_x in [-1.0, 1.0]:
         var leg := _static_box(root, "BarrierLeg", Vector3(0.08, 1.05, 0.08), Vector3(leg_x, 0.52, 0), wood_mat)
         leg.set_meta("surface", "wood")
+
+
+## Muro de tablones con rendijas (45 mm de pino): lo atraviesa una 9 mm
+## perdiendo ~15% de velocidad por tablon; por las rendijas pasa intacta.
+func _make_plank_wall(x: float, z: float, rot_y: float) -> void:
+    var root := Node3D.new()
+    root.name = "PlankWall"
+    root.position = Vector3(x, 0, z)
+    root.rotation.y = rot_y
+    add_child(root)
+    for i in range(5):
+        var plank := _static_box(root, "Plank", Vector3(0.22, 1.9, 0.045), Vector3((i - 2) * 0.25, 0.95, 0), wood_mat)
+        plank.set_meta("surface", "wood")
+        plank.set_meta("penetrable", true)
+        plank.set_meta("penetration_resistance", 7.0)
+    for rail_y in [0.5, 1.5]:
+        var rail := _static_box(root, "PlankRail", Vector3(1.3, 0.09, 0.03), Vector3(0, rail_y, -0.05), wood_mat)
+        rail.set_meta("surface", "wood")
+        rail.set_meta("penetrable", true)
+        rail.set_meta("penetration_resistance", 7.0)
+
+
+## Caja de madera (35 cm): la 9 mm la pasa saliendo lenta (~110 m/s, al limite
+## del modelo); dos cajas pegadas ya la detienen. Entrenamiento de libro.
+func _make_crate(base: Vector3, size: float) -> void:
+    var box := _static_box(self, "WoodCrate", Vector3(size, size, size), base + Vector3(0, size * 0.5, 0), wood_mat)
+    box.set_meta("surface", "wood")
+    box.set_meta("penetrable", true)
+    box.set_meta("penetration_resistance", 7.0)
 
 
 func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> void:
