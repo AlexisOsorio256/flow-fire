@@ -190,13 +190,21 @@ func _install_arms() -> void:
 	arms_mount = holder
 	_apply_viewmodel_layer(arms_root)
 
+	# La referencia de la empunadura se mide ANTES de borrar: la pistola del
+	# asset marca donde el autor puso el arma respecto de las manos.
+	var empunadura_autor := _empunadura_del_autor()
+	park_anim("Idle", 0.0)
+	# Anclaje del rig: giro 180 en Y (el modelo mira a +Z) y escala uniforme.
+	var scaled_r := Basis(Vector3.UP, PI).scaled(Vector3(ARMS_SCALE, ARMS_SCALE, ARMS_SCALE))
+	holder.transform = Transform3D(scaled_r, GRIP_ANCHOR - scaled_r * empunadura_autor)
+	# El arma copia la referencia del autor ANTES de borrar sus mallas y de
+	# apagar sus huesos: se mide con pose y habilitados.
+	_colocar_arma_en_la_mano()
+
 	# Del rig de brazos solo se conserva el PERSONAJE. Fuera, borradas del
 	# arbol, las mallas que no lo son: la pistola que trae el asset (el arma
 	# visible es la de piezas), su skybox de presentacion y sus ayudantes de
 	# apuntado. Borrarlas y no solo ocultarlas ahorra tenerlas en el pase.
-	# La referencia de la empunadura se mide ANTES de borrar: la pistola del
-	# asset marca donde el autor puso el arma respecto de las manos.
-	var empunadura_autor := _empunadura_del_autor()
 	var quitadas := []
 	for m in _collect_meshes(arms_root):
 		if _es_personaje(m):
@@ -215,15 +223,6 @@ func _install_arms() -> void:
 			arms_sleeve_visible = m
 			break
 	print("BRAZOS fuera=", quitadas, " huesos apagados=", apagados)
-
-	park_anim("Idle", 0.0)
-	# Anclaje del rig: giro 180 en Y (el modelo mira a +Z) y escala uniforme.
-	var scaled_r := Basis(Vector3.UP, PI).scaled(Vector3(ARMS_SCALE, ARMS_SCALE, ARMS_SCALE))
-	holder.transform = Transform3D(scaled_r, GRIP_ANCHOR - scaled_r * empunadura_autor)
-	# El arma se coloca donde la MANO la agarra: se mide el hueso de la mano en
-	# el frame de pose y se lleva el arma ahi. Un solo numero de ajuste fino,
-	# EMPUNADURA_EN_MANO, para subirla o adelantarla.
-	_colocar_arma_en_la_mano(empunadura_autor)
 
 	fire_clip = _resolve_clip("Fire")
 	reload_clip = _resolve_clip("Reload")
@@ -298,76 +297,76 @@ func _es_pistola_del_asset(m: MeshInstance3D) -> bool:
 	return false
 
 
-## Como se agarra el arma. Tres numeros, medidos sobre el rig real y
-## verificados con tools/check_viewmodel.gd (que renderiza cada pose a PNG).
+## El arma se asienta copiando la referencia del autor: el rig trae su propia
+## pistola agarrada por las manos, asi que sus huesos del arma marcan el sitio
+## exacto. Sin numeros de ajuste: se mide en el frame de pose, con el anclaje
+## del rig ya aplicado y antes de borrar sus mallas y de apagar sus huesos.
 ##
-##   EMPUNADURA_EN_MANO  donde la comisura (hueco pulgar-indice) toca la EMPUNADURA
-##   AGARRE_ABAJA        hacia donde baja el mango, en ejes de la mano
-##   CANO_DELANTE        hacia donde apunta la boca, en ejes de la mano
-const EMPUNADURA_EN_MANO := Vector3(0.0, 0.0, 0.0)
-const AGARRE_ABAJA := Vector3(0.0, -1.0, -0.15)
-const CANO_DELANTE := Vector3(0.0, -1.0, -0.05)
-
-## Coloca el arma para que LA MANO la agarre.
-##
-## El marco de la mano se mide con POSICIONES de huesos (comisura, nudillos,
-## pulgar), no con sus orientaciones: en un rig importado las orientaciones
-## dependen del rigger, las posiciones no.
-func _colocar_arma_en_la_mano(_empunadura_autor: Vector3) -> void:
+##   Eje del mango ... +Y del hueso Magazine (de la base hacia la corredera)
+##   Delante ......... el gatillo menos el eje del mango (el gatillo va delante)
+##   Origen .......... la cabeza del hueso Weapon proyectada sobre el eje del
+##                     mango (ahi el armazon se une con la corredera, que es
+##                     justo donde nace el Frame de `GlockWeapon`)
+func _colocar_arma_en_la_mano() -> void:
 	if weapon == null or arms_skeleton == null:
 		return
-	var comisura := _punto_hueso("DEF-hand.R")
-	var indice := _punto_hueso("DEF-f_index.01.R")
-	var menique := _punto_hueso("DEF-f_pinky.01.R")
-	var pulgar := _punto_hueso("DEF-thumb.01.R")
-	if not comisura.is_finite() or not indice.is_finite() or not menique.is_finite() or not pulgar.is_finite():
-		push_warning("No se pudo medir la mano derecha; el arma queda sin asentar")
+	arms_skeleton.force_update_all_bone_transforms()
+	var mag := _hueso_del_arma("Magazine")
+	var gatillo := _hueso_del_arma("Weapon_Trigger")
+	var corredera := _hueso_del_arma("Weapon")
+	if mag < 0 or gatillo < 0 or corredera < 0:
+		push_warning("El rig no trae huesos de arma; el arma queda sin asentar")
 		return
-	# Ejes de la mano.
-	var hacia_nudillos := ((indice + menique) * 0.5 - comisura).normalized()
-	var hacia_pulgar := (pulgar - comisura).normalized()
-	# Base del agarre: comisura + ajuste fino.
-	var origen: Vector3 = comisura + EMPUNADURA_EN_MANO
-	# Direccion del mango dentro de la mano y direccion de la boca.
-	var abajo := (hacia_nudillos * AGARRE_ABAJA.y + hacia_pulgar * AGARRE_ABAJA.x
-		+ hacia_nudillos.cross(hacia_pulgar).normalized() * AGARRE_ABAJA.z).normalized()
-	var delante := (hacia_nudillos * CANO_DELANTE.y + hacia_pulgar * CANO_DELANTE.x
-		+ hacia_nudillos.cross(hacia_pulgar).normalized() * CANO_DELANTE.z).normalized()
-	# Marco de la mano: X = derecha, Y = arriba (contrario al mango), Z = boca.
-	var marco := _marco(origen, -abajo, delante)
-	# El arma entra en ese marco: su origen (la empunadura) va al origen de la
-	# mano y su boca mira hacia delante. Los dos ejes del arma, en su espacio:
-	#   empunadura -> abajo  = -Y   (el armazon nace en la union con la corredera)
-	#   boca                 = -Z
-	# El arma se pone en ese marco. Su GLB mide METROS reales (GlockWeapon le
-	# aplica su escala), asi que aqui solo se convierte el marco del rig.
+	var base := _pos_global_hueso(mag)
+	var eje := _eje_y_global_hueso(mag)
+	var cabeza_corredera := _pos_global_hueso(corredera)
+	# El +Y del hueso va de la base hacia la corredera; si viniera al reves,
+	# el arma quedaria boca abajo.
+	if eje.dot(cabeza_corredera - base) < 0.0:
+		eje = -eje
+	var al_gatillo := _pos_global_hueso(gatillo) - base
+	var delante := al_gatillo - eje * al_gatillo.dot(eje)
+	if delante.length() < 0.001:
+		push_warning("Gatillo sobre el eje del mango; el arma queda sin asentar")
+		return
+	delante = delante.normalized()
+	var origen: Vector3 = base + eje * (cabeza_corredera - base).dot(eje)
+	# Columnas del marco en el espacio del arma: +Y sube por el mango y la
+	# boca mira segun `adelante` de la tabla ARMAS (glock -Z, de +Z).
+	var z := delante * weapon.adelante.z
+	var x := eje.cross(z).normalized()
+	var y := z.cross(x).normalized()
+	var marco := Basis(x, y, z)
 	weapon.global_transform = Transform3D(marco.scaled(Vector3.ONE * weapon.escala * ARMS_SCALE), origen)
 
 
-## Marco ortonormal a partir de un origen, un "arriba" aproximado y un "delante".
-func _marco(origen: Vector3, arriba: Vector3, delante: Vector3) -> Basis:
-	var z := -delante.normalized()
-	var x := arriba.cross(z).normalized()
-	if x.length() < 0.001:
-		x = Vector3.RIGHT
-	var y := z.cross(x).normalized()
-	# Columnas: X, Y, Z del marco.
-	var b := Basis()
-	b.x = x
-	b.y = y
-	b.z = z
-	return b
-
-
-## Posicion global de un hueso por prefijo de nombre (el importador añade sufijo).
-func _punto_hueso(prefijo: String) -> Vector3:
+## Hueso del arma del autor por prefijo ("Magazine", "Weapon_Trigger",
+## "Weapon"). El importador añade un sufijo numerico, asi que no hay nombre
+## exacto. "Magazine_2" es el cargador de repuesto y se excluye, igual que
+## "Weapon_Trigger" cuando se busca "Weapon".
+func _hueso_del_arma(prefijo: String) -> int:
 	if arms_skeleton == null:
-		return Vector3.INF
+		return -1
 	for i in range(arms_skeleton.get_bone_count()):
-		if arms_skeleton.get_bone_name(i).begins_with(prefijo):
-			arms_skeleton.force_update_all_bone_transforms()
-			return arms_skeleton.global_transform * arms_skeleton.get_bone_global_pose(i).origin
-	return Vector3.INF
+		var n := arms_skeleton.get_bone_name(i)
+		if prefijo == "Weapon" and n.begins_with("Weapon_Trigger"):
+			continue
+		if n.begins_with(prefijo) and not n.begins_with("Magazine_2"):
+			return i
+	return -1
+
+
+## Cabeza de un hueso en espacio global, con la pose actual del esqueleto.
+func _pos_global_hueso(hueso: int) -> Vector3:
+	return arms_skeleton.global_transform * arms_skeleton.get_bone_global_pose(hueso).origin
+
+
+## Eje +Y de un hueso en espacio global. Los huesos del arma son rigidos: su
+## +Y va de la cabeza a la cola en cualquier pose, asi que no hace falta leer
+## la cola (Godot no la expone).
+func _eje_y_global_hueso(hueso: int) -> Vector3:
+	var eje: Vector3 = arms_skeleton.global_transform.basis * arms_skeleton.get_bone_global_pose(hueso).basis.y
+	return eje.normalized()
 
 
 ## Hueso de MANO del lado pedido ("l" o "r").

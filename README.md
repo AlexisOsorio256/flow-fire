@@ -80,7 +80,7 @@ mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
 | Petición | Un solo sitio |
 |---|---|
 | "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, 3 constantes juntas |
-| "el arma está mal encuadrada" | `ARMA_EMPUNADURA` en `GlockViewmodel.gd` |
+| "el arma está mal encuadrada" | `_colocar_arma_en_la_mano` en `GlockViewmodel.gd` (copia la referencia del autor) |
 | "la corredera no llega / recorre de más" | `corredera` en la tabla `ARMAS` |
 | "quiero otra pistola" | `const ARMA` + entrada en `ARMAS` + `.glb` |
 | "un sonido no cae en el gesto" | no hay segundos que tocar: el evento sale del gesto |
@@ -108,8 +108,6 @@ Comprobar sin abrir el editor: `tools/check_weapon.gd` (orientación y montaje),
   justifica si el usuario la pide explícitamente o autoriza una invariante
   concreta (pregunta objetiva que el usuario no responde mejor mirando o
   escuchando, pequeña y atada a esa invariante).
-- **Tras DOS intentos sin mejora visible o audible: DETENTE Y PREGUNTA.** Una
-  pregunta de 10 segundos es mejor que 40 minutos de análisis equivocado.
 - **Comentarios:** explican invariantes actuales y el porqué de una decisión no
   obvia. Un valor calibrado puede decir `CALIBRADO: razón actual`, pero no cita
   herramientas ni experimentos que ya no existen.
