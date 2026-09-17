@@ -11,11 +11,12 @@ extends Node3D
 ##   Viewmodel
 ##   └── PoseRoot            cadera / ADS / sprint / bob / sway / respiracion
 ##       └── WristPivot      cesion lenta de brazos y manos (GlockRecoil.arm_*)
-##           ├── ArmsMount   escala + anclaje del rig de brazos (GLB)
-##           │   └── Skeleton3D + AnimationPlayer
-##           └── HandGrip    posicion del arma respecto del pivote
-##               └── WeaponSocket   retroceso: UNICA transformacion del arma
-##                   └── Grip -> Frame/Slide/Trigger/Magazine/Muzzle/...
+##           └── ArmsMount   escala + anclaje del rig de brazos (GLB)
+##               └── Skeleton3D + AnimationPlayer
+##                   └── WeaponAttachment (hueso Root del rig)
+##                       └── HandGrip     bind + ajuste fijo de la pistola
+##                           └── WeaponSocket   retroceso: unica transformacion dinamica
+##                               └── Grip -> Frame/Slide/Trigger/Magazine/Muzzle/...
 ##
 ## AUTORIDAD (una sola por cosa; nada de dos capas sobre el mismo transform)
 ##
@@ -27,10 +28,10 @@ extends Node3D
 ##   Camara ......................... Player.gd (aqui no se toca)
 ##
 ## EL ARMA YA NO ESTA EN EL ESQUELETO. Es `GlockWeapon`, un arbol de piezas
-## rigidas. Por eso este archivo no escribe ni un hueso del arma, y por eso
-## `WristPivot` puede mover a la vez brazos y pistola: la pose de las manos la
-## pone el clip, y como el pivote es antepasado comun, la pistola la sigue sin
-## ningun seguimiento por codigo. Cero desincronizacion mano<->arma.
+## rigidas. `WeaponAttachment` sigue el hueso `Root`, que el rig usa para el
+## armazon de su pistola; `HandGrip` aplica su bind y el ajuste fijo. Asi los
+## clips llevan el arma con la mano y `WeaponSocket` conserva el recoil sin
+## escribir huesos ni seguir transforms por codigo.
 ##
 ## EL CARGADOR no depende de tiempos escritos a mano: `Glock.gd` decide cuando
 ## la mano lo tiene y llama a `magazine_to_hand()` / `magazine_to_weapon()`.
@@ -42,11 +43,24 @@ extends Node3D
 ## scripts/GlockWeapon.gd. Valores: "glock", "de".
 const ARMA := "glock"
 
-const ARMS_PATH := "res://assets/models/full9mm_2k.glb"
-## Escala y anclaje del rig de brazos, CALIBRADOS sobre el encuadre validado.
-const ARMS_SCALE := 1.362
-const GRIP_ANCHOR := Vector3(0.0, -0.088, 0.038)
-const GRIP_AHEAD := 0.080
+const ARMS_PATH := "res://assets/models/fps_rig.glb"
+const ARMS_MESH_NODE := "ArmModel"
+## Malla skinneada de la pistola del autor. Se usa solo para tomar el bind de
+## `Root` y luego se vacia sin apagar su nodo.
+const ARMS_GUN_NODE := "Glock19"
+const ARMS_WEAPON_BONE := "Root"
+## La Glock nueva se normaliza a 0.125542 en GlockWeapon. Este factor la lleva
+## al tamano 0.7785 con el que coincide con la pistola del rig, y se aplica al
+## padre para conservar la escala mecanica propia de cada arma.
+const WEAPON_RIG_SCALE := 6.2011
+## La pistola del rig apunta a X; las piezas rigidas apuntan a -Z.
+const ARMA_GIRO_RIG := -PI * 0.5
+## Cotas reales de una Glock 19 (m): el ArmsMount se calibra midiendo la malla
+## del autor y llevando su caja a estas cotas (ver `_measure_mesh` y
+## `_align_arms_with_mesh`, portados de la calibracion probada de 928f256).
+## Nada aqui es un numero magico: sale de la geometria real del GLB.
+const GUN_LENGTH := 0.186
+const GUN_TOP_OVER_ORIGIN := 0.035
 ## Pose de cadera (validada).
 const HIP_POS := Vector3(0.0, 0.122, -0.34)
 ## Ojo -> mira trasera en ADS.
@@ -117,6 +131,9 @@ var reload_clip := ""
 var reload_empty_clip := ""
 var inspect_clip := ""
 var idle_clip := ""
+## Base medida del arma del autor (ver `_align_arms_with_mesh`).
+var gun_frame_bind := Basis.IDENTITY
+var bind_in_skeleton := Transform3D.IDENTITY
 
 
 func _ready() -> void:
@@ -152,9 +169,8 @@ func _install_weapon() -> void:
 	if weapon.frame == null:
 		weapon = null
 		return
-	# La posicion definitiva la fija `_colocar_arma_en_la_mano`, despues de
-	# montar los brazos: se mide el hueso de la mano y el arma va ahi.
-	# Los puntos del arma (boca, puerto) ya cuelgan de su corredera.
+	# La posicion definitiva la fija `_montar_arma_en_hueso` despues de montar
+	# los brazos. Los puntos (boca, puerto) ya cuelgan de su corredera.
 	muzzle = weapon.muzzle
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
@@ -165,10 +181,8 @@ func _install_weapon() -> void:
 # ---------------------------------------------------------------------------
 # BRAZOS
 # ---------------------------------------------------------------------------
-## El rig de brazos es el asset de 1Matzh (CC-BY 4.0), pero aqui SOLO se usan
-## sus brazos: la malla de la pistola que trae dentro se apaga, porque el arma
-## visible es `GlockWeapon`. Las animaciones se reproducen integras (el arma ya
-## no esta en el esqueleto, asi que sus pistas de hueso no hacen nada).
+## Monta el rig sencillo (`fps_rig.glb`): brazos de 41 huesos y cuatro clips del
+## autor. `Glock19` es una malla skinneada; sus huesos, no su nodo, se animan.
 func _install_arms() -> void:
 	var packed := load(ARMS_PATH) as PackedScene
 	if packed == null:
@@ -190,45 +204,34 @@ func _install_arms() -> void:
 	arms_mount = holder
 	_apply_viewmodel_layer(arms_root)
 
-	# Del rig de brazos solo se conserva el PERSONAJE. Fuera, borradas del
-	# arbol, las mallas que no lo son: la pistola que trae el asset (el arma
-	# visible es la de piezas), su skybox de presentacion y sus ayudantes de
-	# apuntado. Borrarlas y no solo ocultarlas ahorra tenerlas en el pase.
-	# La referencia de la empunadura se mide ANTES de borrar: la pistola del
-	# asset marca donde el autor puso el arma respecto de las manos.
-	var empunadura_autor := _empunadura_del_autor()
-	var quitadas := []
-	for m in _collect_meshes(arms_root):
-		if _es_personaje(m):
-			continue
-		quitadas.append(m.name)
-		m.get_parent().remove_child(m)
-		m.queue_free()
-	# Con las mallas del arma fuera, los huesos que solo las movian ya no
-	# deforman nada: se apagan para que el pase no los recorra cada frame.
-	var apagados := _apagar_huesos_sin_malla()
-	for m in _collect_meshes(arms_root):
-		if _es_brazos(m) and (arms_mesh_visible == null or _mesh_vert_count(m) > _mesh_vert_count(arms_mesh_visible)):
-			arms_mesh_visible = m
-	for m in _collect_meshes(arms_root):
-		if m != arms_mesh_visible and _es_mangas(m):
-			arms_sleeve_visible = m
-			break
-	print("BRAZOS fuera=", quitadas, " huesos apagados=", apagados)
+	arms_mesh_visible = arms_root.find_child(ARMS_MESH_NODE, true, false) as MeshInstance3D
+	var arma_autor := arms_root.find_child(ARMS_GUN_NODE, true, false) as MeshInstance3D
+	if arms_mesh_visible == null or arma_autor == null:
+		push_warning("El rig no trae ArmModel o Glock19")
+		return
 
+	# Se conserva ArmModel por nombre: sus unidades no sirven para el filtro de
+	# tamanos del rig anterior. Glock19 queda sin malla, pero mantiene su Skin para
+	# convertir el bind del hueso Root al arma rigida.
 	park_anim("Idle", 0.0)
-	# Anclaje del rig: giro 180 en Y (el modelo mira a +Z) y escala uniforme.
-	var scaled_r := Basis(Vector3.UP, PI).scaled(Vector3(ARMS_SCALE, ARMS_SCALE, ARMS_SCALE))
-	holder.transform = Transform3D(scaled_r, GRIP_ANCHOR - scaled_r * empunadura_autor)
-	# El arma se coloca donde la MANO la agarra: se mide el hueso de la mano en
-	# el frame de pose y se lleva el arma ahi. Un solo numero de ajuste fino,
-	# EMPUNADURA_EN_MANO, para subirla o adelantarla.
-	_colocar_arma_en_la_mano(empunadura_autor)
+	# El ArmsMount NO es un ancla inventada: se calibra midiendo la pistola del
+	# autor (bind -> modelo) y llevando su caja a cotas reales de Glock 19.
+	# Sin esto el esqueleto queda en unidades del GLB (escala 336x, metros de
+	# deriva) y el ADS sale a varios metros.
+	var medida := _measure_mesh(arma_autor)
+	if medida.get("ok", false):
+		_align_arms_with_mesh(medida, holder)
+	else:
+		push_warning("No se pudo medir la pistola del rig: anclaje por defecto")
+		holder.transform = Transform3D.IDENTITY
+	_montar_arma_en_hueso(arma_autor)
+	arma_autor.mesh = null
+	print("BRAZOS malla=", arms_mesh_visible.name, " arma_autor=", arma_autor.name)
 
-	fire_clip = _resolve_clip("Fire")
+	fire_clip = _resolve_clip("Shoot")
 	reload_clip = _resolve_clip("Reload")
-	reload_empty_clip = _resolve_clip("Reload_Empty")
-	inspect_clip = _resolve_clip("Inspect")
+	reload_empty_clip = _resolve_clip("Reload")
+	inspect_clip = _resolve_clip("Idle")
 	idle_clip = _resolve_clip("Idle")
 	_mount_hand_socket()
 	_darken_arms()
@@ -239,142 +242,259 @@ func _install_arms() -> void:
 		solve_ads()
 
 
-## Apaga los huesos que ya no deforman ninguna malla visible: al borrar las
-## mallas de la pistola del asset, sus ~300 huesos de control (MCH/ORG/IK) y
-## los del arma quedan sin uso. No se borran (el skin aun los referencia), pero
-## se sacan del pase para que no cuesten cada frame.
-func _apagar_huesos_sin_malla() -> int:
-	if arms_skeleton == null:
-		return 0
-	var usados := {}
-	for m in _collect_meshes(arms_root):
-		for si in range(m.mesh.get_surface_count()):
-			var arr: Array = m.mesh.surface_get_arrays(si)
-			if arr.is_empty() or arr[Mesh.ARRAY_BONES] == null:
-				continue
-			var pesos: PackedFloat32Array = arr[Mesh.ARRAY_WEIGHTS]
-			var huesos: PackedInt32Array = arr[Mesh.ARRAY_BONES]
-			for k in range(pesos.size()):
-				if pesos[k] > 0.0:
-					usados[huesos[k]] = true
-	var apagados := 0
-	for i in range(arms_skeleton.get_bone_count()):
-		if not usados.has(i):
-			arms_skeleton.set_bone_enabled(i, false)
-			apagados += 1
-	return apagados
-
-
-## Punto de la EMPUNADURA de la pistola que traia el asset, aplanado con la
-## MISMA transformacion con la que se monta el arma nueva.
-##
-## Se mide en el sistema del Holder, no en el mundo: ahi las unidades son las
-## del GLB del arma (sin la escala de los brazos), asi que las dos pistolas se
-## comparan sin convertir nada.
-func _empunadura_del_autor() -> Vector3:
-	var mejor: MeshInstance3D = null
-	for m in _collect_meshes(arms_root):
-		if _es_pistola_del_asset(m):
-			if mejor == null or _mesh_vert_count(m) > _mesh_vert_count(mejor):
-				mejor = m
-	if mejor == null:
-		return Vector3.ZERO
-	var caja: AABB = mejor.mesh.get_aabb()
-	# La empunadura esta en la mitad inferior y trasera de la pistola: centro en
-	# ancho y fondo, y la base de la caja en alto.
-	var centro: Vector3 = caja.get_center()
-	var esquina: Vector3 = caja.position
-	return Vector3(centro.x, esquina.y, centro.z)
-
-
-## Malla de la pistola que trae el rig de brazos: material Slide/Body/Magazine.
-func _es_pistola_del_asset(m: MeshInstance3D) -> bool:
-	for si in range(m.mesh.get_surface_count()):
-		var mat: Material = m.mesh.surface_get_material(si)
-		if mat != null:
-			var n := mat.resource_name.to_lower()
-			if n.contains("slide") or n.contains("body") or n.contains("magazine") or n.contains("bullet"):
-				return true
-	return false
-
-
-## Como se agarra el arma. Tres numeros, medidos sobre el rig real y
-## verificados con tools/check_viewmodel.gd (que renderiza cada pose a PNG).
-##
-##   EMPUNADURA_EN_MANO  donde la comisura (hueco pulgar-indice) toca la EMPUNADURA
-##   AGARRE_ABAJA        hacia donde baja el mango, en ejes de la mano
-##   CANO_DELANTE        hacia donde apunta la boca, en ejes de la mano
-const EMPUNADURA_EN_MANO := Vector3(0.0, 0.0, 0.0)
-const AGARRE_ABAJA := Vector3(0.0, -1.0, -0.15)
-const CANO_DELANTE := Vector3(0.0, -1.0, -0.05)
-
-## Coloca el arma para que LA MANO la agarre.
-##
-## El marco de la mano se mide con POSICIONES de huesos (comisura, nudillos,
-## pulgar), no con sus orientaciones: en un rig importado las orientaciones
-## dependen del rigger, las posiciones no.
-func _colocar_arma_en_la_mano(_empunadura_autor: Vector3) -> void:
-	if weapon == null or arms_skeleton == null:
+## Cuelga la cadena rigida del hueso Root. Su bind es la compensacion que el
+## skin aplica al armazon del rig; sin el, un hijo rigido hereda la escala 336x
+## del esqueleto y queda enorme.
+func _montar_arma_en_hueso(arma_autor: MeshInstance3D) -> void:
+	if weapon == null or arms_skeleton == null or arma_autor.skin == null:
+		push_warning("No se pudo montar el arma: falta su Skin o el esqueleto")
 		return
-	var comisura := _punto_hueso("DEF-hand.R")
-	var indice := _punto_hueso("DEF-f_index.01.R")
-	var menique := _punto_hueso("DEF-f_pinky.01.R")
-	var pulgar := _punto_hueso("DEF-thumb.01.R")
-	if not comisura.is_finite() or not indice.is_finite() or not menique.is_finite() or not pulgar.is_finite():
-		push_warning("No se pudo medir la mano derecha; el arma queda sin asentar")
+	var bone := arms_skeleton.find_bone(ARMS_WEAPON_BONE)
+	var bind := -1
+	for i in range(arma_autor.skin.get_bind_count()):
+		if arma_autor.skin.get_bind_name(i) == ARMS_WEAPON_BONE:
+			bind = i
+			break
+	if bone < 0 or bind < 0:
+		push_warning("No se pudo montar el arma: falta el hueso o bind " + ARMS_WEAPON_BONE)
 		return
-	# Ejes de la mano.
-	var hacia_nudillos := ((indice + menique) * 0.5 - comisura).normalized()
-	var hacia_pulgar := (pulgar - comisura).normalized()
-	# Base del agarre: comisura + ajuste fino.
-	var origen: Vector3 = comisura + EMPUNADURA_EN_MANO
-	# Direccion del mango dentro de la mano y direccion de la boca.
-	var abajo := (hacia_nudillos * AGARRE_ABAJA.y + hacia_pulgar * AGARRE_ABAJA.x
-		+ hacia_nudillos.cross(hacia_pulgar).normalized() * AGARRE_ABAJA.z).normalized()
-	var delante := (hacia_nudillos * CANO_DELANTE.y + hacia_pulgar * CANO_DELANTE.x
-		+ hacia_nudillos.cross(hacia_pulgar).normalized() * CANO_DELANTE.z).normalized()
-	# Marco de la mano: X = derecha, Y = arriba (contrario al mango), Z = boca.
-	var marco := _marco(origen, -abajo, delante)
-	# El arma entra en ese marco: su origen (la empunadura) va al origen de la
-	# mano y su boca mira hacia delante. Los dos ejes del arma, en su espacio:
-	#   empunadura -> abajo  = -Y   (el armazon nace en la union con la corredera)
-	#   boca                 = -Z
-	# El arma se pone en ese marco. Su GLB mide METROS reales (GlockWeapon le
-	# aplica su escala), asi que aqui solo se convierte el marco del rig.
-	weapon.global_transform = Transform3D(marco.scaled(Vector3.ONE * weapon.escala * ARMS_SCALE), origen)
+	var attachment := BoneAttachment3D.new()
+	attachment.name = "WeaponAttachment"
+	attachment.bone_idx = bone
+	arms_skeleton.add_child(attachment)
+	hand_grip.reparent(attachment, false)
+	var fit := Transform3D(Basis(Vector3.UP, ARMA_GIRO_RIG).scaled(Vector3.ONE * WEAPON_RIG_SCALE), Vector3.ZERO)
+	hand_grip.transform = arma_autor.skin.get_bind_pose(bind) * fit
+	# La empunadura no es el origen del GLB: se compensa con el basis completo
+	# para que el giro del rig tambien afecte al desplazamiento.
+	weapon.position = -(weapon.basis * weapon.empunadura)
+	weapon.force_update_transform()
+	print("ARMA anclada a ", ARMS_WEAPON_BONE, " escala_rig=", WEAPON_RIG_SCALE,
+		" tamano_mundo=", _caja_mundo(weapon).size.snapped(Vector3(0.1, 0.1, 0.1)))
 
 
-## Marco ortonormal a partir de un origen, un "arriba" aproximado y un "delante".
-func _marco(origen: Vector3, arriba: Vector3, delante: Vector3) -> Basis:
-	var z := -delante.normalized()
-	var x := arriba.cross(z).normalized()
-	if x.length() < 0.001:
-		x = Vector3.RIGHT
-	var y := z.cross(x).normalized()
-	# Columnas: X, Y, Z del marco.
-	var b := Basis()
-	b.x = x
-	b.y = y
-	b.z = z
-	return b
+## MEDICION DEL RIG (portada de la calibracion probada de 928f256).
+##
+## El GLB viene en unidades propias: el `Skeleton3D` trae escala global 336x y
+## `mesh.get_aabb()` en espacio de bind da cajas de cientos de unidades. No se
+## asume ninguna orientacion ni escala: se mide la geometria real (vertices en
+## espacio de bind llevados a modelo con la cadena hueso/bind) y se corrige el
+## `ArmsMount` con esa medida. Asi los brazos quedan en metros y el ADS en
+## centimetros, no en metros.
+func _bind_vertices(arma_autor: MeshInstance3D) -> PackedVector3Array:
+	var verts := PackedVector3Array()
+	if arma_autor == null or arma_autor.mesh == null:
+		return verts
+	for si in range(arma_autor.mesh.get_surface_count()):
+		var arrays := arma_autor.mesh.surface_get_arrays(si)
+		if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
+			continue
+		verts.append_array(arrays[Mesh.ARRAY_VERTEX])
+	return verts
 
 
-## Posicion global de un hueso por prefijo de nombre (el importador añade sufijo).
-func _punto_hueso(prefijo: String) -> Vector3:
-	if arms_skeleton == null:
-		return Vector3.INF
-	for i in range(arms_skeleton.get_bone_count()):
-		if arms_skeleton.get_bone_name(i).begins_with(prefijo):
-			arms_skeleton.force_update_all_bone_transforms()
-			return arms_skeleton.global_transform * arms_skeleton.get_bone_global_pose(i).origin
-	return Vector3.INF
+## Cadena del hueso del arma: bind -> espacio del modelo (arms_root).
+func _bind_in_model(arma_autor: MeshInstance3D) -> Transform3D:
+	var root_bone := arms_skeleton.find_bone(ARMS_WEAPON_BONE)
+	if root_bone < 0:
+		push_error("El rig no tiene hueso " + ARMS_WEAPON_BONE)
+		return Transform3D.IDENTITY
+	var root_name := arms_skeleton.get_bone_name(root_bone)
+	var bind_index := -1
+	for i in range(arma_autor.skin.get_bind_count()):
+		if arma_autor.skin.get_bind_name(i) == root_name:
+			bind_index = i
+			break
+	if bind_index < 0:
+		push_error("Ningun bind del arma se llama " + root_name)
+		return Transform3D.IDENTITY
+	bind_in_skeleton = arms_skeleton.get_bone_global_rest(root_bone) * arma_autor.skin.get_bind_pose(bind_index)
+	return _local_chain(arms_skeleton, arms_root) * bind_in_skeleton
+
+
+## Transformacion local acumulada de `node` hasta su ancestro `ancestor`.
+func _local_chain(node: Node, ancestor: Node) -> Transform3D:
+	var result := Transform3D.IDENTITY
+	var current := node
+	while current != null and current != ancestor:
+		if current is Node3D:
+			result = (current as Node3D).transform * result
+		current = current.get_parent()
+	return result
+
+
+func _bounds(verts: PackedVector3Array) -> AABB:
+	if verts.is_empty():
+		return AABB()
+	var mn := verts[0]
+	var mx := verts[0]
+	for v in verts:
+		mn = mn.min(v)
+		mx = mx.max(v)
+	return AABB(mn, mx - mn)
+
+
+## Caja envolvente de `box` expresada en otro sistema (sus 8 esquinas).
+func _box_in_frame(box: AABB, t: Transform3D) -> AABB:
+	var result := AABB()
+	var first := true
+	var mn := box.position
+	var mx := box.position + box.size
+	for xi in [0.0, 1.0]:
+		for yi in [0.0, 1.0]:
+			for zi in [0.0, 1.0]:
+				var corner := Vector3(lerpf(mn.x, mx.x, xi), lerpf(mn.y, mx.y, yi), lerpf(mn.z, mx.z, zi))
+				var p: Vector3 = t * corner
+				if first:
+					result = AABB(p, Vector3.ZERO)
+					first = false
+				else:
+					result = result.expand(p)
+	return result
+
+
+func _centroid(points: PackedVector3Array) -> Vector3:
+	var sum := Vector3.ZERO
+	for p in points:
+		sum += p
+	return sum / float(maxi(points.size(), 1))
+
+
+## Vertices de una primitiva concreta del arma del autor, en espacio de modelo.
+func _surface_vertices(arma_autor: MeshInstance3D, surface_name: String) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	if arma_autor == null or arma_autor.mesh == null or arms_skeleton == null or arma_autor.skin == null:
+		return out
+	var to_model := _bind_in_model(arma_autor)
+	for i in range(arma_autor.mesh.get_surface_count()):
+		if arma_autor.mesh.surface_get_name(i) != surface_name:
+			continue
+		var arrays := arma_autor.mesh.surface_get_arrays(i)
+		if arrays.is_empty() or arrays[Mesh.ARRAY_VERTEX] == null:
+			continue
+		for v in arrays[Mesh.ARRAY_VERTEX]:
+			out.append(to_model * v)
+	return out
+
+
+## Mide la malla tal como viene del GLB: vertices en su espacio de bind, caja
+## envolvente y marco real del arma. No se asume orientacion: el eje mas largo
+## es el del canon, el mediano la altura y el mas corto la anchura. Los signos
+## salen de la propia geometria (mira encima de la corredera, empunadura
+## detras).
+func _measure_mesh(arma_autor: MeshInstance3D) -> Dictionary:
+	var result := {"ok": false}
+	if arma_autor == null or arma_autor.mesh == null or arma_autor.skin == null or arms_skeleton == null:
+		return result
+	var bind_verts := _bind_vertices(arma_autor)
+	if bind_verts.is_empty():
+		return result
+	var to_model := _bind_in_model(arma_autor)
+	var verts := PackedVector3Array()
+	verts.resize(bind_verts.size())
+	for i in range(bind_verts.size()):
+		verts[i] = to_model * bind_verts[i]
+	var box := _bounds(verts)
+	var size := box.size
+	var axis_len := 0
+	for i in range(1, 3):
+		if size[i] > size[axis_len]:
+			axis_len = i
+	var axis := Vector3.ZERO
+	axis[axis_len] = 1.0
+	var helper := Vector3.UP if absf(axis.dot(Vector3.UP)) < 0.9 else Vector3.RIGHT
+	var x0 := helper.cross(axis).normalized()
+	var y0 := axis.cross(x0).normalized()
+	var base0 := Basis(x0, y0, axis)
+	# Balanceo: el angulo que MINIMIZA el area de la seccion perpendicular al
+	# canon. La seccion es alargada (alto contra ancho), asi que el minimo cae
+	# en la orientacion alineada.
+	var best_angle := 0.0
+	var best_area := INF
+	var best_lo := Vector2.ZERO
+	var best_hi := Vector2.ZERO
+	for step in range(0, 90):
+		var angle := deg_to_rad(float(step))
+		var probe := base0 * Basis(Vector3.BACK, angle)
+		var inv := probe.inverse()
+		var lo := Vector2(INF, INF)
+		var hi := Vector2(-INF, -INF)
+		for v in verts:
+			var local: Vector3 = inv * v
+			lo.x = minf(lo.x, local.x)
+			lo.y = minf(lo.y, local.y)
+			hi.x = maxf(hi.x, local.x)
+			hi.y = maxf(hi.y, local.y)
+		var area := (hi.x - lo.x) * (hi.y - lo.y)
+		if area < best_area:
+			best_area = area
+			best_angle = angle
+			best_lo = lo
+			best_hi = hi
+	var frame := base0 * Basis(Vector3.BACK, best_angle)
+	if (best_hi.x - best_lo.x) > (best_hi.y - best_lo.y):
+		frame = frame * Basis(Vector3.BACK, PI * 0.5)
+	var to_frame := frame.inverse()
+	var slide_mid: Vector3 = to_frame * _centroid(_surface_vertices(arma_autor, "Slide"))
+	var sight_mid: Vector3 = to_frame * _centroid(_surface_vertices(arma_autor, "White"))
+	var magazine_mid: Vector3 = to_frame * _centroid(_surface_vertices(arma_autor, "Magazine"))
+	var up := frame.y
+	var forward := frame.z
+	if (sight_mid - slide_mid).y < 0.0:
+		up = -up
+	if (magazine_mid - slide_mid).z > 0.0:
+		forward = -forward
+	var right := up.cross(-forward).normalized()
+	result["ok"] = true
+	result["verts"] = verts
+	result["frame"] = Basis(right, up, -forward)
+	var final_inv: Basis = (result["frame"] as Basis).inverse()
+	var f_lo := Vector3(INF, INF, INF)
+	var f_hi := Vector3(-INF, -INF, -INF)
+	for v in verts:
+		var local: Vector3 = final_inv * v
+		f_lo = f_lo.min(local)
+		f_hi = f_hi.max(local)
+	result["frame_box"] = AABB(f_lo, f_hi - f_lo)
+	result["length"] = maxf(size.x, maxf(size.y, size.z))
+	return result
+
+
+## Corrige el ArmsMount para que la malla quede en el marco del arma: -Z
+## adelante (boca), +Y arriba (corredera) y +X derecha, con la escala real
+## (Glock 19 = 186 mm de largo). La correccion sale de la cadena medida
+## hueso/bind/armature, no de numeros fijos.
+func _align_arms_with_mesh(measure: Dictionary, holder: Node3D) -> void:
+	if holder == null or arms_skeleton == null:
+		return
+	gun_frame_bind = measure["frame"]
+	var target := Vector3(0.0296, 0.1286, GUN_LENGTH)
+	var frame_box: AABB = measure["frame_box"]
+	var axis_scale := Vector3(
+		target.x / maxf(frame_box.size.x, 0.000001),
+		target.y / maxf(frame_box.size.y, 0.000001),
+		target.z / maxf(frame_box.size.z, 0.000001)
+	)
+	holder.basis = Basis.IDENTITY.scaled(axis_scale) * gun_frame_bind.inverse()
+	var centred := _box_in_frame(_bounds(measure["verts"]), holder.basis)
+	# Ojo: la cadena incluye arms_root (identidad) y Armature (336x): al medir
+	# la caja se usa solo el basis del holder porque la medida ya viene en
+	# espacio de modelo (bind_in_model incluye la cadena hasta arms_root).
+	var box_centre := centred.position + centred.size * 0.5
+	holder.position = Vector3(
+		-box_centre.x,
+		GUN_TOP_OVER_ORIGIN - (centred.position.y + centred.size.y),
+		-box_centre.z
+	)
+	print("RIG_MEDIDA escala_ejes=", axis_scale.snapped(Vector3(0.0001, 0.0001, 0.0001)),
+		" anclaje=", holder.position.snapped(Vector3(0.0001, 0.0001, 0.0001)))
 
 
 ## Hueso de MANO del lado pedido ("l" o "r").
 ##
-## El importador añade un sufijo numerico a los nombres (DEF-hand.R_842), asi
-## que no se puede buscar por nombre exacto. Se puntua el nombre: DEF manda, y
-## "hand" sin dedos evita confundir la mano con un nudillo.
+## El importador puede añadir un sufijo numerico a los nombres, asi que no se
+## busca por nombre exacto: se puntua ("hand" sin dedos para no confundirla con
+## un nudillo, lado por sufijo .l/.r).
 func _find_hand_bone(lado: String) -> int:
 	if arms_skeleton == null:
 		return -1
@@ -398,28 +518,6 @@ func _find_hand_bone(lado: String) -> int:
 			best = i
 			best_score = score
 	return best
-
-
-func _es_personaje(m: MeshInstance3D) -> bool:
-	# No es personaje: la pistola del asset, el skybox de presentacion ni los
-	# ayudantes de apuntado (4 caras).
-	if _es_pistola_del_asset(m):
-		return false
-	var sz: Vector3 = (m.mesh as Mesh).get_aabb().size
-	if sz.x > 1.5 and sz.z > 1.5:
-		return false
-	return _mesh_vert_count(m) > 16
-
-
-## Malla de brazos: la que deforman huesos de mano o antebrazo.
-func _es_brazos(m: MeshInstance3D) -> bool:
-	var d := _dominant_bone(m)
-	return d.findn("hand") >= 0 or d.findn("forearm") >= 0
-
-
-func _es_mangas(m: MeshInstance3D) -> bool:
-	var d := _dominant_bone(m)
-	return d.findn("forearm") >= 0 or d.findn("upper_arm") >= 0
 
 
 # ---------------------------------------------------------------------------
@@ -479,31 +577,32 @@ func magazine_in_hand() -> bool:
 # Materiales y utilidades de malla
 # ---------------------------------------------------------------------------
 const FABRIC_SPECULAR := 0.22
-const GLOVE_TINT := Color(0.52, 0.52, 0.55, 1.0)
-const SLEEVE_TINT := Color(0.40, 0.40, 0.43, 1.0)
-const GLOVE_ROUGHNESS := 0.95
-const SLEEVE_ROUGHNESS := 1.0
+## El key del viewmodel (2.9) quemaria el albedo del autor: se baja un paso.
+const ARMS_TAME := 0.5
+const ARMS_ROUGHNESS := 0.95
 
 
 func _darken_arms() -> void:
-	_darken_mesh(arms_mesh_visible, "GUANTE", GLOVE_TINT, GLOVE_ROUGHNESS)
-	_darken_mesh(arms_sleeve_visible, "MANGA", SLEEVE_TINT, SLEEVE_ROUGHNESS)
+	_tame_mesh(arms_mesh_visible)
+	_tame_mesh(arms_sleeve_visible)
 
 
-func _darken_mesh(mi: MeshInstance3D, label: String, tint: Color, roughness: float) -> void:
+## Deja la tela como tela: conserva el tono del autor (camisa oliva, piel,
+## guante oscuro) pero anula el metalico que trae el GLB (0.4 hasta en la piel)
+## y sube la rugosidad. Sin esto las manos salen espejadas o quemadas.
+func _tame_mesh(mi: MeshInstance3D) -> void:
 	if mi == null or mi.mesh == null:
 		return
 	for si in range(mi.mesh.get_surface_count()):
-		var m: Material = mi.get_surface_override_material(si)
-		if m == null:
-			m = mi.mesh.surface_get_material(si)
-		if m is StandardMaterial3D:
-			var src := m as StandardMaterial3D
+		var base: Material = mi.mesh.surface_get_material(si)
+		if base is StandardMaterial3D:
+			var src := base as StandardMaterial3D
 			var fabric := src.duplicate() as StandardMaterial3D
-			fabric.albedo_color = tint
+			fabric.albedo_color = Color(src.albedo_color.r * ARMS_TAME,
+				src.albedo_color.g * ARMS_TAME, src.albedo_color.b * ARMS_TAME, 1.0)
 			fabric.metallic = 0.0
 			fabric.metallic_specular = FABRIC_SPECULAR
-			fabric.roughness = roughness
+			fabric.roughness = ARMS_ROUGHNESS
 			fabric.emission_enabled = false
 			mi.set_surface_override_material(si, fabric)
 
@@ -520,37 +619,15 @@ func _collect_meshes(root_node: Node) -> Array:
 	return out
 
 
-func _mesh_vert_count(mi: MeshInstance3D) -> int:
-	var c := 0
-	for si in range(mi.mesh.get_surface_count()):
-		c += (mi.mesh.surface_get_arrays(si)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
-	return c
-
-
-func _dominant_bone(mi: MeshInstance3D) -> String:
-	var acc := {}
-	for si in range(mi.mesh.get_surface_count()):
-		var arrays := mi.mesh.surface_get_arrays(si)
-		if arrays.is_empty() or arrays[Mesh.ARRAY_BONES] == null:
-			continue
-		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
-		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
-		var n: int = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
-		for vi in range(n):
-			for k in range(4):
-				var w: float = weights[vi * 4 + k]
-				if w > 0.0:
-					var b: int = bones[vi * 4 + k]
-					acc[b] = float(acc.get(b, 0.0)) + w
-	var best := -1
-	var best_w := 0.0
-	for b in acc:
-		if float(acc[b]) > best_w:
-			best_w = float(acc[b])
-			best = b
-	if best < 0 or arms_skeleton == null:
-		return ""
-	return arms_skeleton.get_bone_name(best)
+## Caja global que cubre todas las piezas de malla bajo un nodo.
+func _caja_mundo(nodo: Node) -> AABB:
+	var caja := AABB()
+	var primero := true
+	for m in _collect_meshes(nodo):
+		var mundo: AABB = m.global_transform * m.mesh.get_aabb()
+		caja = mundo if primero else caja.merge(mundo)
+		primero = false
+	return caja
 
 
 func _apply_viewmodel_layer(root_node: Node) -> void:
@@ -602,7 +679,16 @@ func _resolve_clip(short_name: String) -> String:
 func play_anim(short_name: String, loop := false) -> bool:
 	if not arms_ok or arms_player == null:
 		return false
-	var resolved := _resolve_clip(short_name)
+	# Este rig no trae Fire/Reload_Empty/Inspect: se mapean a sus clips reales.
+	# Sin esto play_fire() y la recarga en vacio no reproducen nada.
+	var alias := short_name
+	if short_name == "Fire":
+		alias = "Shoot"
+	elif short_name == "Reload_Empty":
+		alias = "Reload"
+	elif short_name == "Inspect":
+		alias = "Idle"
+	var resolved := _resolve_clip(alias)
 	if resolved == "":
 		return false
 	arms_player.play(resolved, -1.0, 1.0)

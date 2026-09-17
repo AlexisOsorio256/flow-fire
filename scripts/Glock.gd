@@ -37,12 +37,16 @@ const SLIDE_RESTITUTION := 0.25
 const SLIDE_EJECT_AT := 0.030
 
 ## Red de seguridad de la recarga, en segundos, para clips inesperados.
-const RELOAD_TOTAL := 3.20
-const RELOAD_EMPTY_TOTAL := 4.00
-const RELOAD_SLIDE_T := 2.87
-const RELOAD_MAG_OUT_T := 0.70
-const RELOAD_MAG_IN_T := 2.25
-const RELOAD_EMPTY_MAG_IN_T := 3.36
+## Calibrada al clip `Reload` del rig (`fps_rig.glb`, 2.042 s): el agarre cae al
+## inicio del gesto y la entrega cuando la mano vuelve al brocal (~1.6-1.9 s).
+## La logica total cubre el clip, no al reves: si el clip termina antes, las
+## manos vuelven a idle mientras el arma sigue "recargando".
+const RELOAD_TOTAL := 2.10
+const RELOAD_EMPTY_TOTAL := 2.45
+const RELOAD_SLIDE_T := 1.95
+const RELOAD_MAG_OUT_T := 0.55
+const RELOAD_MAG_IN_T := 1.60
+const RELOAD_EMPTY_MAG_IN_T := 1.90
 ## Instantes del clip Inspect.
 const INSPECT_TOTAL := 5.30
 const INSPECT_GRAB_T := 0.90

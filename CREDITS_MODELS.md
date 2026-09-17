@@ -1,5 +1,19 @@
 # Créditos de modelos 3D
 
+## Fps Rig — J-Toastie  (BRAZOS)
+
+- Archivo: `assets/models/fps_rig.glb` (706 KB).
+- Fuente: Poly Pizza — pack FPS de J-Toastie (brazos riggeados + Glock riggeada).
+- Autor: **J-Toastie**.
+- Licencia: **Creative Commons Attribution (CC-BY)** según Poly Pizza
+  (el historial del proyecto la cita como CC-BY 3.0); compatible, sin cláusula
+  NonCommercial. Atribución: *"Fps Rig" by J-Toastie, licensed under CC-BY*.
+- Del asset se usan los **brazos (41 huesos, 4 animaciones: Grip, Idle, Reload,
+  Shoot)** y el hueso `Root` como referencia del armazón. La malla de su
+  pistola se vacía en runtime (`mesh = null`, nunca `visible = false`); el arma
+  visible es la de Urpo.
+- 9 593 triángulos visibles (2 432 de brazos + arma de piezas).
+
 ## 9mm Pistol — Urpo  (ARMA VISIBLE)
 
 - Archivo: `assets/models/glock_urpo.glb` (15,9 MB).
