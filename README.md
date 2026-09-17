@@ -85,20 +85,19 @@ mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
 | "quiero otra pistola" | `const ARMA` + entrada en `ARMAS` + `.glb` |
 | "un sonido no cae en el gesto" | no hay segundos que tocar: el evento sale del gesto |
 
-Comprobar abriendo el juego: `tools/review_contact_sheet.py idle|fire|ads|...`
-(ejecuta Godot, graba la acción y deja UNA hoja en `captures/review/` para
-mirarla). Invariantes objetivas: `tools/check_weapon.gd` (orientación y
-montaje), `tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
-`tools/check_weapon_parts.py` (piezas, tamaño real y puntos mecánicos).
+Invariantes objetivas: `tools/check_weapon.gd` (orientación y montaje),
+`tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
+`tools/check_weapon_parts.py` (piezas, tamaño real y puntos mecánicos). Lo
+visual se comprueba con capturas del Godot del usuario, no headless.
 
 ## Workflow IA + usuario
 
-- **La IA abre el juego y mira.** Si el problema es espacial, visual o de
-  pose, la IA ejecuta el juego en Godot y mira capturas ella misma antes de
-  diagnosticar. No pide al usuario imágenes de lo que puede ver sola.
-- **Ciclo:** cambio pequeño → la IA lo verifica mirando el juego (captura) →
-  commit/push → el usuario valida la sensación final en Godot → feedback →
-  corregir.
+- **El usuario muestra, la IA diagnostica.** Las capturas headless no
+  concuerdan con lo que se ve en Godot, asi que no se usan. Si el problema es
+  espacial, visual o de pose, el usuario manda una captura o foto de su Godot
+  y la IA diagnostica sobre ESA imagen.
+- **Ciclo:** cambio pequeño → commit/push → el usuario prueba en Godot y manda
+  captura si algo se ve mal → feedback → corregir.
 - **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
   justifica si el usuario la pide explícitamente o autoriza una invariante
   concreta (pregunta objetiva que el usuario no responde mejor mirando o
