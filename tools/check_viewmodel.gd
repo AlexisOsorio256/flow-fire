@@ -109,11 +109,8 @@ func _ready() -> void:
 		for i in range(30):
 			vm.update(1.0 / 60.0)
 			await get_tree().process_frame
-		# Encuadre automatico: la caja del ARMA (piezas rigidas, en metros
-		# reales) crecida para incluir las manos. No vale _caja_visible(vm):
-		# las mallas skinneadas del rig traen su AABB en espacio de bind
-		# (unidades del GLB) y reventarian el encuadre a cientos de metros.
-		var caja := _caja_visible(arma).grow(0.30)
+		# Encuadre automatico: se mira TODA la caja visible, no un punto fijo.
+		var caja := _caja_visible(vm)
 		var centro := caja.get_center()
 		var radio := maxf(caja.size.length() * 0.5, 0.15)
 		cam.global_position = centro + Vector3(radio * 1.1, radio * 0.35, radio * 1.6)
