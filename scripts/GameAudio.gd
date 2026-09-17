@@ -52,6 +52,7 @@ const SOUNDS := {
     "slide_hand": {"stream": preload("res://assets/audio/slide_hand.wav"), "db": -16.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
+    "handling": {"stream": preload("res://assets/audio/handling.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
     # Impactos: grabaciones reales de impacto de bala (Gamemaster Audio, Bullet
     # Impact Sounds). Cada material tiene su propia grabacion; antes hormigon,
@@ -80,9 +81,10 @@ const SHOT_STREAMS: Array[AudioStream] = [
 
 const SHOT_DB := -6.0        # disparo (los 5 WAV comparten loudness de ataque)
 
-# Voces simultáneas del arma: al disparar rápido las colas se apilaban y
-# enfangaban el mix, así que se cortan las más viejas con un fade corto.
-const MAX_WEAPON_VOICES := 4
+# Voces simultáneas del arma: cada disparo son 3 voces (blast + tope + bateria)
+# con colas de 95-190 ms; con 4 voces al disparar seguido se cortaban las colas
+# con un fade y el tiro adelgazaba. 8 cubre ~2.5 tiros rapidos + recarga.
+const MAX_WEAPON_VOICES := 8
 const VOICE_FADE := 0.06
 
 var _weapon_voices: Array[AudioStreamPlayer] = []

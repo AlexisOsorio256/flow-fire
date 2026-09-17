@@ -18,9 +18,10 @@ extends RefCounted
 ## de Idle: con resorte a cero la transformacion es identidad y el arma queda
 ## exactamente donde la deja su animacion.
 
-# Impulso de cabeceo del ARMA en el disparo (rad/s). CALIBRADO a 4.2 rad/s:
-# la boca sube ~8 grados con pico a ~50 ms.
-const MAIN_RECOIL_KICK := 4.2
+# Impulso de cabeceo del ARMA en el disparo (rad/s): ~11 grados con pico a
+# ~50 ms. Con las manos firmes (gesto de Fire neutralizado) el arma puede
+# viajar mas sin arrastrar al tirador.
+const MAIN_RECOIL_KICK := 4.8
 # Resorte del arma en la mano: k=520/c=18 (zeta 0.39), pico a ~50 ms y
 # recuperacion controlada hacia 250 ms.
 const WEAPON_K := 520.0

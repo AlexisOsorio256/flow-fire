@@ -116,9 +116,10 @@ func update(delta: float) -> void:
 	_gas_mat.albedo_color = Color(1.0, 1.0, 1.0) * pow(f, GAS_DECAY)
 	_core_mat.emission_energy_multiplier = CORE_EMISSION * pow(f, CORE_DECAY)
 	if muzzle_light != null:
-		# Pulso corto sobre el entorno, no una segunda fuente de iluminación
-		# amarilla que convierta tela y piel en metal dorado.
-		muzzle_light.light_energy = randf_range(0.30, 0.55)
+		# Pico caliente que muere con el fogonazo, no franja fija: desde atras
+		# (cadera) una luz sostenida parecia una linea encendida sobre la
+		# corredera al disparar seguido.
+		muzzle_light.light_energy = randf_range(0.35, 0.60) * f
 
 
 ## Evento de disparo completo: fogonazo + humo de boca.
@@ -155,9 +156,10 @@ func pop_flash() -> void:
 ## contorno del poliedro no dibuja nada, que es lo que convierte la silueta en
 ## gas y no en una pieza recortada.
 ##
-## No hay punta ni aguja: el volumen muere a 18 mm delante de la boca, así que
-## ninguna silueta puede leerse como un objeto alargado (estrella, flecha, cono
-## o lápiz). Lo que se ve es resplandor alrededor de la boca.
+## No hay punta ni aguja: el volumen muere a ~12 mm delante de la boca (desde
+## atras se escorza a casi nada en vez de leerse como lapiz sobre la
+## corredera) y abre un poco a los lados para que el halo asome por los
+## cantos de la corredera en vez de apilarse encima.
 func _build_gas_mesh() -> ArrayMesh:
 	var inner := PackedVector3Array([
 		Vector3(-0.0060, 0.0072, 0.004),
@@ -202,6 +204,11 @@ func _build_gas_mesh() -> ArrayMesh:
 	colors.append_array(inner_colors)
 	verts.append_array(outer)
 	colors.append_array(outer_colors)
+	# De frente el chorro debe morir pronto y abrir halo: menos aguja en Z,
+	# mas aire a los lados. La raiz (boca) no se toca.
+	for i in range(1, verts.size()):
+		var v: Vector3 = verts[i]
+		verts[i] = Vector3(v.x * 1.2, v.y, v.z * 0.65)
 	var idx := PackedInt32Array()
 	for i in range(n):
 		var a := 1 + i
@@ -240,6 +247,10 @@ func _build_core_mesh() -> ArrayMesh:
 	for p in ring:
 		verts.append(p)
 	verts.append(tip)
+	# Como el gas: corto hacia delante para que desde atras no haga lapiz.
+	for i in range(verts.size()):
+		var v: Vector3 = verts[i]
+		verts[i] = Vector3(v.x * 1.1, v.y, v.z * 0.65)
 	for i in range(ring.size()):
 		var a: int = 1 + i
 		var b: int = 1 + ((i + 1) % ring.size())

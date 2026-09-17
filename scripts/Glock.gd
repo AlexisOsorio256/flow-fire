@@ -29,9 +29,10 @@ const MAG_SIZE := 17
 const SLIDE_TRAVEL := 0.039
 const SLIDE_K := 4000.0        # rigidez equivalente del muelle recuperador
 const SLIDE_C := 80.0          # amortiguacion (zeta 0.632)
-# CALIBRADO para tocar el tope trasero: con menos impulso la corredera no
-# llegaba al tope y el disparo normal no tenia mecanica audible.
-const SLIDE_IMPULSE := 5.90
+# CALIBRADO para tocar el tope trasero (simulado el integrador de _update_slide:
+# con 5.90 el pico se quedaba en 37.2 mm y el tope a 39 mm no se tocaba nunca:
+# el `slide_rear` no sonaba en ningun disparo. Con 6.50 el pico es ~41 mm).
+const SLIDE_IMPULSE := 6.50
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto (~8 ms)
 # Instantes de la recarga, MEDIDOS sobre la animacion real de cada clip
@@ -60,6 +61,13 @@ const RELOAD_EMPTY_MAG_IN_T := 3.36
 const RELOAD_SLIDE_T := 2.87
 const RELOAD_EMPTY_TOTAL := 4.00    # Reload_Empty (3.917) + mezcla al idle
 const RELOAD_TACTICAL_TOTAL := 3.20  # Reload (3.125) + mezcla al idle
+
+# Instantes del Inspect, MEDIDOS sobre su clip (5.208 s): la mano abraza el
+# arma a ~0.9 s, la corredera va atras a 3.15-3.35 s y vuelve sola a ~4.12 s.
+const INSPECT_GRAB_T := 0.90
+const INSPECT_SLIDE_GRAB_T := 3.15
+const INSPECT_SLIDE_HOME_T := 4.12
+const INSPECT_TOTAL := 5.30  # clip (5.208) + margen
 
 # --- Estado mecanico -------------------------------------------------------
 var camera: Camera3D  # solo para la direccion del disparo
@@ -95,6 +103,12 @@ var reload_slide_released := false
 var reload_mag_seated := false
 var mag_sound_out := false
 var reload_pose_blend := 0.0  # 0..1: lo consume la pose de recarga del viewmodel
+
+var inspecting := false
+var inspect_elapsed := 0.0
+var inspect_grab := false
+var inspect_slide_grab := false
+var inspect_slide_home := false
 
 # --- Entradas de gameplay --------------------------------------------------
 var aim := false
@@ -148,10 +162,11 @@ func _process(delta: float) -> void:
 	_update_trigger(delta)
 	_update_slide(delta)
 	_update_reload(delta)
+	_update_inspect(delta)
 	recoil.update(delta)
 	viewmodel.set_pose_inputs(aim_blend, sprint_blend, player_speed, look_delta, _last_local_move, reload_pose_blend)
 	viewmodel.update(delta)
-	viewmodel.apply_mechanics(slide_pos, SLIDE_TRAVEL, trigger_visual)
+	viewmodel.apply_mechanics(slide_pos, SLIDE_TRAVEL, trigger_visual, not slide_locked and slide_pos < 0.02)
 
 	shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
 	if fx != null:
@@ -191,6 +206,7 @@ func start_reload() -> bool:
 	if chamber > 0 and mag >= MAG_SIZE:
 		return false
 	reloading = true
+	inspecting = false
 	reload_elapsed = 0.0
 	# Recarga en vacio = no hay cartucho en recamara: al terminar hay que soltar
 	# la corredera para alimentarlo. Basta con chamber <= 0; no se exige
@@ -203,6 +219,7 @@ func start_reload() -> bool:
 	reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TACTICAL_TOTAL
 	reload_slide_released = false
 	reload_mag_seated = false
+	mag_sound_out = false
 	aim = false
 	trigger_held = false
 	viewmodel.play_reload(reload_empty)
@@ -241,6 +258,7 @@ func _update_trigger(delta: float) -> void:
 
 func _fire() -> void:
 	chamber -= 1
+	inspecting = false
 	trigger_ready = false
 	trigger_latched = true
 	trigger_reset_timer = 0.075
@@ -251,8 +269,8 @@ func _fire() -> void:
 	slide_vel += SLIDE_IMPULSE
 	shot_pulse = 1.0
 
-	# Evento fisico del disparo: el retroceso del arma y de los brazos lo integra
-	# GlockRecoil (tres escalas de tiempo, ver su cabecera). Aqui solo se avisa.
+	# Evento fisico del disparo: el retroceso del arma lo integra GlockRecoil
+	# (ver su cabecera). Aqui solo se avisa.
 	recoil.kick_shot()
 
 	GameAudio.play_shot()
@@ -372,6 +390,10 @@ func _update_reload(delta: float) -> void:
 		slide_locked = false
 		slide_pos = SLIDE_TRAVEL
 		slide_vel = -4.2
+		# La bateria de ESTE cierre tiene que sonar aunque la del ultimo
+		# disparo ya sonara: el flag es por ciclo de corredera, no por sesion
+		# (sin esto, la corredera liberada volvia muda a bateria).
+		slide_battery_emitted = false
 		# La mano soltando la corredera, en su propia grabacion. La vuelta a
 		# bateria usa su muestra cuando la fisica la detecta (ver _update_slide).
 		GameAudio.play_2d("slide_hand", -2.0, randf_range(0.98, 1.04))
@@ -388,11 +410,36 @@ func _update_reload(delta: float) -> void:
 
 ## Inspeccionar el arma (tecla F). La animacion existe en el rig de brazos, asi
 ## que no hay coreografia que inventar: se reproduce y el AnimationPlayer vuelve
-## solo al idle al terminar (queue en el propio clip).
+## solo al idle al terminar (queue en el propio clip). El foley sigue al gesto
+## (ver _update_inspect): roce al abrazar, agarre de corredera y suelta.
 func inspect_weapon() -> void:
 	if reloading:
 		return
+	inspecting = true
+	inspect_elapsed = 0.0
+	inspect_grab = false
+	inspect_slide_grab = false
+	inspect_slide_home = false
 	viewmodel.play_anim("Inspect")
+
+
+## Foley del Inspect, atado a su clip (ver constantes INSPECT_*): sin esto la
+## inspeccion era muda.
+func _update_inspect(delta: float) -> void:
+	if not inspecting:
+		return
+	inspect_elapsed += delta
+	if not inspect_grab and inspect_elapsed >= INSPECT_GRAB_T:
+		inspect_grab = true
+		GameAudio.play_2d("handling", 0.0, randf_range(0.97, 1.03))
+	if not inspect_slide_grab and inspect_elapsed >= INSPECT_SLIDE_GRAB_T:
+		inspect_slide_grab = true
+		GameAudio.play_2d("slide_hand", -2.0, randf_range(0.98, 1.04))
+	if not inspect_slide_home and inspect_elapsed >= INSPECT_SLIDE_HOME_T:
+		inspect_slide_home = true
+		GameAudio.play_2d("slide_battery", -4.0, randf_range(0.98, 1.02))
+	if inspect_elapsed >= INSPECT_TOTAL:
+		inspecting = false
 
 
 func _seat_reload_mag() -> void:

@@ -78,16 +78,19 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     pm.spread = 24.0
     pm.initial_velocity_min = 0.25
     pm.initial_velocity_max = 0.9
-    pm.gravity = Vector3(0, 0.35, 0)
+    # El humo acompana al disparo hacia delante y se disipa: antes subia
+    # demasiado (+0.35) durante 0.9 s y desde atras se leia como una estela
+    # vertical colgando sobre la corredera.
+    pm.gravity = Vector3(0, 0.12, 0)
     pm.scale_min = 0.45
     pm.scale_max = 1.8
     pm.color = Color(0.55, 0.55, 0.52, 0.24)
-    pm.damping_min = 1.2
-    pm.damping_max = 2.0
+    pm.damping_min = 1.6
+    pm.damping_max = 2.4
 
     var particles := GPUParticles3D.new()
     particles.amount = 7
-    particles.lifetime = 0.9
+    particles.lifetime = 0.6
     particles.one_shot = true
     particles.explosiveness = 1.0
     particles.process_material = pm

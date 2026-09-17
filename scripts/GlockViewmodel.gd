@@ -738,7 +738,7 @@ func resolve_idle() -> String:
 ## En cualquier otro clip (Idle/Reload/Reload_Empty/Inspect) estos huesos no
 ## se tocan: la animacion los coloca y todas terminan en la misma pose de
 ## Idle por construccion. Con resorte a cero la transformacion es identidad.
-func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: float) -> void:
+func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: float, slide_home: bool) -> void:
 	if not pistol_ok or arms_skeleton == null or slide_bone < 0:
 		return
 	var current := ""
@@ -747,9 +747,10 @@ func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: floa
 	var firing := current == fire_clip and fire_clip != ""
 	if trigger_bone >= 0:
 		arms_skeleton.set_bone_pose_position(trigger_bone, trigger_rest + TRIGGER_PULL * trigger_visual)
-	# En Inspect la corredera la lleva el gesto del clip; el resto del tiempo,
-	# la logica (incluida la recarga en vacio, cuyas pistas se borraron).
-	if current != inspect_clip and slide_bone >= 0:
+	# En Inspect la corredera la lleva el gesto del clip... salvo con la
+	# corredera abierta (arma vacia): ahi la logica la sujeta atras, que es
+	# lo verdadero. El resto del tiempo manda la logica.
+	if (current != inspect_clip or not slide_home) and slide_bone >= 0:
 		var ratio := SLIDE_VISUAL_TRAVEL / maxf(slide_travel, 0.0001)
 		arms_skeleton.set_bone_pose_position(slide_bone, slide_rest + Vector3(0.0, 0.0, -slide_pos * ratio))
 	if firing and recoil != null:

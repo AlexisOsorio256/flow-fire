@@ -14,7 +14,13 @@
 # cada variante empiece en su propio ataque y no contenga el disparo siguiente.
 #
 # Uso: tools/process_audio.sh [--dry-run]
-# Requiere ffmpeg/ffprobe. Los originales se guardan en /tmp/audio_backup.
+# Requiere ffmpeg/ffprobe.
+#
+# Los masters con licencia versionada viven en `assets/audio/source/` (PCM
+# canonico 96 kHz / 16 bits: el editor de Godot NO importa WAV extensibles ni
+# de 24 bits y los marca como error). Los cortes reproducibles (`shot_*`,
+# `magin`, `magout`) salen siempre de ahi; el resto de la foley heredada esta
+# congelada en sus WAV versionados (ver `process`).
 #
 # Después de cambiar un WAV hay que reimportar el proyecto antes de ejecutarlo:
 #   godot4 --headless --path . --editor --quit
@@ -193,11 +199,21 @@ start_offset() {
 }
 
 # process <archivo> <ataque_objetivo> <duracion_max> <fade> <modo>
+#
+# OJO: esta funcion SOLO trabaja desde el original guardado en $BACKUP_DIR y se
+# NIEGA a adivinarlo: si falta el backup, avisa y salta el archivo (antes lo
+# "respaldaba" del propio WAV procesado y una re-ejecucion lo procesaba DOS
+# veces). Los originales de la foley heredada (Freesound) ya no existen como
+# tales: sus WAV versionados SON los masters. Lo reproducible de verdad son los
+# cortes con master versionado (`process_shot`, `process_mag`).
 process() {
     local name="$1" target="$2" max_dur="$3" fade="$4" mode="$5"
     local file="$AUDIO_DIR/$name.wav"
     [ -f "$file" ] || { echo "  falta $name.wav"; return; }
-    [ -f "$BACKUP_DIR/$name.wav" ] || cp "$file" "$BACKUP_DIR/$name.wav"
+    if [ ! -f "$BACKUP_DIR/$name.wav" ]; then
+        echo "  $name: sin original en $BACKUP_DIR, se salta (no se toca)"
+        return
+    fi
 
     local before_attack before_peak duration start
     before_attack="$(level "$file" 0.25)"
@@ -349,12 +365,13 @@ SHOT_CUTS=(
 # ruido de sala; el asiento es un golpe unico. Los objetivos conservan la
 # dinamica natural (salir suena mas blando que asentar).
 # Ventanas medidas con la envolvente de 1 ms sobre
-# assets/audio/source/g36c_mag_in_out_excerpt.wav (recorte 11.38-11.70 s de la
+# assets/audio/source/g36c_mag_in_out_excerpt.wav (recorte 11.28-11.70 s de la
 # toma `..._mag_in_&_out.wav`; ciclo con 0 muestras al ras):
-#   magout  0.005-0.110  clic del reten + friccion de extraccion (ataque a 0.010)
-#   magin   0.110-0.300  insercion + asiento (el clack cae a 0.170, o sea ~60 ms
-#           dentro de la muestra: Glock.gd dispara el evento 60 ms ANTES del
-#           asiento para que el clack caiga en el contacto)
+#   handling 0.005-0.105 roce de manos antes del gesto (ataque ~0.010)
+#   magout   0.105-0.210 clic del reten + friccion de extraccion (ataque a 0.110)
+#   magin    0.210-0.400 insercion + asiento (el clack cae a 0.270, o sea ~60 ms
+#            dentro de la muestra: Glock.gd dispara el evento 60 ms ANTES del
+#            asiento para que el clack caiga en el contacto)
 process_mag() {
     local name="$1" start="$2" stop="$3" peak_target="$4" fade="$5"
     local file="$AUDIO_DIR/$name.wav"
@@ -398,8 +415,9 @@ process_mag() {
 }
 
 echo "== Cargador (extracto G36C close-up, misma toma) =="
-process_mag magout 0.005 0.110 -8.0 0.03
-process_mag magin 0.110 0.300 -1.5 0.05
+process_mag handling 0.005 0.105 -14.0 0.03
+process_mag magout 0.105 0.210 -8.0 0.03
+process_mag magin 0.210 0.400 -1.5 0.05
 
 echo "== Disparos (cortados de la grabacion original en su ataque real) =="
 for cut in "${SHOT_CUTS[@]}"; do process_shot $cut; done

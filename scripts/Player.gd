@@ -290,10 +290,10 @@ func _update_camera_recoil(delta: float) -> void:
 
 func _on_shot_fired() -> void:
     # La cámara (la cabeza del operador) sube menos que el arma y tarda más:
-    # pico de ~2.5-3.0 grados a ~111 ms con recuperación de ~450 ms. Sólo
+    # pico de ~8 grados a ~111 ms con recuperación de ~450 ms. Sólo
     # rotación: un desplazamiento de cámara de unos milímetros no se ve (el
     # viewmodel cuelga de ella y se mueve con ella), así que simular "masa"
     # moviéndola de sitio sería decorativo.
-    recoil_pitch_vel += randf_range(1.00, 1.20)
+    recoil_pitch_vel += randf_range(1.30, 1.55)
     recoil_yaw_vel += randf_range(-0.20, 0.20)
     recoil_roll_vel += randf_range(-0.35, 0.35)
