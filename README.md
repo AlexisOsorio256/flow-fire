@@ -1,300 +1,243 @@
 # FlowFire Bodycam — Godot 4 + Jolt
 
-> **Juego pequeño. Calidad obsesiva.** FlowFire no compite por cantidad de sistemas: compite porque lo poco que hace debe sentirse excepcional.
->
-> Si un cambio no mejora directamente **combate, profundidad física, sensación del arma, realismo perceptual, estabilidad, rendimiento o claridad del producto**, no entra.
+> Juego pequeño, calidad obsesiva. FlowFire no compite por cantidad de sistemas:
+> compite porque lo poco que hace debe sentirse excepcional.
 
 ---
 
-## 0. Contrato para cualquier IA o colaborador
+## 1. Qué es FlowFire
 
-Este repositorio se mantiene pequeño a propósito y el código se mantiene **100% con IA**. El siguiente modelo debe poder entender las autoridades, medir el comportamiento y continuar sin reconstruir el proyecto mentalmente desde cero. La prioridad es **profundizar, no expandir**.
+Un FPS **bodycam** compacto y deliberadamente limitado. Hoy es un **vertical
+slice de combate y entrenamiento** en un rango pequeño: **una** pistola, **un**
+viewmodel, **una** autoridad mecánica, balística con penetración real y audio de
+grabaciones reales. Todo el código se mantiene con IA.
 
-1. **No inventes alcance.** Implementa únicamente lo pedido o lo necesario para corregir un problema demostrado.
-2. **Si te piden “pulir”, profundiza lo existente.** No significa añadir sistemas, menús, modos, contenido o arquitectura nueva.
-3. **Física, profundidad, realismo y eficiencia son restricciones simultáneas.** No se acepta más realismo a costa de desperdicio evitable, ni más FPS destruyendo la percepción buscada. El objetivo es mantener o mejorar calidad mientras se mantiene o mejora la eficiencia; una excepción debe estar medida y justificada.
-4. **Una sola ruta de producción. Sin fallbacks ni legacy activo.** Cuando un reemplazo está validado, elimina el camino anterior, sus flags, assets y código muerto. Git es el rollback. No conservar `old_*`, `--old*`, implementaciones alternativas ni autoridades duplicadas “por si acaso”.
-5. **Una sola autoridad por comportamiento.** No duplicar estado o lógica de arma, daño, audio, input, cámara, física, animación mecánica o networking.
-6. **Nada de arquitectura especulativa.** No crear frameworks, capas, servicios, factories, event buses, ECS, plugins internos ni abstracciones “por si luego sirven”.
-7. **No hacer future-proofing sin un problema real.** Una sola implementación no necesita una abstracción genérica.
-8. **Las herramientas de diagnóstico NO son sobreingeniería cuando resuelven una necesidad real del flujo IA.** Benchmarks, capturas deterministas, slow motion, diagnósticos geométricos, audio y pruebas pueden ser extensos si permiten medir el producto. Deben permanecer fuera de la autoridad de gameplay, ejecutarse sólo cuando se solicitan y no imponer coste significativo al juego normal.
-9. **El tooling sirve al modelo, no al revés.** Puede variar según la tarea/modelo activo. Prefiere comandos claros que produzcan datos, capturas o logs reproducibles; no metas lógica específica de un proveedor de IA en producción.
-10. **No crear nuevos autoloads/managers salvo necesidad concreta y aprobación explícita.** Reutiliza la autoridad existente.
-11. **No dividir archivos sólo porque crecieron.** Refactorizar únicamente cuando reduzca un problema real y medible de mantenimiento, errores, acoplamiento o coste.
-12. **Cambios locales antes que rediseños.** La solución más pequeña que arregle bien la causa gana.
-13. **Nada de suposiciones: mide.** Geometría, física, penetración, audio, animación, FPS, timings y comportamiento deben comprobarse con herramientas, referencias o capturas.
-14. **Modelo → mide → compara → corrige → vuelve a medir.** Un cambio visual requiere inspección visual; audio requiere revisión/medición; rendimiento requiere benchmark; física requiere comprobar el resultado físico real, no sólo un test verde.
-15. **Android manda junto con PC.** Que algo funcione o se vea bien en escritorio no demuestra que sea viable en teléfono.
-16. **Assets:** licencia compatible y crédito en `CREDITS_*.md` en el mismo cambio. Nunca NonCommercial. No conservar candidatos descartados sin una razón activa.
-17. **Commits pequeños y explicables.** Un tema por commit cuando sea razonable. No mezclar una feature con un refactor grande no solicitado.
-18. **Mantén este README corto y verdadero.** Corrige información vieja; no dupliques reglas ni documentes estados que ya no existen.
-19. **Elimina lo que tu propio cambio vuelva obsoleto.** Código, assets, flags, comentarios, tests falsos y documentación muerta no se acumulan.
-
-### Prioridad de ingeniería
-
-**correctitud → profundidad física / sensación / realismo → estabilidad → rendimiento → calidad audiovisual → features**
-
-Ese orden no autoriza a degradar lo que está a la derecha: en FlowFire la **calidad perceptual y la eficiencia son criterios de aceptación**, no sliders que se cambian a ciegas.
+La profundidad viene de cómo reaccionan **arma, proyectil, material, cuerpo,
+cámara y sonido**, no de acumular features.
 
 ---
 
-## 1. Producto objetivo
+## 2. Reglas de arquitectura
 
-FlowFire debe terminar siendo un FPS premium, compacto y deliberadamente limitado:
+1. **Una sola autoridad por comportamiento.** No duplicar estado ni lógica de
+   arma, daño, audio, input, cámara, física o animación mecánica.
+2. **Una sola ruta de producción. Sin fallbacks ni legacy activo.** Cuando un
+   reemplazo está validado, se elimina el camino anterior. Git es el rollback.
+3. **Nada de arquitectura especulativa.** Sin frameworks de armas, event buses,
+   managers, interfaces genéricas ni preparar rifles futuros. Tenemos una pistola.
+4. **No dividir archivos sólo porque crecieron.** Refactorizar sólo si reduce
+   carga cognitiva o acoplamiento reales. Un archivo extraído no puede tener una
+   segunda copia de munición, recámara, corredera, recarga ni cadencia: recibe
+   estado de su autoridad.
+5. **Cambios locales antes que rediseños.** La causa se arregla donde está.
+6. **No inventes alcance.** Solo lo pedido o lo necesario para corregir un
+   problema demostrado. **No tocar por iniciativa propia:** multijugador, mapa,
+   LightmapGI, penetración/balística, UI, lobby, controles Android ni features nuevas.
+7. **Assets:** licencia compatible (nunca NonCommercial) y crédito en
+   `CREDITS_*.md` en el mismo cambio. Una etiqueta CC-BY no basta en primera
+   persona: los packs de brazos FPS suelen derivar de `FP Arms` (bumstrum, NC).
+8. **Android manda junto con PC.** Que algo funcione en escritorio no demuestra
+   que sea viable en teléfono.
+9. **Elimina lo que tu cambio vuelva obsoleto:** código, flags, assets,
+   comentarios y documentación muerta no se acumulan.
+10. **Mantén este README corto y verdadero.** Corrige lo viejo; no lo archivas aquí.
 
-- **PC + Android**.
-- **4 vs 4**.
-- **Un mapa pequeño** y muy trabajado.
-- Combate bodycam con armas, balística, físicas, audio, materiales e impactos extremadamente pulidos.
-- **Mini entrenamiento** derivado del rango/prototipo actual.
-- **Lobby muy simple**.
-- **Multijugador**, sólo cuando el núcleo local, el rendimiento y las reglas de partida estén sólidos.
-
-Eso es el producto. No convertirlo en un shooter enorme.
-
-La profundidad debe venir de cómo reaccionan **arma, proyectil, material, cuerpo, cámara y sonido**, no de acumular features. Cuando una bala atraviese una estructura, debe sentirse como una entrada, pérdida de energía y salida coherentes; no como “tocó el objeto y reprodujo un efecto”.
-
-### Fuera de alcance
-
-No añadir por iniciativa propia: mundo abierto, campaña, vehículos, loot, crafting, inventario complejo, economía, battle pass, tienda, clanes, chat, ranking, espectador avanzado, replays, decenas de armas, decenas de mapas ni sistemas sociales.
-
-**Multijugador, lobby, mapa 4v4 y controles finales de Android son objetivos del producto, pero no se implementan antes de tiempo.** Sólo se empiezan cuando el usuario lo ordene explícitamente.
+**Prioridad:** correctitud → profundidad física / sensación → estabilidad →
+rendimiento → calidad audiovisual → features. La calidad perceptual y la
+eficiencia son criterios de aceptación, no sliders que se cambian a ciegas.
 
 ---
 
-## 2. Núcleo actual
+## 3. Regla de trabajo (IA + usuario)
 
-Actualmente FlowFire es un vertical slice de combate y entrenamiento.
+El usuario está disponible como **evaluador visual y auditivo en tiempo real**.
+Aprovéchalo.
 
-- **Viewmodel de primera persona en `assets/models/full9mm_2k.glb`** — "9mm Pistol | First Person Animations" de 1Matzh, CC-BY 4.0. **29 321 tris** (14 312 manos + 6 164 antebrazos + 8 357 arma), 928 huesos y **10 animaciones** (Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty, Inspect, Equip, Unequip). Trae brazos Y arma ya agarrados y animados en un solo rig, así que **no hay segunda arma ni fallback**: la pistola visible es la del propio asset. Texturas de 4096² bajadas a 2048 (`tools/downscale_glb_textures.py`) para el perfil Mobile.
-- Integración: giro 180° en Y (el arma apunta a +Z del modelo, la cámara a -Z), acercamiento y altura calibrados, y **F = inspeccionar** (`Inspect`). Los instantes mecánicos de recarga están clavados a las claves del rig: `RELOAD_MAG_OUT_T=0.30`, `RELOAD_MAG_IN_T=2.50`, `RELOAD_SLIDE_T=2.90`, totales 3,20 s (táctica) y 4,00 s (vacía). La vaina es procedural (cilindro de latón 9×19: 19,15 × 4,9 mm) y el puerto de expulsión es un punto fijo del marco del arma.
-- Sin crosshair ni hitmarker visual: se apunta con las miras reales del arma.
-- Corredera, gatillo, cargador, recarga, expulsión de casquillo y recamado gobernados por el estado mecánico.
-- Balística con gravedad, arrastre, subpasos, penetración, rebotes y daño por zona. **La salida ya se calcula desde la geometría real del volumen**, no desde metadata de grosor: se resuelve el intervalo de intersección de los tres *slabs* de cada `BoxShape3D` del collider y la cara lejana es la salida. Limitación concreta y deliberada: **`_find_exit_geometry()` sólo entiende `BoxShape3D`**; con cualquier otra forma no hay salida demostrable y el proyectil se detiene. Es suficiente para el rango actual (paneles y muros son cajas) y no se generaliza hasta que exista un caso real.
-- Jolt para jugador, blancos y casquillos.
-- Cámara bodycam con sway/bob/breathing/recoil y post-proceso sin blur deliberado.
-- Audio con buses `Weapons` / `World` y techo de seguridad en Master. **Sin compresores de bus**: se midió que no protegían nada y que su release devolvía ganancia durante la cola del disparo. Los 5 disparos son tomas reales de Glock 18c (Sonniss GDC 2016, royalty-free comercial) y **se cortan de la grabación original en su ataque medido**, con la cola acotada al hueco real hasta el disparo siguiente (`tools/process_audio.sh`, tabla `SHOT_CUTS`); la grabación original se versiona en `assets/audio/source/`. **Dentro de cada muestra el estampido recupera el dominio sobre el mecánico** (energía 35-54% → 62-74%) hundiendo el mecánico 7 dB con una rampa, para que un disparo se perciba como un solo evento; el ataque no se toca. La foley es CC0. Todos los WAV se alinean a su ataque real con el mismo script: **los 15 archivos atacan dentro de los primeros 2 ms**.
-- Materiales PBR reales para el entorno y para el viewmodel.
-- Tests duros con exit code y un laboratorio separado de medición/diagnóstico.
+- **Problemas perceptuales:** cambia UNA cosa → pide al usuario que lo pruebe →
+  feedback concreto → corrige → vuelve a probar. Es más rápido y más fiable que
+  deducir sensación desde capturas aisladas.
+- **Mide** sólo cuando la pregunta sea objetiva y la respuesta no evidente
+  (alineación, frametime, dos transitorios indistinguibles, geometría que se
+  atraviesa). **No medir por ceremonia.**
+- **Test proporcional al cambio:** aimtest para ADS, reloadtest para recarga,
+  mirar para lo visual, escuchar para lo audible, fpsbench para rendimiento.
+  La suite completa sólo al cerrar una etapa grande.
+- **Capturas:** nunca 1 FPS para estudiar un disparo. Si hace falta inspección
+  automática de un evento corto, tira de 8–16 frames en slow motion. Para
+  comportamiento general, el usuario puede enviar vídeo.
+- **Física, profundidad y eficiencia son restricciones simultáneas.**
 
-### Foco inmediato permitido
+---
 
-Mientras el usuario no cambie la fase, el trabajo debe concentrarse en:
+## 4. Producto objetivo y alcance
 
-- sensación, proporción y animación del arma/manos;
-- sincronía mecánica + audio;
-- balística, penetración geométrica, impactos y respuesta por material;
-- estabilidad ante FPS bajos e hitches;
-- rendimiento y perfil Android;
-- claridad visual del bodycam;
-- iluminación estática eficiente del rango;
-- sustituir assets de primera persona cuando la propia geometría limite el realismo;
-- eliminar bugs, residuos, fallbacks y contradicciones.
+- **PC + Android.**
+- **4 vs 4**, un mapa pequeño y muy trabajado.
+- Combate bodycam con balística, físicas, audio, materiales e impactos pulidos.
+- **Mini entrenamiento** derivado del rango actual y **lobby muy simple**.
+- **Multijugador** sólo cuando el núcleo local, el rendimiento y las reglas de
+  partida estén sólidos, y **sólo cuando el usuario lo ordene**.
 
-### Encuadre del viewmodel
+Fuera de alcance: mundo abierto, campaña, vehículos, loot, crafting, inventario,
+economía, battle pass, tienda, clanes, chat, ranking, espectador, replays,
+decenas de armas o mapas.
 
-El encuadre se corrigió midiendo. La causa no era la que parecía: las masas que
-se comían la pantalla **no eran los hombros** sino las cadenas de antebrazo, y lo
-que las sacaba de encuadre era la distancia ojo → alza (0,42 m). Alejarla a
-**0,54 m** bajó los brazos de **41,2% a 28,8%** del encuadre y las bandas
-laterales inferiores de **70,9% a 36,5%**, con el arma centrada y el alza legible.
-Se para en 0,54 m porque a partir de ahí el alza trasera deja de leerse.
+---
 
-**ADS geométrico verificado.** La pose se resuelve después de montar los
-marcadores medidos sobre la geometría real de las miras, unidos a la corredera.
-Se alinea la línea de mira con el eje de cámara y se corrige el balanceo usando
-la orientación del hueso `Slidder`. `--aimtest` mide **5,3 mm / 9,79 mrad** de
-desvío máximo: está en verde frente al criterio de **6 mm**; no es error cero.
+## 5. Autoridades actuales
 
-**Revisión perceptual cerrada:** la llama facetada cuelga de la boca de la
-corredera (no del marco), llega a un máximo de 80 mm ya escalada y se verificó
-en lateral y ADS; el asentamiento del cargador añade al mismo evento `magin` un
-rebote de muñeca calibrado a ~1 mm / 0,2°; el casquillo se conservó tras la
-revisión (14--17 px durante `--slowmo`).
-
-Otra limitación medida: en este archivo la pistola mide 0,074 de ancho y las
-manos 0,908 (**12×**), así que no existe un factor de escala uniforme que las
-encaje con exactitud.
-
-## 3. Límites técnicos
-
-- **Motor:** Godot 4.7.2 stable.
-- **Física:** Jolt, 60 ticks/s, unidades SI.
-- **Perfil de desarrollo:** **Mobile** a 1920×1080 en PC y como base de Android.
-- Mobile se eligió tras A/B determinista frente a Forward+: misma percepción en las escenas medidas y aproximadamente 20 ms menos por frame en la HD 520. No se eligió por prestigio sino por **calidad visual por milisegundo**.
-- **Destino de producción:** PC + Android; el perfil móvil final debe medirse en dispositivo real.
-- **Objetivo de rendimiento:** 60 FPS como meta de diseño. Una medición muy por debajo es un problema a investigar, no un estándar nuevo.
-- **Autoloads:** `GameAudio`, `ImpactFX`, `Ballistics`.
-- **Escena principal:** `scenes/Main.tscn`.
-
-### Rendimiento medido
-
-Perfil completo del rango bajo Mobile en la HD 520, 1920×1080 y vsync off: el cuello dominante siguen siendo las **8 Omni interiores** (~13 ms/frame de las 38 totales; apagarlas sube de 26 a 38 FPS). Sombra direccional y glow son pequeños. Las Omni no se abarataron troceando la sala ni aislando el viewmodel por capas. La palanca pendiente con mayor potencial es dejar de iluminar una sala mayormente estática con ocho Omni dinámicas: evaluar **LightmapGI / horneado real** con captura A/B y benchmark, sin aplanar la imagen.
-
-Estado en el HEAD actual (`--fpsbench --fpsreps=3 --fpsduration=6`, 3 corridas):
-
-| | fps avg | p1 | frametime avg | p95 | max |
-|---|---|---|---|---|---|
-| baseline completo | 25.11 | 21.23 | 39.83 ms | 47.09 ms | 92.81 ms |
-
-**Coste del viewmodel.** La ultima medida por diferencia (ocultar el viewmodel
-entero ahorra **2,03 ms/frame**, 5,4%; de eso los brazos **0,49 ms**) se tomo con
-el rig ANTERIOR. **Con el asset actual esta pendiente de reproducir**: el
-viewmodel nuevo tiene 29 321 tris y 928 huesos, asi que el coste de skinning es
-candidato a subir y hay que medirlo antes de cerrar cualquier fase de
-rendimiento. No se extrapola desde el rig viejo.
-
-Antes de cerrar una fase de rendimiento, repetir el perfil completo sobre el HEAD actual. En esta máquina de 4 núcleos y GPU integrada la dispersión es grande (`fps_min` oscila entre 9 y 19 entre variantes que deberían medir casi igual), así que **el promedio de 3 corridas sirve para detectar regresiones grandes, no para comparar décimas**. Lo que sí es firme es el coste marginal del viewmodel, que es lo que estas pasadas podían mover.
-
-### Autoridades existentes
-
-| Área | Autoridad principal |
+| Área | Autoridad |
 |---|---|
 | Arranque / escena / tests | `scripts/Main.gd` |
 | Laboratorio de diagnóstico | `scripts/DevTools.gd` |
 | Jugador / cámara | `scripts/Player.gd` |
-| Viewmodel / arma / manos / mecanica | `scripts/Glock.gd` |
+| Arma: mecánica y viewmodel | `scripts/Glock.gd` |
 | Resortes | `scripts/Springs.gd` |
 | Balística | `scripts/Ballistics.gd` |
 | Impactos | `scripts/ImpactFX.gd` |
 | Audio | `scripts/GameAudio.gd` |
 | Mundo / rango | `scripts/World.gd` |
 | Blancos | `scripts/Target.gd` |
-| HUD / bodycam post | `scripts/HUD.gd` + `shaders/bodycam.gdshader` |
+| HUD / post bodycam | `scripts/HUD.gd` + `shaders/bodycam.gdshader` |
 
-El laboratorio puede observar, congelar, medir o desactivar temporalmente subsistemas para A/B. **No puede convertirse en una segunda autoridad del comportamiento normal.**
+El laboratorio puede observar, congelar, medir o desactivar subsistemas para A/B.
+**No puede convertirse en una segunda autoridad del comportamiento normal.**
 
-### Señales públicas
-
-- `ammo_changed(mag, chamber, reserve, reloading)`
-- `shot_fired`
-- `target_hit(zone)`
+Señales públicas: `ammo_changed(mag, chamber, reserve, reloading)`,
+`shot_fired`, `target_hit(zone)`.
 
 ---
 
-## 4. Verificación obligatoria
+## 6. Asset y viewmodel actual
 
-```bash
-# Importa/compila scripts
-godot4 --headless --path . --editor --quit
-
-# Disparo, blanco, daño, consumo y recamarado
-godot4 --headless --path . -- --autotest
-
-# ADS / mira visible real
-godot4 --headless --path . -- --aimtest
-
-# Penetración + daño + decals
-godot4 --headless --path . -- --pentest
-
-# Salida por segunda cara de la geometría (madera + pladur)
-godot4 --headless --path . -- --penetrationdiag
-
-# Recarga vacía y táctica
-godot4 --headless --path . -- --reloadtest
-```
-
-Los cinco tests deben devolver **exit code 0**. Un test verde no reemplaza inspección visual/física cuando el cambio modifica algo perceptual.
-
-### Herramientas del flujo IA
-
-Estas herramientas existen para que el modelo pueda comprobar su propio trabajo. No son features del juego.
-
-```bash
-# Geometría, encuadre, corredera, recarga
-godot4 --path . -- --geometrydebug
-
-# Brazos (encuadre, huesos y SILUETA) y miras
-#   --armdiag imprime, por hueso, profundidad/lateral/altura respecto a la
-#   cámara y su margen en pantalla, y ademas la linea SILUETA: que porcentaje
-#   del encuadre 16:9 ocupan los brazos y el arma y cuanto de las bandas
-#   laterales inferiores. Es la medida que convierte "los hombros salen
-#   demasiado" en un numero comparable entre cambios.
-godot4 --path . -- --armdiag
-godot4 --path . -- --sightdiag
-
-# Secuencia reproducible + media
-godot4 --path . -- --timeline
-bash tools/make_timeline_media.sh
-
-# Estados rápidos de inspección
-godot4 --path . -- --probe
-
-# A/B visual determinista: env, hip, ads, shot, casing, reload, slide_back
-# (las 4 capturas versionadas en captures/review/ son ads, hip, reload y shot)
-godot4 --path . -- --visualab --visualout=captures/visual/current
-
-# Disparo/recarga en cámara lenta
-godot4 --path . -- --slowmo
-
-# Retroceso: perfil real del arma durante el primer disparo (pico y tiempo)
-# y curva de la animacion Fire sola (--firecurve)
-godot4 --path . -- --recoilprobe
-godot4 --path . -- --firecurve
-
-# Benchmark real; misma cámara/resolución/duración, vsync off
-godot4 --path . -- --fpsbench
-godot4 --path . -- --fpsbench --fpsvariant=glow_off,stage_omnis_off --fpsreps=3 --fpsduration=5
-
-# Mix final
-godot4 --path . -- --audiocapture
-
-# Preview del mismo viewmodel usado por el juego
-godot4 --path . --scene res://scenes/WeaponPreview.tscn
-```
-
-**No pases `--rendering-driver vulkan` a secas.** En esta configuración puede forzar Forward+ y saltarse Mobile. Si necesitas forzar renderer, especifica también el método correspondiente.
-
-Las capturas de diagnóstico (`captures/visual/`, `captures/shot/`, `captures/timeline/`) se regeneran y están ignoradas por Git. La única excepción versionada es **`captures/review/`**, la evidencia de auditoría que un revisor remoto necesita para juzgar el encuadre y el estado del viewmodel sin ejecutar el juego.
-
-### Definition of Done
-
-Un cambio no está terminado porque “funciona”. Está terminado cuando:
-
-1. resuelve la causa pedida sin ampliar alcance;
-2. los tests relevantes pasan;
-3. no crea segunda autoridad, fallback ni arquitectura innecesaria;
-4. se midió o inspeccionó el aspecto modificado;
-5. física/realismo no retroceden silenciosamente;
-6. rendimiento no retrocede sin causa medida y decisión consciente;
-7. una optimización visual demuestra con A/B que no degradó apreciablemente nitidez, identidad o realismo;
-8. no introduce assets sin licencia/crédito;
-9. elimina lo que el cambio volvió obsoleto;
-10. el resultado queda **más sólido y más entendible**, no simplemente más complejo.
+- **`assets/models/full9mm_2k.glb`** — “9mm Pistol | First Person Animations” de
+  **1Matzh**, CC-BY 4.0 (cadena verificada hasta **Urpo** y **Blue-Spirit**,
+  ambas CC-BY 4.0). **29 321 tris** (14 312 manos + 6 164 antebrazos + 8 357
+  arma), 928 huesos, **10 animaciones** (Idle, Idle_2, Walk, Run, Fire, Reload,
+  Reload_Empty, Inspect, Equip, Unequip). Trae **brazos y arma ya agarrados y
+  animados en un solo rig**: es la única representación de arma y manos.
+- Texturas 4096² bajadas a 2048 (`tools/downscale_glb_textures.py`) para Mobile.
+- Cadena en runtime: `Camera → WeaponRig → Glock → PoseRoot → WristPivot →
+  RecoilNode → ArmsMount → ArmsRoot (GLB) → Skeleton3D`.
+- Reparto: la **lógica** manda munición, corredera, gatillo, cadencia y recarga;
+  las **animaciones del asset** mandan la pose humana (manos, muñecas, brazos) y
+  arrastran el arma. Las pistas de corredera, gatillo y del hueso del arma en
+  `Fire` se eliminan al cargar (`_strip_mechanical_tracks`), así que la mecánica
+  visible y la lógica son la misma realidad.
+- **Mira, boca y puerto cuelgan de la corredera real** (`BoneAttachment3D` sobre
+  `Slidder_919`): el ADS, el fogonazo, la balística y la vaina leen el arma de
+  verdad, no una copia.
 
 ---
 
-## 5. Controles actuales
+## 7. Estado actual
 
-Controles provisionales de escritorio:
+- **ADS resuelto desde la geometría real** (línea de mira → eje de cámara,
+  corrección de canto con el hueso `Slidder`), a **0,54 m** ojo→alza.
+  `--aimtest` mide **5,3 mm / 9,79 mrad** de desvío máximo, verde frente al
+  criterio de 6 mm: no es error cero.
+- **Corredera y gatillo gobernados por la lógica.** Ciclo de corredera
+  **calibrado** a ~59 ms (recorrido real de G19: 39 mm), con dos transitorios
+  reales distintos: tope trasero y vuelta a batería. El latigazo del arma en el
+  disparo es físico (el clip `Fire` ya no mueve el hueso del arma).
+- **Recarga** con los instantes clavados a las claves del rig (0,30 / 2,50 /
+  2,90 s; totales 3,20 s táctica y 4,00 s vacía) y un rebote breve de muñeca al
+  asentar el cargador, reutilizando el resorte de retroceso existente.
+- **Audio:** buses `Weapons` / `World`, sin compresores de bus (medido: no
+  protegían nada). Los 5 disparos son tomas reales de Glock 18c (Sonniss GDC
+  2016) cortadas en su ataque medido; el estampido recupera el dominio sobre el
+  mecánico dentro de cada muestra. Los 15 WAV atacan dentro de los primeros 2 ms.
+  El blast actual **gusta: conservarlo**.
+- **Vaina** procedural (9×19: 19,15 × 4,9 mm) expulsada desde el puerto real.
+- **Escala manos/arma:** `--gundiag` mide el cociente **0,96×** en el mismo
+  espacio y misma pose (105,5 mm de arma / 101,8 mm de manos en hip). Manos y
+  arma son coherentes entre sí; **no hay desajuste de 12×** (esa cifra vieja
+  comparaba espacios distintos y era falsa).
 
-- `WASD`: mover
-- `Mouse`: mirar
-- `Click izq`: capturar mouse / disparar
-- `Click der`: ADS
-- `R`: recargar
-- `F`: inspeccionar el arma (con el mouse capturado)
-- `Esc`: liberar mouse
+### Problemas realmente abiertos
 
-Antes de controles táctiles, migrar entrada a acciones reutilizables. **No duplicar gameplay para Android**: cambia el input, no las reglas del arma o del jugador.
+- **Fogonazo.** Cuelga de la boca de la corredera (correcto), pero todavía se lee
+  como **pieza geométrica naranja sólida**, no como combustión. Es el trabajo en
+  curso: núcleo breve y caliente, forma irregular, gases que nacen de la boca,
+  duración extremadamente corta, viable en Mobile.
+- **Sensación de disparo / peso.** Recoil, muñeca, recuperación, cámara y sonido
+  mecánico se profundizan **por iteración humana**, una cosa cada vez.
+- **Recarga:** el rebote al asentar está; falta saber si el conjunto se siente
+  ligero y, si es así, qué contacto falta (sonido, timing, movimiento, transición).
+- **Coste del viewmodel nuevo sin medir.** La última medida por diferencia
+  (2,03 ms/frame con el rig anterior) no se extrapola: hay que reproducirla con
+  29 321 tris y 928 huesos antes de cerrar una fase de rendimiento.
+- **Iluminación del rango.** El cuello medido son las **8 Omni interiores**
+  (~13 ms/frame de 38). No se toca por iniciativa propia; la palanca pendiente
+  sería LightmapGI con A/B y benchmark, sin aplanar la imagen.
 
 ---
 
-## 6. Assets y licencias
+## 8. Límites PC + Android
 
-- **Viewmodel (brazos + arma):** `assets/models/full9mm_2k.glb` — “9mm Pistol | First Person Animations” de **1Matzh**, CC-BY 4.0, con la cadena verificada hasta las mallas originales de **Urpo** y **Blue-Spirit** (ambas CC-BY 4.0). Única representación de arma y manos.
-- **Audio:** disparos de Sonniss #GameAudioGDC (royalty-free comercial, sin atribución obligatoria) y foley CC0 de Freesound. Todo procesado con `tools/process_audio.sh`. Los dos golpes de la corredera son dos grabaciones reales distintas (tope trasero de una Glock 19, vuelta a batería de una Sig P229): no se repite la misma muestra.
-- **Texturas PBR:** Poly Haven CC0.
-- **Código y contenido original de FlowFire:** propietario; los recursos de terceros conservan sus licencias. Ver `LICENSE` y `CREDITS_*.md`.
+- **Motor:** Godot 4.7.2 stable. **Física:** Jolt, 60 ticks/s, unidades SI.
+- **Perfil de desarrollo:** **Mobile** a 1920×1080 en PC y como base de Android
+  (elegido por A/B: misma percepción y ~20 ms menos por frame en la HD 520).
+- **Destino:** PC + Android; el perfil móvil final debe medirse en dispositivo real.
+- **Objetivo:** 60 FPS de diseño. Muy por debajo es un problema a investigar, no
+  un estándar nuevo.
+- **Autoloads:** `GameAudio`, `ImpactFX`, `Ballistics`. **Escena:** `scenes/Main.tscn`.
 
-Nunca sustituir un asset bueno sólo por novedad. Cambiarlo únicamente si mejora de forma visible/medible el resultado o resuelve una limitación real.
+---
 
-**Una etiqueta CC-BY no basta para los assets de primera persona.** El campo de los packs de brazos FPS en Sketchfab está lleno de derivados de `FP Arms` (bumstrum, CC-BY-NC) reetiquetados como CC-BY por quien los sube. Antes de integrar uno hay que leer la descripción buscando `@bumstrum` / `fp-arms` **y** remontar la licencia de la malla original, no sólo la del pack.
+## 9. Herramientas
 
-Los assets de **primera persona** tienen un estándar más alto que el decorado: arma, manos, brazos, cargador y casquillo ocupan gran parte de la pantalla y no pueden delatar geometría pobre si el objetivo visual es realista. Si un asset limita la silueta/anatomía, se sustituye; no se deforma brutalmente ni se esconde con shaders.
+No son features del juego: existen para que la IA compruebe su propio trabajo.
+`godot4 --path . -- <flag>` (con `--headless` para los tests).
+
+| Flag | Para qué |
+|---|---|
+| `--autotest` | disparo, blanco, daño, consumo y recamarado |
+| `--aimtest` | ADS / mira visible real |
+| `--reloadtest` | recarga vacía y táctica |
+| `--pentest` / `--penetrationdiag` | penetración, daño, decals / salida por segunda cara |
+| `--geometrydebug` | geometría, encuadre, corredera, recarga |
+| `--gundiag` | rig, piel, miras, muñeca (escala manos/arma) |
+| `--armdiag` / `--sightdiag` | silueta de brazos en % de encuadre / línea de mira vs eje |
+| `--recoilprobe` / `--firecurve` | retroceso real del disparo / curva de `Fire` sola |
+| `--visualab --visualout=…` | A/B visual determinista (env, hip, ads, shot, casing, reload) |
+| `--slowmo` | disparo/recarga en cámara lenta |
+| `--audiocapture` | mix final |
+| `--fpsbench --fpsreps=3 --fpsduration=6` | benchmark real, misma cámara/resolución, vsync off |
+
+Los 5 tests (`autotest`, `aimtest`, `reloadtest`, `pentest`, `penetrationdiag`)
+deben devolver **exit code 0**. Un test verde no sustituye la inspección visual o
+física cuando el cambio es perceptual. Importar/compilar: `godot4 --headless
+--path . --editor --quit`.
+
+**No pases `--rendering-driver vulkan` a secas:** puede forzar Forward+ y saltarse
+Mobile. Si necesitas forzar renderer, especifica también el método.
+
+Las capturas de diagnóstico (`captures/visual/`, `captures/shot/`,
+`captures/timeline/`) se regeneran y están ignoradas por Git. La única excepción
+versionada es `captures/review/`, la evidencia que un revisor remoto necesita
+para juzgar encuadre y estado del viewmodel sin ejecutar el juego.
+
+**Definition of Done:** la causa pedida resuelta sin ampliar alcance; tests
+relevantes en verde; sin segunda autoridad ni fallback; aspecto modificado
+medido o inspeccionado; física y rendimiento sin retroceso silencioso; assets con
+licencia y crédito; y lo obsoleto eliminado.
+
+---
+
+## 10. Controles actuales
+
+Provisionales de escritorio: `WASD` mover · `Mouse` mirar · `Click izq`
+capturar/disparar · `Click der` ADS · `R` recargar · `F` inspeccionar · `Esc`
+liberar mouse.
+
+Antes de controles táctiles, migrar la entrada a acciones reutilizables. **No
+duplicar gameplay para Android:** cambia el input, no las reglas del arma o del
+jugador.
 
 ---
 
 ## Regla final
 
-**FlowFire no debe impresionar por todo lo que tiene. Debe impresionar por lo absurdamente bien hecho que está lo poco que tiene.**
+**FlowFire no debe impresionar por todo lo que tiene. Debe impresionar por lo
+absurdamente bien hecho que está lo poco que tiene.**

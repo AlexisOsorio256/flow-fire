@@ -21,8 +21,10 @@
   huérfanas fuera) y `tools/downscale_glb_textures.py` (4096 -> 2048 para el
   perfil Mobile). El skybox de presentación y los ayudantes de apuntado se apagan
   en runtime.
-- Limitación medida: la pistola mide 0,074 de ancho y las manos 0,908 en el mismo
-  archivo (12x), así que no hay escala uniforme que las encaje exactamente.
+- Escala: la pistola y las manos son coherentes entre sí. Medido con `--gundiag`
+  en el mismo espacio y misma pose, el cociente de anchos manos/arma es **0,96x**
+  (101,8 mm de manos / 105,5 mm de arma en hip). Una cifra anterior de "12x" era
+  falsa: comparaba espacios distintos y ya no aplica.
 
 ---
 
