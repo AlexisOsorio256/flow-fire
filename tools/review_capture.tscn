@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://flowfire_review_capture"]
+
+[ext_resource type="Script" path="res://tools/review_capture.gd" id="1"]
+
+[node name="ReviewCapture" type="Node"]
+script = ExtResource("1")

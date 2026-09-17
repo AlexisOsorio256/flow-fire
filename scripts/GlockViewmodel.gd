@@ -19,12 +19,18 @@ extends Node3D
 ## OWNERSHIP DEL RIG (una sola autoridad por pieza; lo aplica
 ## `_strip_mechanical_tracks` al cargar):
 ##   Humano / brazos ........... AnimationPlayer (Idle/Fire/Reload/Reload_Empty)
-##   Arma root durante Fire .... GlockRecoil (procedural) sobre la pose neutra
-##   Arma root durante reload .. AnimationPlayer
-##   Corredera ................. Glock.gd (`slide_pos`, recorrido visual mapeado)
+##     En Fire el gesto amplio de brazos del asset esta neutralizado (el autor
+##     dibuja un aspaviento de ~30 grados por tiro): las manos sostienen, no
+##     son arrastradas. Quedan los dedos (detalle del gatillo).
+##   Arma + cargador en Fire ... GlockRecoil: UNA transformacion rigida
+##     (posicion + rotacion) sobre la pose de Idle, mismo pivote para ambos.
+##     Con resorte a cero es identidad: nadie escribe estos huesos en Idle.
+##   Arma + cargador en
+##   Reload/Reload_Empty/Inspect/Idle ... AnimationPlayer (nada procedural los
+##     toca; todas terminan en la misma pose de Idle por construccion del asset)
+##   Corredera ................. Glock.gd (`slide_pos`), salvo en Inspect donde
+##     manda el gesto del clip
 ##   Gatillo ................... Glock.gd (`trigger_visual`)
-##   Cargador durante Fire ..... rigido con el arma (GlockRecoil)
-##   Cargador durante reload ... AnimationPlayer (gesto del clip)
 
 ## Ojo -> mira trasera en ADS. 0.54 m es la distancia a la que un tirador real
 ## tiene el alza del ojo sin tocar la escala de los brazos (atada a la
@@ -93,10 +99,21 @@ var weapon_bone := -1
 var mag_bone := -1
 var slide_rest := Vector3.ZERO
 var trigger_rest := Vector3.ZERO
-# Reposo del arma y del cargador: sobre ellos se suma el retroceso (ver
-# apply_mechanics). El cargador es hueso hermano del arma, no hijo.
-var weapon_rest := Vector3.ZERO
-var mag_rest := Vector3.ZERO
+# UNA pose base del arma: el agarre de Idle (pose ANIMADA, no el rest del
+# esqueleto: el rest queda ~17 cm fuera de las manos y usarlo como neutro
+# teletransportaba el arma cada vez que el procedural sobrevivia al
+# AnimationPlayer). El retroceso es una transformacion rigida sobre esta base;
+# con resorte a cero es identidad y la pose visible == la animada.
+var weapon_base_pos := Vector3.ZERO
+var weapon_base_rot := Quaternion.IDENTITY
+var mag_base_pos := Vector3.ZERO
+var mag_base_rot := Quaternion.IDENTITY
+# Clips resueltos (el importador puede prefijarlos): el modo procedural del
+# arma depende del clip activo (ver apply_mechanics).
+var fire_clip := ""
+var reload_clip := ""
+var reload_empty_clip := ""
+var inspect_clip := ""
 var slide_attach: BoneAttachment3D  # la mira/boca van con la corredera real
 
 
@@ -202,8 +219,6 @@ func _apply_pose(delta: float) -> void:
 	pos.x -= move_x * 0.02 * (1.0 - _in_aim * 0.5)
 	pos.y -= absf(move_y) * 0.008 * (1.0 - _in_aim * 0.5)
 
-	pos += recoil.arm_pos
-	rot += recoil.arm_rot
 	rot.x += sway.y * 0.5 + sin(idle_phase * 1.05) * 0.0025 * (1.0 - _in_aim * 0.6) - move_y * 0.008
 	rot.y += sway.x * 0.5 + sin(idle_phase * 0.73 + 1.0) * 0.0020 * (1.0 - _in_aim * 0.6)
 	rot.z += -move_x * 0.012 - sin(bob_phase) * 0.012 * _in_sprint
@@ -441,13 +456,19 @@ func _install_arms() -> void:
 	var grip_err: float = (holder.transform * grip_ref - GRIP_ANCHOR).length() * 1000.0
 	print("ARMS_MONTAJE escala=", snappedf(ARMS_SCALE, 0.0001),
 		" residuo_empunadura_mm=", snappedf(grip_err, 0.1))
-	# Reposos mecanicos: la pose local sin animar de corredera, gatillo, arma y
-	# cargador. El arma y el cargador son la base sobre la que se suma el
-	# retroceso (apply_mechanics).
+	# Reposos mecanicos: la pose local sin animar de corredera y gatillo.
 	slide_rest = arms_skeleton.get_bone_rest(slide_bone).origin
 	trigger_rest = arms_skeleton.get_bone_rest(trigger_bone).origin
-	weapon_rest = arms_skeleton.get_bone_rest(weapon_bone).origin
-	mag_rest = arms_skeleton.get_bone_rest(mag_bone).origin
+	# Base del arma: el agarre ANIMADO de Idle (ver comentario de las vars).
+	park_anim("Idle", 0.05)
+	weapon_base_pos = arms_skeleton.get_bone_pose_position(weapon_idx)
+	weapon_base_rot = arms_skeleton.get_bone_pose_rotation(weapon_idx)
+	mag_base_pos = arms_skeleton.get_bone_pose_position(mag_idx)
+	mag_base_rot = arms_skeleton.get_bone_pose_rotation(mag_idx)
+	fire_clip = _resolve_clip("Fire")
+	reload_clip = _resolve_clip("Reload")
+	reload_empty_clip = _resolve_clip("Reload_Empty")
+	inspect_clip = _resolve_clip("Inspect")
 	_mount_slide_attachments()
 	_strip_mechanical_tracks()
 	_measure_wrist(weapon_bone)
@@ -541,38 +562,57 @@ func _attach_point(parent: Node3D, point_name: String, offset: Vector3) -> Node3
 	return n
 
 
-## Aplica el OWNERSHIP del rig (ver cabecera) a los tres clips que la logica
-## controla: borra de cada uno las pistas que no le pertenecen y clona en Fire
-## la pose neutra del arma. Explicito a proposito: al leerlo se ve que manda
+## Aplica el OWNERSHIP del rig (ver cabecera): borra de cada clip las pistas
+## que no le pertenecen. Explicito a proposito: al leerlo se ve que manda
 ## cada capa.
 func _strip_mechanical_tracks() -> void:
-	var idle_weapon := _sample_bone_pose("Idle", WEAPON_BONE)
+	# FIRE: el procedural posee arma y cargador (los escribe cada frame sobre
+	# la base de Idle), la logica posee corredera y gatillo. Las pistas del
+	# asset para esos cuatro huesos se borran: si quedaran, el AnimationPlayer
+	# las reescribiria DESPUES del procedural (va mas abajo en el arbol) y el
+	# retroceso seria invisible en el arma pero visible en el cargador.
+	# El gesto amplio de BRAZOS del clip (~30 grados de aspaviento por tiro,
+	# medido en el GLB) tambien se neutraliza: las manos sostienen el arma,
+	# no la acompanan hacia atras. Quedan dedos y detalles finos.
+	if fire_clip != "":
+		_remove_bone_tracks(fire_clip, WEAPON_BONE)
+		_remove_bone_tracks(fire_clip, MAG_BONE)
+		_remove_bone_tracks(fire_clip, SLIDE_BONE)
+		_remove_bone_tracks(fire_clip, TRIGGER_BONE)
+		_neutralize_fire_arms()
+		print("ARMS_PISTA ", fire_clip, " procedural (arma/cargador/corredera/gatillo + brazos)")
 
-	# FIRE: la animacion manda en el humano; la logica en corredera y gatillo;
-	# GlockRecoil en el retroceso; el cargador va rigido con el arma.
-	# La POSE NEUTRA del arma (posicion Y rotacion) se CLONA de Idle, no se
-	# borra: el clip Fire la hunde y ademas el autor le dibuja un gesto. Borrar
-	# la rotacion dejaba el hueso en su REST (recto), asi que el arma pasaba del
-	# canto de Idle (~15 grados) a recta al disparar y volvia: un giro visible
-	# en cada tiro. Clonando Idle el arma se queda como la sostiene el tirador y
-	# el retroceso procedural se suma encima.
-	var fire := _resolve_clip("Fire")
-	if fire != "":
-		if not idle_weapon.is_empty():
-			_set_bone_position(fire, WEAPON_BONE, idle_weapon["position"])
-			_set_bone_rotation(fire, WEAPON_BONE, idle_weapon["rotation"])
-		_remove_bone_tracks(fire, MAG_BONE)
-		_remove_bone_tracks(fire, SLIDE_BONE)
-		_remove_bone_tracks(fire, TRIGGER_BONE)
-		print("ARMS_PISTA ", fire, " neutralizada (pose de Idle clonada)")
+	# RELOAD / RELOAD_EMPTY: el gesto de sacar y meter el cargador, y la
+	# posicion del arma, son de la animacion. La logica solo manda en
+	# corredera y gatillo.
+	for clip_name in [reload_clip, reload_empty_clip]:
+		if clip_name != "":
+			_remove_bone_tracks(clip_name, SLIDE_BONE)
+			_remove_bone_tracks(clip_name, TRIGGER_BONE)
 
-	# RELOAD / RELOAD_EMPTY: el gesto de sacar y meter el cargador, y la posicion
-	# del arma, son de la animacion. La logica solo manda en corredera y gatillo.
-	for clip_name in ["Reload", "Reload_Empty"]:
-		var clip := _resolve_clip(clip_name)
-		if clip != "":
-			_remove_bone_tracks(clip, SLIDE_BONE)
-			_remove_bone_tracks(clip, TRIGGER_BONE)
+	# IDLE e INSPECT: integros del asset. En Idle el procedural no escribe
+	# nada; en Inspect ni siquiera la corredera (su gesto es del clip).
+
+
+## Quita del Fire las rotaciones de la cadena de brazos (hombro/codo/muneca/
+## manos, en todas sus variantes IK/FK/DEF/ORG/MCH). Los dedos se conservan:
+## son detalle humano que no mueve el arma. Sin esto cada disparo menea los
+## brazos ~30 grados encima del retroceso procedural: dos autoridades.
+func _neutralize_fire_arms() -> void:
+	if arms_skeleton == null or fire_clip == "":
+		return
+	var done := 0
+	for bi in range(arms_skeleton.get_bone_count()):
+		var bn := arms_skeleton.get_bone_name(bi).to_lower()
+		if bn.contains("weapon") or bn.contains("magazine") or bn.contains("slidder") or bn.contains("trigger") or bn.contains("barrel"):
+			continue
+		if bn.contains("finger") or bn.contains("thumb") or bn.contains("index") or bn.contains("middle") or bn.contains("ring") or bn.contains("pinky"):
+			continue
+		if not (bn.contains("arm") or bn.contains("hand") or bn.contains("shoulder") or bn.contains("clavicle") or bn.contains("elbow")):
+			continue
+		_remove_bone_tracks(fire_clip, arms_skeleton.get_bone_name(bi))
+		done += 1
+	print("ARMS_PISTA ", fire_clip, " brazos neutralizados: ", done, " huesos")
 
 
 ## Nombre real de un clip en el AnimationPlayer (el importador puede prefijarlo).
@@ -593,48 +633,11 @@ func _remove_bone_tracks(resolved: String, bone: String) -> void:
 			anim.remove_track(ti)
 
 
-## Copia `value` en todas las claves de la pista de POSICION de un hueso.
-func _set_bone_position(resolved: String, bone: String, value: Vector3) -> void:
-	var anim: Animation = arms_player.get_animation(resolved)
-	for ti in range(anim.get_track_count()):
-		if anim.track_get_type(ti) == Animation.TYPE_POSITION_3D and str(anim.track_get_path(ti)).contains(":" + bone):
-			for k in range(anim.track_get_key_count(ti)):
-				anim.track_set_key_value(ti, k, value)
-			return
-
-
-## Copia `value` en todas las claves de la pista de ROTACION de un hueso.
-func _set_bone_rotation(resolved: String, bone: String, value: Quaternion) -> void:
-	var anim: Animation = arms_player.get_animation(resolved)
-	for ti in range(anim.get_track_count()):
-		if anim.track_get_type(ti) == Animation.TYPE_ROTATION_3D and str(anim.track_get_path(ti)).contains(":" + bone):
-			for k in range(anim.track_get_key_count(ti)):
-				anim.track_set_key_value(ti, k, value)
-			return
-
-
-## Pose local (posicion + rotacion) de un hueso en el instante inicial de un
-## clip, para clonarla en otro sin duplicar la animacion. Devuelve {} si el clip
-## o el hueso no existen.
-func _sample_bone_pose(short_name: String, bone: String) -> Dictionary:
-	var resolved := _resolve_clip(short_name)
-	if resolved == "":
-		return {}
-	arms_player.play(resolved, -1.0, 1.0)
-	arms_player.seek(0.0, true)
-	arms_skeleton.force_update_all_bone_transforms()
-	var idx := _exact_bone(bone)
-	if idx < 0:
-		return {}
-	return {
-		"position": arms_skeleton.get_bone_pose_position(idx),
-		"rotation": arms_skeleton.get_bone_pose_rotation(idx),
-	}
-
-
-## Pivote del retroceso procedural: punto del agarre que sostiene el arma (35%
-## del hueso del arma hacia el hueso de la mano), en el frame del ESQUELETO, que
-## es donde el viewmodel escribe el hueso del arma.
+## Pivote del retroceso: punto del agarre que sostiene el arma (35% del hueso
+## del arma hacia el hueso de la mano), expresado en el espacio del hueso PADRE
+## del arma, que es donde se escriben sus huesos. Arma y cargador comparten
+## padre (la raiz) y pivote: la misma rotacion rigida vale para los dos, cada
+## uno con su palanca.
 func _measure_wrist(weapon_bone: int) -> void:
 	var hand := _exact_bone("DEF-hand.R_842")
 	if hand < 0:
@@ -642,10 +645,12 @@ func _measure_wrist(weapon_bone: int) -> void:
 	arms_skeleton.force_update_all_bone_transforms()
 	var weapon_p: Vector3 = arms_skeleton.get_bone_global_pose(weapon_bone).origin
 	var hand_p: Vector3 = arms_skeleton.get_bone_global_pose(hand).origin
-	var pivot := weapon_p + (hand_p - weapon_p) * 0.35
+	var pivot_skel := weapon_p + (hand_p - weapon_p) * 0.35
+	var parent := arms_skeleton.get_bone_parent(weapon_bone)
+	var pivot_parent: Vector3 = arms_skeleton.get_bone_global_pose(parent).affine_inverse() * pivot_skel
 	if recoil != null:
-		recoil.set_wrist_pivot(pivot)
-	print("ARMS_MUNECA pivote=", pivot.snapped(Vector3(0.001, 0.001, 0.001)))
+		recoil.set_wrist_pivot(pivot_parent)
+	print("ARMS_MUNECA pivote_padre=", pivot_parent.snapped(Vector3(0.001, 0.001, 0.001)))
 
 
 ## Deja una animacion de brazos aparcada en un instante exacto.
@@ -722,30 +727,39 @@ func resolve_idle() -> String:
 ## Escribe en los huesos el estado mecanico que le pasa Glock. Es el unico
 ## punto donde la logica toca el esqueleto: una sola realidad, representada.
 ##
-## El ARMA retrocede AQUI, en su hueso, y no en los nodos del rig: la mano se
-## queda donde la animacion la pone y el arma gira sobre el pivote del agarre y
-## se hunde dentro de ella, que es lo que hace un retroceso real. (Rotar el
-## viewmodel entero empujaria las manos hacia atras con el arma.)
+## El ARMA solo se toca durante Fire, y como transformacion RIGIDA completa
+## (posicion + rotacion) sobre su base de Idle, alrededor del pivote del
+## agarre: cabecea dentro de las manos en vez de desplazarse sin girar. El
+## CARGADOR recibe la MISMA rotacion sobre el MISMO pivote con SU palanca
+## (es hueso hermano, en otra posicion): asi permanece rigido dentro del
+## brocal aunque el arma rote. Copiarle el mismo offset lineal seria
+## incorrecto en cuanto hay rotacion.
 ##
-## El CARGADOR recibe el mismo offset porque es un hueso hermano (cuelga de la
-## raiz, no del arma): en Fire va rigido en el brocal y se mueve exactamente
-## igual que el arma.
-##
-## Escribir a mano en el hueso sobrevive al AnimationPlayer mientras corre el
-## clip; es lo que hace compatible la autoridad procedural con la animada.
+## En cualquier otro clip (Idle/Reload/Reload_Empty/Inspect) estos huesos no
+## se tocan: la animacion los coloca y todas terminan en la misma pose de
+## Idle por construccion. Con resorte a cero la transformacion es identidad.
 func apply_mechanics(slide_pos: float, slide_travel: float, trigger_visual: float) -> void:
 	if not pistol_ok or arms_skeleton == null or slide_bone < 0:
 		return
-	var ratio := SLIDE_VISUAL_TRAVEL / maxf(slide_travel, 0.0001)
-	arms_skeleton.set_bone_pose_position(slide_bone, slide_rest + Vector3(0.0, 0.0, -slide_pos * ratio))
+	var current := ""
+	if arms_player != null:
+		current = arms_player.current_animation
+	var firing := current == fire_clip and fire_clip != ""
 	if trigger_bone >= 0:
 		arms_skeleton.set_bone_pose_position(trigger_bone, trigger_rest + TRIGGER_PULL * trigger_visual)
-	if recoil != null:
-		var kick := recoil.bone_offset(recoil.rot, weapon_rest)
-		arms_skeleton.set_bone_pose_position(weapon_bone, weapon_rest + kick)
-		arms_skeleton.set_bone_pose_position(mag_bone, mag_rest + kick)
-	# En recarga el cargador lo lleva la mano en la animacion, en fase con ella
-	# por construccion; aqui solo se le suma el retroceso.
+	# En Inspect la corredera la lleva el gesto del clip; el resto del tiempo,
+	# la logica (incluida la recarga en vacio, cuyas pistas se borraron).
+	if current != inspect_clip and slide_bone >= 0:
+		var ratio := SLIDE_VISUAL_TRAVEL / maxf(slide_travel, 0.0001)
+		arms_skeleton.set_bone_pose_position(slide_bone, slide_rest + Vector3(0.0, 0.0, -slide_pos * ratio))
+	if firing and recoil != null:
+		var r := Basis.from_euler(recoil.rot)
+		var rq := Quaternion(r)
+		var pivot: Vector3 = recoil.pivot
+		arms_skeleton.set_bone_pose_position(weapon_bone, pivot + (r * (weapon_base_pos - pivot)) + recoil.pos)
+		arms_skeleton.set_bone_pose_rotation(weapon_bone, (rq * weapon_base_rot).normalized())
+		arms_skeleton.set_bone_pose_position(mag_bone, pivot + (r * (mag_base_pos - pivot)) + recoil.pos)
+		arms_skeleton.set_bone_pose_rotation(mag_bone, (rq * mag_base_rot).normalized())
 
 
 ## Cadena de nodos del rig. Se crea aqui y no en Glock: es presentacion.

@@ -37,13 +37,15 @@ const BUS_WORLD := "World"
 #
 # Antes los dos usaban el mismo `slide.wav` con distinto volumen y pitch, y eso
 # es lo que se percibia como "BANG + otro golpe": el mismo transitorio dos veces
-# separado 42 ms. El trasero va 4 dB por encima del de bateria porque su energia
-# esta en agudos (donde el estampido ya no compite) y el de bateria en graves
-# (donde si compite con la cola del estampido).
+# separado 42 ms. El trasero va 2 dB por encima del de bateria: su energia vive
+# en agudos, donde el estampido ya no compite (medido: a -14 dB el trasero caia
+# a solo -6,9 dB del blast en >2,5 kHz y se leia como segundo golpe; a -17 dB
+# queda ~10 dB por debajo, presente sin competir). La bateria sube 3 dB porque
+# quedaba 27 dB bajo la cola del disparo: inaudible, y el tiro perdia su peso.
 const SOUNDS := {
     "empty": {"stream": preload("res://assets/audio/empty_b.wav"), "db": -8.0, "bus": BUS_WEAPONS},
-    "slide_rear": {"stream": preload("res://assets/audio/slide_rear.wav"), "db": -14.0, "bus": BUS_WEAPONS},
-    "slide_battery": {"stream": preload("res://assets/audio/slide_battery.wav"), "db": -18.0, "bus": BUS_WEAPONS},
+    "slide_rear": {"stream": preload("res://assets/audio/slide_rear.wav"), "db": -17.0, "bus": BUS_WEAPONS},
+    "slide_battery": {"stream": preload("res://assets/audio/slide_battery.wav"), "db": -15.0, "bus": BUS_WEAPONS},
     # Mano sobre la corredera: no es un disparo mecanico, es un golpe de acero
     # seco y corto (SoundHolder, Metal Contact). Antes no existia y el gesto de
     # agarrar la corredera era mudo hasta que volvia a bateria.

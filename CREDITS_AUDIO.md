@@ -57,9 +57,13 @@ distintas para que no puedan confundirse:
 | `slide_rear.wav` | tope trasero (~12 ms) | Glock 19 real | −0,85 dBFS | 7221 Hz | 85% >2,5 kHz |
 | `slide_battery.wav` | vuelta a batería (~54 ms) | Sig P229 real | −9,82 dBFS | 774 Hz | 75% <800 Hz |
 
-El trasero va a **−14 dB** y el de batería a **−18 dB** (4 dB por debajo): la
+El trasero va a **−17 dB** y el de batería a **−15 dB**: la
 energía del primero vive en agudos, donde el estampido ya no compite, y la del
-segundo en graves, donde sí compite con la cola del estampido. Medido en la
+segundo en graves, donde sí compite con la cola del estampido. (Antes −14/−18:
+medido después, el trasero caía a solo −6,9 dB del blast en >2,5 kHz y se leía
+como segundo golpe, y la batería quedaba 27 dB bajo la cola: inaudible. El
+rebalanceo −3/+3 dB deja el crack ~10 dB bajo el blast y devuelve su peso al
+cierre.) Medido en la
 captura real, en la ventana 26-45 ms el centroide sube a
 **2700-3000 Hz** con el 34-43% de la energía por encima de 2,5 kHz, que es
 exactamente la huella del tope trasero, y el estampido conserva el dominio (su
@@ -147,8 +151,9 @@ No se usa `astats` con `reset` pequeño: su reset se queda en el tamaño de fram
 - `slide_rear.wav`: **tope trasero de la corredera**, cortado del evento de 10,972 s de "Glock 19 Handgun Pistol Slide Cocking Sounds" por jackthemurray — https://freesound.org/s/393734/ — CC0 (Freesound). Es el pico más agudo y limpio de la toma (85% de energía >2,5 kHz, 0 muestras recortadas). Se corta en su ataque real y se alinea por transitorio con `tools/process_audio.sh`.
 - `slide_battery.wav`: **vuelta a batería**, cortado del evento de 4,016 s de "Sig Sauer P229 Handgun slide rack.wav" por nikkolaus — https://freesound.org/s/442560/ — CC0 (Freesound). Es el golpe más sordo y con más cuerpo disponible (75% de energía <800 Hz, centroide 774 Hz, 0 muestras recortadas): el contrapunto exacto del tope trasero. Las dos muestras vienen ya recortadas a su ataque desde el origen, así que la primera pasada del script no tiene que buscar nada.
 - `slide.wav` (retirado): era "glock.wav" por hiramjustus — https://freesound.org/s/55340/ — CC0 (Freesound). Se eliminó al sustituirse por los dos eventos reales de arriba: usar la misma muestra para el tope trasero y para la batería era la causa medida del "BANG + otro golpe". No se conserva como variante.
-- `magout.wav`: "Magazine Removal" por brianhanson2nd — https://freesound.org/s/171208/ — CC0 (Freesound).
-- `magin.wav`: "Magazine Insert" por brianhanson2nd — https://freesound.org/s/171209/ — CC0 (Freesound).
+- `magout.wav`: **extraccion del cargador** (clic del reten + friccion, 105 ms, pico -8 dBFS), cortado de `Heckler_&_Koch_G36C_5.56mm_foley_close_up_MKH60_mag_in_&_out.wav` (misma toma y micro que `magin`: pareja coherente) — Sonniss #GameAudioGDC Bundle 2016 — https://sonniss.com/gameaudiogdc — licencia Sonniss (royalty-free comercial). Sustituye al "Magazine Removal" de brianhanson2nd (Freesound CC0, retirado): grabacion mas fina, ataque limpio y sin sala.
+- `magin.wav`: **insercion + asiento del cargador** (el clack cae ~60 ms dentro de la muestra; `Glock.gd` dispara el evento 60 ms antes del contacto para que caiga en el asiento), cortado de la misma toma que `magout` — Sonniss #GameAudioGDC Bundle 2016, misma licencia. El ciclo elegido (11.39-11.55 s) tiene 0 muestras al ras; se descartaron otros asientos de la misma toma con 4-14 muestras recortadas. Sustituye al "Magazine Insert" de brianhanson2nd (retirado, mismo motivo).
+- `assets/audio/source/g36c_mag_in_out_excerpt.wav`: recorte 11.38-11.70 s de la toma original, 96 kHz / 24 bits / mono. Es la fuente versionada de la que se cortan `magin`/`magout` con `tools/process_audio.sh` (`process_mag`).
 - `ricochet.wav`: "bullet ricochet.wav" por aust_paul — https://freesound.org/s/30932/ — CC0 (Freesound).
 - `shell_drop.wav`: "Metal_Shell_Spin_10" por BlondPanda — https://freesound.org/s/777923/ — CC0 (Freesound).
 - `impact_metal.wav`: "Fast Collision Reverb" por qubodup — https://freesound.org/s/332057/ — CC0 (Freesound).
@@ -164,6 +169,7 @@ Se revisaron ~240 candidatos para corredera, cargador y casquillo (Freesound CC0
 
 - Las mejores tomas de corredera/cargador de Freesound (p. ej. "Glock 19 slide cocking" de jackthemurray, 36 variaciones) sólo son descargables como **preview MP3 de 192 kbps** sin iniciar sesión, y varias muestran clipping en el preview. No se sustituye un WAV por un MP3 recortado.
 - Las tomas de Sonniss para mecánica (`Steyr TMP9 cocking`, `HK G36C mag in/out`, `M1911A1 dryfire`) son buenas pero el juego ya tiene su propia foley CC0 coherente con el arma; cambiarla no aportaba una mejora medible.
+  - Matiz 2026-09: el `mag in/out` del G36C (close-up MKH60, 96/24) SÍ se adoptó para `magin`/`magout` (ver Fuentes): la foley anterior de cargador seguía sonando barata y la toma nueva es objetivamente más limpia. En cambio el `cocking & dry fire` del Steyr TMP se evaluó y se rechazó: es micro distante con sala (~-25 dB de pico y cola reverberante) y empeoraría el `empty`/corredera actuales, que son primeros planos.
 - Descartados por licencia: Wikimedia `9 mm gunshot-mike-koenig-123.wav` (CC BY-SA 4.0, incompatible con el criterio del proyecto), OpenGameArt `gunshots` de kurt (CC0 pero procedencia no acreditada: "no son mis armas") y `gamesounds.xyz` (no declara licencia).
 
 ## Assets nuevos de esta pasada (2026-09)

@@ -340,6 +340,67 @@ SHOT_CUTS=(
     "5 1.1640 140 0.05"
 )
 
+# process_mag <nombre> <inicio> <fin> <pico_objetivo> <fade>
+#
+# Corta el cargador del extracto G36C (misma toma, mismo micro: pareja
+# coherente) en su ataque real. A diferencia de `process`, normaliza por PICO
+# y no por media de 250 ms: la extraccion es un evento disperso (clic +
+# friccion en 180 ms) y la media alargaria +22 dB de ganancia bombeando el
+# ruido de sala; el asiento es un golpe unico. Los objetivos conservan la
+# dinamica natural (salir suena mas blando que asentar).
+# Ventanas medidas con la envolvente de 1 ms sobre
+# assets/audio/source/g36c_mag_in_out_excerpt.wav (recorte 11.38-11.70 s de la
+# toma `..._mag_in_&_out.wav`; ciclo con 0 muestras al ras):
+#   magout  0.005-0.110  clic del reten + friccion de extraccion (ataque a 0.010)
+#   magin   0.110-0.300  insercion + asiento (el clack cae a 0.170, o sea ~60 ms
+#           dentro de la muestra: Glock.gd dispara el evento 60 ms ANTES del
+#           asiento para que el clack caiga en el contacto)
+process_mag() {
+    local name="$1" start="$2" stop="$3" peak_target="$4" fade="$5"
+    local file="$AUDIO_DIR/$name.wav"
+    local master="$AUDIO_DIR/source/g36c_mag_in_out_excerpt.wav"
+    [ -f "$master" ] || { echo "  falta el extracto original: $master"; return; }
+    [ -f "$file" ] && [ ! -f "$BACKUP_DIR/$name.wav" ] && cp "$file" "$BACKUP_DIR/$name.wav"
+
+    local keep
+    keep="$(awk -v s="$start" -v e="$stop" 'BEGIN { printf "%.3f", e - s }')"
+    local tmp="$BACKUP_DIR/$name.trim.wav"
+    ffmpeg -v error -y -i "$master" -af "atrim=start=${start}:end=${stop},asetpts=PTS-STARTPTS" \
+        -ac 1 -ar 44100 -c:a pcm_s16le "$tmp"
+
+    local raw_peak gain fade_start
+    # Ojo: `peak` mide la global $file (el destino, aun sin escribir); aqui el
+    # original es el temporal y se mide explicito.
+    raw_peak="$(ffmpeg -hide_banner -i "$tmp" -af volumedetect -f null - 2>&1 | grep -m1 max_volume | awk '{print $(NF-1)}')"
+    gain="$(awk -v t="$peak_target" -v p="$raw_peak" 'BEGIN { printf "%.2f", t - p }')"
+    fade_start="$(awk -v k="$keep" -v f="$fade" 'BEGIN { s = k - f; printf "%.3f", (s > 0 ? s : 0) }')"
+
+    if [ "$DRY_RUN" = "--dry-run" ]; then
+        printf "  %-8s extracto %.3f..%.3f s  pico=%s dB  ganancia=%s dB\n" \
+            "$name" "$start" "$stop" "$raw_peak" "$gain"
+        return
+    fi
+
+    local chain="volume=${gain}dB,atrim=0:${keep},afade=t=out:st=${fade_start}:d=${fade}"
+    ffmpeg -v error -y -i "$tmp" -af "$chain" -ac 1 -ar 44100 -c:a pcm_s16le "$file"
+
+    local after_peak
+    after_peak="$(peak "$file")"
+    if awk -v p="$after_peak" -v c="$PEAK_CEILING" 'BEGIN { exit !(p > c) }'; then
+        local trim
+        trim="$(awk -v p="$after_peak" -v c="$PEAK_CEILING" 'BEGIN { printf "%.2f", c - p }')"
+        ffmpeg -v error -y -i "$file" -af "volume=${trim}dB" -ac 1 -ar 44100 -c:a pcm_s16le "$file.peak.wav"
+        mv "$file.peak.wav" "$file"
+    fi
+
+    printf "  %-8s extracto %.3f..%.3f s  pico %5s -> %5s\n" \
+        "$name" "$start" "$stop" "$raw_peak" "$(peak "$file")"
+}
+
+echo "== Cargador (extracto G36C close-up, misma toma) =="
+process_mag magout 0.005 0.110 -8.0 0.03
+process_mag magin 0.110 0.300 -1.5 0.05
+
 echo "== Disparos (cortados de la grabacion original en su ataque real) =="
 for cut in "${SHOT_CUTS[@]}"; do process_shot $cut; done
 
@@ -359,9 +420,9 @@ echo "== Mecánica del arma =="
 # Los dos vienen ya recortados a su ataque (ver CREDITS_AUDIO.md), así que se
 # alinean por transitorio como el resto de la foley. Se igualan al mismo target
 # de familia porque su reparto DENTRO del disparo lo fija GameAudio
-# (slide_rear a nivel base y slide_battery 4 dB por debajo).
+# (slide_rear 2 dB por encima de slide_battery: ver su comentario medido).
 for s in slide_rear slide_battery; do process "$s" "$MECH_ATTACK_TARGET" 0.12 0.05 transient; done
-for s in empty_b magin magout; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 transient; done
+for s in empty_b; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 transient; done
 
 echo "== Otros =="
 for s in footstep shell_drop; do process "$s" "$SOFT_ATTACK_TARGET" 0.30 0.05 transient; done

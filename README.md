@@ -65,13 +65,18 @@ El ownership de huesos concretos vive al principio de `scripts/GlockViewmodel.gd
   feedback → corregir.
 - **Capturas y video están permitidos.** Si el problema es espacial, visual o de
   pose, mirar una captura o pedirla al usuario es más rápido que diagnosticar
-  transforms a ciegas. Mirar no es construir tooling.
-- **Sin laboratorio.** No se construyen herramientas, métricas ni baterías de
-  capturas para sustituir el juicio humano (nada de DevTools, armdiag,
-  recoilprobe, visualab, fpsbench, audiocapture).
-- **Tests:** no son workflow por defecto. Una comprobación automática solo se
-  justifica si la pregunta es objetiva, el usuario no puede responderla mejor
-  mirando o escuchando, protege una invariancia importante y es pequeña.
+  transforms a ciegas. Mirar no es construir tooling. Excepción: UNA
+  herramienta pequeña de inspección visual (`tools/review_contact_sheet.py`) que
+  graba una acción breve a suficientes FPS y reúne sus frames en UNA sola
+  imagen de contacto. No es un test, no produce métricas, no sustituye al
+  usuario.
+- **Sin laboratorio.** Nada más que esa hoja de contacto: ni DevTools, ni
+  armdiag, ni recoilprobe, ni visualab, ni fpsbench, ni audiocapture, ni
+  baterías de capturas para sustituir el juicio humano.
+- **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
+  justifica si el usuario la pide explícitamente o autoriza una invariante
+  concreta (pregunta objetiva que el usuario no responde mejor mirando o
+  escuchando, pequeña y atada a esa invariante).
 - **Tras DOS intentos sin mejora visible o audible: DETENTE Y PREGUNTA.** Una
   pregunta de 10 segundos es mejor que 40 minutos de análisis equivocado.
 - **Comentarios:** explican invariantes actuales y el porqué de una decisión no

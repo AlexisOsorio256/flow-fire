@@ -35,20 +35,29 @@ const SLIDE_IMPULSE := 5.90
 const SLIDE_RESTITUTION := 0.25  # rebote contra el tope trasero
 const SLIDE_EJECT_AT := 0.030  # el casquillo sale con el puerto ya abierto (~8 ms)
 # Instantes de la recarga, MEDIDOS sobre la animacion real de cada clip
-# (posicion del hueso Magazine_924 y de la corredera frame a frame). Lo que
-# manda es el CONTACTO, no un reloj: el sonido va donde ocurre el gesto.
+# (cargador en el marco del arma, frame a frame). Lo que manda es el CONTACTO,
+# no un reloj heredado: el sonido va donde ocurre el gesto.
 #
-#   tactica (Reload, 3.125 s): el cargador empieza a salir a 0.30 s, esta fuera
-#     del todo a ~0.93 s y el nuevo asienta a 2.50 s (la base vuelve al brocal).
-#   vacia (Reload_Empty, 3.917 s): el gesto es el mismo hasta 2.50 s; el
-#     cargador se empuja hasta 2.90 s y la corredera se libera a 2.90 s.
+#   tactica (Reload, 3.125 s): el cargador se mueve a partir de ~0.08 s;
+#     vuelve a <9 mm a 2.20 s y asienta a ~2.31 s.
+#   vacia (Reload_Empty, 3.917 s): el gesto es el mismo hasta ~1.9 s; el
+#     cargador espera fuera (~55 mm) hasta ~2.85 s, entra de golpe a 3.0 s y
+#     asienta a ~3.42 s. La corredera la suelta la mano a ~2.87 s y llega a
+#     bateria sola a ~2.93 s (el sonido de bateria lo emite la fisica al
+#     llegar, no este codigo).
 #
 # El instante de asiento NO puede ser el mismo para las dos: son clips distintos
-# y el contacto ocurre en momentos distintos.
-const RELOAD_MAG_OUT_T := 0.30
-const RELOAD_TACTICAL_MAG_IN_T := 2.50
-const RELOAD_EMPTY_MAG_IN_T := 2.90
-const RELOAD_SLIDE_T := 2.90
+# y el contacto ocurre en momentos distintos (antes ambas usaban 2.50/2.90 y el
+# sonido caia 0.2 s tarde en la tactica y 0.5 s pronto en la vacia, con el
+# cargador todavia visiblemente fuera).
+#
+# `magin.wav` lleva ~60 ms de insercion antes de su clack: los MAG_IN de abajo
+# son el INICIO del gesto para que el clack caiga justo en el asiento medido
+# (2.31 s tactica, 3.42 s vacia).
+const RELOAD_MAG_OUT_T := 0.10
+const RELOAD_TACTICAL_MAG_IN_T := 2.25
+const RELOAD_EMPTY_MAG_IN_T := 3.36
+const RELOAD_SLIDE_T := 2.87
 const RELOAD_EMPTY_TOTAL := 4.00    # Reload_Empty (3.917) + mezcla al idle
 const RELOAD_TACTICAL_TOTAL := 3.20  # Reload (3.125) + mezcla al idle
 
@@ -348,27 +357,24 @@ func _update_reload(delta: float) -> void:
 	if not reload_mag_seated and reload_elapsed >= mag_in_t:
 		_seat_reload_mag()
 		# El cargador deja de ser una cifra abstracta en el mismo instante en
-		# que su base golpea el brocal: el gesto del rig ya lo lleva hasta ahí,
-		# y este rebote breve transmite la reacción de esa masa a la muñeca.
-		# Es deliberadamente una fracción del retroceso de un disparo (~1 mm /
-		# ~0,2° de pico, no otro latigazo) y reutiliza el resorte físico existente.
+		# que su base golpea el brocal. Rebote breve en la capa del ARMA (no en
+		# los brazos): fraccion del retroceso de un disparo, mismo resorte.
 		recoil.kick_mag_seat()
 		GameAudio.play_2d("magin", 0.0, randf_range(0.95, 1.05))
 
 	# Corredera: en una recarga en vacío se libera a mano en el mismo momento en
-	# que la animación del autor la suelta. El golpe de la mano se oye aquí
-	# (una vez por gesto), no al agarrar: así la mecánica audible coincide con
-	# la corredera entrando en batería.
+	# que la animación del autor la suelta (~2.87 s). El golpe de la mano se oye
+	# aquí (una vez por gesto); la vuelta a batería la canta la física cuando
+	# la corredera llega de verdad (~2.93 s), no este código: antes se
+	# disparaban las dos muestras juntas en el mismo instante.
 	if reload_empty and not reload_slide_released and reload_elapsed >= RELOAD_SLIDE_T:
 		reload_slide_released = true
 		slide_locked = false
 		slide_pos = SLIDE_TRAVEL
 		slide_vel = -4.2
-		# La corredera volviendo a bateria: mismo evento fisico que el cierre
-		# del disparo, asi que usa su misma muestra. El golpe seco de la mano
-		# soltandola va por debajo, en su propia grabacion.
+		# La mano soltando la corredera, en su propia grabacion. La vuelta a
+		# bateria usa su muestra cuando la fisica la detecta (ver _update_slide).
 		GameAudio.play_2d("slide_hand", -2.0, randf_range(0.98, 1.04))
-		GameAudio.play_2d("slide_battery", 1.0)
 
 	# La pose sube con la mano (0.05-0.30 s), se mantiene mientras está el
 	# cargador fuera y baja cuando ya está dentro.
@@ -404,6 +410,13 @@ func _seat_reload_mag() -> void:
 func _finish_reload() -> void:
 	if not reload_mag_seated:
 		_seat_reload_mag()
+	if reload_empty and chamber <= 0 and mag > 0:
+		# La corredera del clip cae (~2.9 s) antes de que el cargador asiente
+		# (~3.42 s): cierra sobre recamara vacia y la fisica no puede alimentar
+		# en ese momento. Al completar el ciclo la recamara queda llena: es el
+		# cartucho que la corredera animada toma del cargador ya asentado.
+		mag -= 1
+		chamber = 1
 	reloading = false
 	viewmodel.blend_to_idle(0.14)
 	_emit_ammo()
