@@ -266,12 +266,12 @@ func _process(delta: float) -> void:
 
 
 func _update_camera_recoil(delta: float) -> void:
-    # Resortes estables (Springs): un hitch de frame no debe volcar la cámara.
-    # k/c dan zeta 0.85: la cabeza sube y BAJA sin rebotar, con el pico a
-    # ~111 ms y recuperación de ~450 ms. Es la capa más lenta de las cuatro y
-    # la que da la masa: no repite el latigazo del arma, lo sigue.
-    var k := 90.0
-    var c := 16.1
+    # La cabeza reacciona DESPUES del arma y con menos amplitud. En el video de
+    # referencia la camara cargaba demasiado del recoil y el arma se leia
+    # pegada a la pantalla; el peso debe venir del agarre, no de inclinar todo
+    # el mundo. Este resorte da ~2.7-3 grados de pico a ~120 ms.
+    var k := 78.0
+    var c := 14.6
     var pitch := Springs.scalar(recoil_pitch, recoil_pitch_vel, k, c, delta)
     recoil_pitch = pitch.x
     recoil_pitch_vel = pitch.y
@@ -283,17 +283,15 @@ func _update_camera_recoil(delta: float) -> void:
     recoil_roll_vel = roll.y
 
     # Clamps: la cámara nunca debe quedarse mirando a otro sitio.
-    recoil_pitch = clampf(recoil_pitch, -0.30, 0.30)
-    recoil_yaw = clampf(recoil_yaw, -0.25, 0.25)
-    recoil_roll = clampf(recoil_roll, -0.25, 0.25)
+    recoil_pitch = clampf(recoil_pitch, -0.18, 0.18)
+    recoil_yaw = clampf(recoil_yaw, -0.12, 0.12)
+    recoil_roll = clampf(recoil_roll, -0.12, 0.12)
 
 
 func _on_shot_fired() -> void:
-    # La cámara (la cabeza del operador) sube menos que el arma y tarda más:
-    # pico de ~8 grados a ~111 ms con recuperación de ~450 ms. Sólo
-    # rotación: un desplazamiento de cámara de unos milímetros no se ve (el
-    # viewmodel cuelga de ella y se mueve con ella), así que simular "masa"
-    # moviéndola de sitio sería decorativo.
-    recoil_pitch_vel += randf_range(1.30, 1.55)
-    recoil_yaw_vel += randf_range(-0.20, 0.20)
-    recoil_roll_vel += randf_range(-0.35, 0.35)
+    # La cabeza acompana el disparo; no lo protagoniza. Menos yaw/roll aleatorio
+    # evita el temblor de videojuego y deja leer el cabeceo + hundimiento real
+    # del arma que lleva GlockRecoil.
+    recoil_pitch_vel += randf_range(1.00, 1.15)
+    recoil_yaw_vel += randf_range(-0.10, 0.10)
+    recoil_roll_vel += randf_range(-0.18, 0.18)
