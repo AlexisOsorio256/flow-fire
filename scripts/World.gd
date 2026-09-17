@@ -199,14 +199,14 @@ func _build_lights() -> void:
 
 
 func _make_lamp(x: float, z: float) -> void:
-    var lamp := MeshInstance3D.new()
-    var mesh := BoxMesh.new()
-    mesh.size = Vector3(1.6, 0.07, 0.26)
-    mesh.material = lamp_mat
-    lamp.mesh = mesh
-    lamp.position = Vector3(x, 4.05, z)
-    lamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    add_child(lamp)
+    # La luminaria visible tambien existe para la bala: antes era solo una
+    # malla y los tiros la atravesaban como si no hubiese objeto. Reutilizamos
+    # la misma caja para render + colision y la declaramos metal.
+    var lamp := _static_box(self, "Lamp", Vector3(1.6, 0.07, 0.26), Vector3(x, 4.05, z), lamp_mat)
+    lamp.set_meta("surface", "metal")
+    var lamp_mesh := lamp.get_child(0) as MeshInstance3D
+    if lamp_mesh != null:
+        lamp_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
     var light := OmniLight3D.new()
     light.position = Vector3(x, 3.55, z)
