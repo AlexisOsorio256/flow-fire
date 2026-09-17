@@ -85,25 +85,20 @@ mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
 | "quiero otra pistola" | `const ARMA` + entrada en `ARMAS` + `.glb` |
 | "un sonido no cae en el gesto" | no hay segundos que tocar: el evento sale del gesto |
 
-Comprobar sin abrir el editor: `tools/check_weapon.gd` (orientación y montaje),
-`tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
+Comprobar abriendo el juego: `tools/review_contact_sheet.py idle|fire|ads|...`
+(ejecuta Godot, graba la acción y deja UNA hoja en `captures/review/` para
+mirarla). Invariantes objetivas: `tools/check_weapon.gd` (orientación y
+montaje), `tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
 `tools/check_weapon_parts.py` (piezas, tamaño real y puntos mecánicos).
 
 ## Workflow IA + usuario
 
-- **El usuario es el evaluador principal** de apariencia, movimiento, sensación y
-  audio. Ciclo: cambio pequeño → commit/push → el usuario prueba en Godot →
-  feedback → corregir.
-- **Capturas y video están permitidos.** Si el problema es espacial, visual o de
-  pose, mirar una captura o pedirla al usuario es más rápido que diagnosticar
-  transforms a ciegas. Mirar no es construir tooling. Excepción: UNA
-  herramienta pequeña de inspección visual (`tools/review_contact_sheet.py`) que
-  graba una acción breve a suficientes FPS y reúne sus frames en UNA sola
-  imagen de contacto. No es un test, no produce métricas, no sustituye al
-  usuario.
-- **Sin laboratorio.** Nada más que esa hoja de contacto: ni DevTools, ni
-  armdiag, ni recoilprobe, ni visualab, ni fpsbench, ni audiocapture, ni
-  baterías de capturas para sustituir el juicio humano.
+- **La IA abre el juego y mira.** Si el problema es espacial, visual o de
+  pose, la IA ejecuta el juego en Godot y mira capturas ella misma antes de
+  diagnosticar. No pide al usuario imágenes de lo que puede ver sola.
+- **Ciclo:** cambio pequeño → la IA lo verifica mirando el juego (captura) →
+  commit/push → el usuario valida la sensación final en Godot → feedback →
+  corregir.
 - **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
   justifica si el usuario la pide explícitamente o autoriza una invariante
   concreta (pregunta objetiva que el usuario no responde mejor mirando o
