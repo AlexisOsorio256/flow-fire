@@ -23,9 +23,11 @@ extends Node
 const BUS_WEAPONS := "Weapons"
 const BUS_WORLD := "World"
 
-# Tabla única de sonidos: archivo + nivel base en dB. Los one-shots del arma se
-# piden con `play_2d`, los del mundo con `play_3d`; el segundo argumento de
-# ambos es un *ajuste* en dB sobre este nivel base.
+# Tabla única de sonidos: archivo + nivel base en dB. `play_2d` sirve tanto para
+# arma como para sonidos locales del jugador (pasos); el BUS de cada entrada es
+# la autoridad que decide a qué mezcla pertenece. `play_3d` se usa para eventos
+# posicionales del mundo. El segundo argumento de ambos es un *ajuste* en dB
+# sobre este nivel base.
 # `slide_rear` y `slide_battery` son los DOS golpes de la corredera, que son dos
 # eventos fisicos distintos (tope trasero a ~12 ms y vuelta a bateria a ~54 ms) y
 # por eso son dos grabaciones distintas:
@@ -172,7 +174,10 @@ func _spawn(bus: String, stream: AudioStream, volume_db: float, pitch: float, ca
     p.bus = bus
     add_child(p)
     p.finished.connect(p.queue_free)
-    if cap_voices:
+    # El limite protege SOLO las voces del arma. Un sonido 2D puede pertenecer
+    # al mundo (los pasos locales son el caso actual) y no debe consumir el
+    # presupuesto ni provocar que se corte blast/mecanica.
+    if cap_voices and bus == BUS_WEAPONS:
         _limit_weapon_voices(p)
     if autoplay:
         p.play()
