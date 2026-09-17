@@ -43,7 +43,7 @@ rendimiento → calidad audiovisual → features.
 |---|---|
 | Arranque y escena | `scripts/Main.gd` |
 | Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga | `scripts/Glock.gd` |
-| Piezas del arma: corredera, gatillo, cargador, boca, miras | `scripts/GlockWeapon.gd` |
+| Piezas del arma y tabla de armas (Glock, Desert Eagle) | `scripts/GlockWeapon.gd` |
 | Viewmodel: brazos, ADS, pose, animación, sockets | `scripts/GlockViewmodel.gd` |
 | Retroceso y peso: el arma en el agarre + cesión de las manos | `scripts/GlockRecoil.gd` |
 | Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
@@ -60,15 +60,34 @@ rendimiento → calidad audiovisual → features.
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
 
-**El arma no está en el esqueleto.** Es un árbol de piezas rígidas
-(`assets/models/glock_urpo.glb`): `Frame`, `Slide`, `Magazine` y los puntos de
-boca, miras y puerto. Los brazos son el único esqueleto y su pose la manda el
-`AnimationPlayer`. El ownership de cada nodo vive al principio de
-`scripts/GlockViewmodel.gd`.
+**El arma no está en el esqueleto.** Es un árbol de piezas rígidas: `Frame`,
+`Slide`, `Trigger`, `Magazine`, `Barrel` y los puntos de boca, miras y puerto.
+Los brazos son el único esqueleto y su pose la manda el `AnimationPlayer`. El
+ownership de cada nodo vive al principio de `scripts/GlockViewmodel.gd`.
+
+**Dos armas:** Glock 19 y Desert Eagle, con el mismo viewmodel y los mismos
+brazos. Cambiar de arma es **una línea** (`const ARMA` en
+`GlockViewmodel.gd`); añadir otra es una entrada en la tabla `ARMAS` de
+`GlockWeapon.gd` más su `.glb` preparado con `tools/make_weapon_parts.py`. No
+hay código por arma.
 
 Los eventos de la recarga (agarre del cargador, entrega, sonidos) no usan
 tiempos escritos a mano: se disparan sobre los mínimos reales de la distancia
 mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
+
+### Dónde se pide cada ajuste
+
+| Petición | Un solo sitio |
+|---|---|
+| "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, 3 constantes juntas |
+| "el arma está mal encuadrada" | `ARMA_EMPUNADURA` en `GlockViewmodel.gd` |
+| "la corredera no llega / recorre de más" | `corredera` en la tabla `ARMAS` |
+| "quiero otra pistola" | `const ARMA` + entrada en `ARMAS` + `.glb` |
+| "un sonido no cae en el gesto" | no hay segundos que tocar: el evento sale del gesto |
+
+Comprobar sin abrir el editor: `tools/check_weapon.gd` (orientación y montaje),
+`tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
+`tools/check_weapon_parts.py` (piezas, tamaño real y puntos mecánicos).
 
 ## Workflow IA + usuario
 

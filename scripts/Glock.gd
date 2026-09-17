@@ -26,7 +26,9 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## cambia, los eventos siguen cayendo en el gesto. Los valores de abajo son solo
 ## una red de seguridad.
 
-const MAG_SIZE := 17
+## Capacidad del cargador: la fija el arma (GlockWeapon.ARMAS). Se lee al
+## montar; aqui solo queda el valor de arranque.
+var MAG_SIZE := 17
 const SLIDE_TRAVEL := 0.039
 const SLIDE_K := 4000.0
 const SLIDE_C := 80.0
@@ -114,6 +116,10 @@ func _ready() -> void:
 	viewmodel.recoil = recoil
 	add_child(viewmodel)
 	viewmodel.mount()
+	if viewmodel.weapon != null:
+		MAG_SIZE = viewmodel.weapon.capacidad
+		mag = MAG_SIZE
+		reserve = MAG_SIZE * 4
 	if viewmodel.muzzle != null:
 		fx = WeaponFX.new()
 		fx.name = "WeaponFX"
