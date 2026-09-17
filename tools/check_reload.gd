@@ -9,7 +9,10 @@ func _ready() -> void:
 	var player: Node = main.get_node("Player")
 	var w: Node = player.get("weapon")
 	var vm = w.get("viewmodel")
-	w.set("mag", 8)
+	# La capacidad la fija el arma: se deja el cargador a la mitad.
+	var cap: int = w.get("MAG_SIZE")
+	w.set("mag", maxi(1, cap / 2))
+	print("arma con capacidad ", cap, " | empieza la recarga con ", w.get("mag"))
 	w.start_reload()
 	var t := 0.0
 	var antes := true

@@ -11,7 +11,7 @@ func _ready() -> void:
 	var vm = w.get("viewmodel")
 	var arma = vm.get("weapon")
 	print("--- ARMA ---")
-	print("escala ", arma.escala, " corredera_mm ", snappedf(0.039*1000, 0.1))
+	print("escala ", arma.escala, " capacidad ", arma.capacidad)
 	for n in ["frame", "slide", "magazine", "muzzle", "ejection_port", "sight_rear", "sight_front"]:
 		var nodo = arma.get(n)
 		if nodo == null:
