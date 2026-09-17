@@ -1,30 +1,41 @@
 class_name GlockRecoil
 extends RefCounted
 
-## Retroceso del arma DENTRO de la mano, mas una respuesta lenta y pequena de
-## las manos. La camara sigue siendo responsabilidad de Player.gd.
+## RETROCESO Y PESO DEL ARMA. Dos capas separadas, nunca sumadas a lo loco:
 ##
-## Una sola autoridad de presentacion por capa:
-##   arma/cargador .... `rot` + `pos`, aplicados por GlockViewmodel a los huesos
-##   manos/brazos ..... `arm_rot` + `arm_pos`, aplicados al WristPivot
-##   camara/cuerpo ..... Player.gd
-##   corredera ......... Glock.gd (`slide_pos`)
+##   1. EL ARMA dentro del agarre -> `pos` + `rot` sobre WeaponSocket.
+##      Rapida y corta: la pistola cabecea y se hunde unos milimetros.
+##   2. LAS MANOS ceden despues  -> `arm_pos` + `arm_rot` sobre WristPivot.
+##      Mas lenta y mas blanda: los brazos absorben. No es un segundo latigazo,
+##      es la masa del conjunto.
 ##
-## En la captura real el problema era el contrario al antiguo "doble recoil":
-## el mundo/camara se movia, pero el conjunto de manos quedaba demasiado fijo y
-## la pistola apenas tenia recorrido lineal. El resultado se leia liviano. Esta
-## capa lenta NO repite el latigazo del arma: solo deja que las manos cedan unos
-## milimetros y ~1 grado despues del golpe, y vuelvan con mas masa.
+## La camara NO se toca aqui: eso es Player.gd.
+##
+## PARA QUE EL ARMA PESE MAS, se toca la seccion de abajo y nada mas. Las tres
+## palancas que de verdad cambian la sensacion de masa:
+##   RECOIL_KICK     cuanto golpea al disparar (impulso)
+##   WEAPON_K        cuanto tarda en volver (rigidez; mas bajo = mas pesada)
+##   ARM_GIVE        cuanto ceden las manos (mas alto = el agarre absorbe mas)
+## El resto son limites de seguridad.
 
-# Cabeceo rapido del ARMA. Con k=520/c=18 da un pico de ~7.7 grados a ~55 ms.
-const MAIN_RECOIL_KICK := 5.10
-const WEAPON_K := 520.0
-const WEAPON_C := 18.0
-# Respuesta de manos: mas lenta, casi criticamente amortiguada. Pico aproximado
-# de 2-3 mm y ~1 grado; suficiente para que el agarre absorba sin convertirse en
-# una segunda animacion de disparo.
-const ARM_K := 72.0
+# --- 1. arma ---------------------------------------------------------------
+const RECOIL_KICK := 5.10        # grados/s de cabeceo por disparo
+const RECOIL_KICK_SIDE := 0.14   # dispersion lateral, simetrica
+const WEAPON_K := 520.0          # rigidez del resorte del arma
+const WEAPON_C := 18.0           # amortiguacion
+const PUSH_HIP := 0.095          # recorrido hacia el tirador (m)
+const PUSH_RISE := 0.018         # subida (m)
+
+# --- 2. manos --------------------------------------------------------------
+const ARM_GIVE := 0.55           # fraccion del empuje que cede la mano
+const ARM_K := 72.0              # mucho mas blando que el arma
 const ARM_C := 13.6
+
+# --- limites ---------------------------------------------------------------
+const POS_LIMIT := Vector3(0.012, 0.018, 0.020)
+const ROT_LIMIT := Vector3(0.22, 0.055, 0.065)
+const ARM_POS_LIMIT := Vector3(0.008, 0.008, 0.010)
+const ARM_ROT_LIMIT := Vector3(0.035, 0.0, 0.018)
 
 var pos := Vector3.ZERO
 var vel := Vector3.ZERO
@@ -34,25 +45,20 @@ var arm_pos := Vector3.ZERO
 var arm_vel := Vector3.ZERO
 var arm_rot := Vector3.ZERO
 var arm_rot_vel := Vector3.ZERO
-# Pivote del agarre, en el espacio del hueso padre del arma (lo mide el
-# viewmodel con el rig real). Arma y cargador comparten padre y pivote.
+## Punto de giro del cabeceo, en espacio del WeaponSocket. Lo coloca el
+## viewmodel para que el arma rote sobre la empuñadura y no sobre su centro.
 var pivot := Vector3.ZERO
 
 
-## El disparo tiene dos tiempos: primero el arma gira/hunde dentro del agarre;
-## despues las manos ceden una fraccion. La dispersion lateral es simetrica y
-## pequena: no hay un giro sistematico de videojuego.
+## El disparo tiene dos tiempos: primero el arma gira y se hunde en el agarre;
+## despues las manos ceden una fraccion.
 func kick_shot() -> void:
 	rot_vel += Vector3(
-		MAIN_RECOIL_KICK + randf() * 0.30,
-		(randf() - 0.5) * 0.14,
-		(randf() - 0.5) * 0.18
-	)
-	# ~3 mm de recorrido pico hacia el tirador, no el milimetro casi invisible
-	# de la version anterior.
-	vel += Vector3((randf() - 0.5) * 0.012, 0.018, 0.095 + randf() * 0.015)
-	# Las manos responden despues, mas blandas que el arma.
-	arm_vel += Vector3((randf() - 0.5) * 0.010, 0.012, 0.052 + randf() * 0.008)
+		RECOIL_KICK + randf() * 0.30,
+		(randf() - 0.5) * RECOIL_KICK_SIDE,
+		(randf() - 0.5) * 0.18)
+	vel += Vector3((randf() - 0.5) * 0.012, PUSH_RISE, PUSH_HIP + randf() * 0.015)
+	arm_vel += Vector3((randf() - 0.5) * 0.010, 0.012, PUSH_HIP * ARM_GIVE)
 	arm_rot_vel += Vector3(0.34 + randf() * 0.05, 0.0, (randf() - 0.5) * 0.07)
 
 
@@ -64,36 +70,36 @@ func kick_mag_seat() -> void:
 	arm_rot_vel.x -= 0.06
 
 
-## Pivote de giro del arma, en el espacio de su hueso padre.
-func set_wrist_pivot(point: Vector3) -> void:
+func set_pivot(point: Vector3) -> void:
 	pivot = point
 
 
-## La capa lenta mueve el conjunto desde la muneca; la rapida sigue siendo de
-## los huesos del arma/cargador. `node.position = -pivot` mantiene el mismo
-## pivote geometrico al rotar WristPivot.
-func apply(wrist: Node3D, node: Node3D) -> void:
-	wrist.position = pivot + arm_pos
-	wrist.rotation = arm_rot
-	node.position = -pivot
-	node.rotation = Vector3.ZERO
-
-
 func update(delta: float) -> void:
-	var res_p := Springs.vector(pos, vel, WEAPON_K, WEAPON_C, delta)
-	pos = res_p[0]
-	vel = res_p[1]
-	var res_r := Springs.vector(rot, rot_vel, WEAPON_K, WEAPON_C, delta)
-	rot = res_r[0]
-	rot_vel = res_r[1]
-	pos = Vector3(clampf(pos.x, -0.012, 0.012), clampf(pos.y, -0.012, 0.018), clampf(pos.z, -0.018, 0.020))
-	rot = Vector3(clampf(rot.x, -0.22, 0.22), clampf(rot.y, -0.055, 0.055), clampf(rot.z, -0.065, 0.065))
+	var rp := Springs.vector(pos, vel, WEAPON_K, WEAPON_C, delta)
+	pos = rp[0]
+	vel = rp[1]
+	var rr := Springs.vector(rot, rot_vel, WEAPON_K, WEAPON_C, delta)
+	rot = rr[0]
+	rot_vel = rr[1]
+	pos = Vector3(clampf(pos.x, -POS_LIMIT.x, POS_LIMIT.x), clampf(pos.y, -POS_LIMIT.y, POS_LIMIT.y), clampf(pos.z, -POS_LIMIT.z, POS_LIMIT.z))
+	rot = Vector3(clampf(rot.x, -ROT_LIMIT.x, ROT_LIMIT.x), clampf(rot.y, -ROT_LIMIT.y, ROT_LIMIT.y), clampf(rot.z, -ROT_LIMIT.z, ROT_LIMIT.z))
 
-	var res_ap := Springs.vector(arm_pos, arm_vel, ARM_K, ARM_C, delta)
-	arm_pos = res_ap[0]
-	arm_vel = res_ap[1]
-	var res_ar := Springs.vector(arm_rot, arm_rot_vel, ARM_K, ARM_C, delta)
-	arm_rot = res_ar[0]
-	arm_rot_vel = res_ar[1]
-	arm_pos = Vector3(clampf(arm_pos.x, -0.008, 0.008), clampf(arm_pos.y, -0.008, 0.008), clampf(arm_pos.z, -0.008, 0.010))
-	arm_rot = Vector3(clampf(arm_rot.x, -0.035, 0.035), 0.0, clampf(arm_rot.z, -0.018, 0.018))
+	var ap := Springs.vector(arm_pos, arm_vel, ARM_K, ARM_C, delta)
+	arm_pos = ap[0]
+	arm_vel = ap[1]
+	var ar := Springs.vector(arm_rot, arm_rot_vel, ARM_K, ARM_C, delta)
+	arm_rot = ar[0]
+	arm_rot_vel = ar[1]
+	arm_pos = Vector3(clampf(arm_pos.x, -ARM_POS_LIMIT.x, ARM_POS_LIMIT.x), clampf(arm_pos.y, -ARM_POS_LIMIT.y, ARM_POS_LIMIT.y), clampf(arm_pos.z, -ARM_POS_LIMIT.z, ARM_POS_LIMIT.z))
+	arm_rot = Vector3(clampf(arm_rot.x, -ARM_ROT_LIMIT.x, ARM_ROT_LIMIT.x), 0.0, clampf(arm_rot.z, -ARM_ROT_LIMIT.z, ARM_ROT_LIMIT.z))
+
+
+## Escribe las dos capas. `wrist` recibe la cesion de los brazos; `socket`
+## recibe el cabeceo del arma. Cada nodo tiene UN dueno y solo este metodo
+## escribe en ellos.
+func apply(wrist: Node3D, socket: Node3D) -> void:
+	wrist.position = arm_pos
+	wrist.rotation = arm_rot
+	var r := Basis.from_euler(rot)
+	socket.position = pivot + (r * -pivot) + pos
+	socket.basis = r
