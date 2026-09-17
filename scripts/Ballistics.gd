@@ -42,6 +42,7 @@ func fire(origin: Vector3, direction: Vector3, speed: float = 372.0, tracer_chan
         "distance": 0.0,
         "penetrations": 0,
         "ricochets": 0,
+        "flyby": false,
     }
     bullets.append(b)
     if mesh != null:
@@ -60,6 +61,12 @@ func _physics_process(delta: float) -> void:
             continue
 
         b.life += delta
+        # Silbido de paso: solo cuando la trayectoria cruza el espacio del oido
+        # (no por disparar). Se calcula de la recta del proyectil al jugador y
+        # suena una sola vez por bala, al pasar el punto mas cercano.
+        if not b.flyby and _passes_near_player(b):
+            b.flyby = true
+            GameAudio.play_3d("bullet_flyby", _closest_point(b), -4.0, randf_range(0.94, 1.08))
         var remaining: float = delta
         var iterations := 0
         while b.active and remaining > 0.0001 and iterations < 16:
@@ -238,6 +245,39 @@ func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object) -
             best = {"point": world_exit, "normal": world_normal, "distance": distance}
             best_distance = distance
     return best
+
+
+## Punto mas cercano de la recta del proyectil a la camara del jugador.
+func _closest_point(b: Dictionary) -> Vector3:
+    var eye := _listener_position()
+    var dir: Vector3 = b.vel.normalized()
+    var to_bullet: Vector3 = b.pos - eye
+    var along: float = to_bullet.dot(dir)
+    return b.pos + dir * maxf(0.0, -along)
+
+
+## Distancia minima de la trayectoria del proyectil al oido. El radio es amplio
+## (1.1 m): el silbido tiene que sentirse cuando la bala pasa cerca, no solo
+## cuando roza la cabeza.
+func _passes_near_player(b: Dictionary) -> bool:
+    var eye := _listener_position()
+    var dir: Vector3 = b.vel.normalized()
+    var to_bullet: Vector3 = b.pos - eye
+    var along: float = to_bullet.dot(dir)
+    # Solo si aun no ha pasado el punto mas cercano: el aviso suena en el paso.
+    if along > 0.0:
+        return false
+    var closest: Vector3 = b.pos + dir * (-along)
+    return closest.distance_to(eye) < 1.1
+
+
+func _listener_position() -> Vector3:
+    var viewport := get_viewport()
+    if viewport != null:
+        var cam := viewport.get_camera_3d()
+        if cam != null:
+            return cam.global_position
+    return Vector3.ZERO
 
 
 func _take_tracer() -> MeshInstance3D:

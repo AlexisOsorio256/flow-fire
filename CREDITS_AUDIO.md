@@ -165,3 +165,28 @@ Se revisaron ~240 candidatos para corredera, cargador y casquillo (Freesound CC0
 - Las mejores tomas de corredera/cargador de Freesound (p. ej. "Glock 19 slide cocking" de jackthemurray, 36 variaciones) sólo son descargables como **preview MP3 de 192 kbps** sin iniciar sesión, y varias muestran clipping en el preview. No se sustituye un WAV por un MP3 recortado.
 - Las tomas de Sonniss para mecánica (`Steyr TMP9 cocking`, `HK G36C mag in/out`, `M1911A1 dryfire`) son buenas pero el juego ya tiene su propia foley CC0 coherente con el arma; cambiarla no aportaba una mejora medible.
 - Descartados por licencia: Wikimedia `9 mm gunshot-mike-koenig-123.wav` (CC BY-SA 4.0, incompatible con el criterio del proyecto), OpenGameArt `gunshots` de kurt (CC0 pero procedencia no acreditada: "no son mis armas") y `gamesounds.xyz` (no declara licencia).
+
+## Assets nuevos de esta pasada (2026-09)
+
+Impactos y mecanica. Todos WAV, convertidos a 48 kHz mono 16-bit con ffmpeg y
+normalizados a -16 LUFS / pico -1.5 dB (mismo criterio que el resto).
+
+| archivo | fuente | licencia |
+|---|---|---|
+| `impact_concrete.wav` | Gamemaster Audio - Bullet Impact Sounds (`bullet_impact_concrete_brick_01`) | Sonniss GDC Bundle EULA: uso comercial y personal, sin atribucion |
+| `impact_metal.wav` | Gamemaster Audio - Bullet Impact Sounds (`bullet_impact_metal_heavy_08`) | idem |
+| `impact_drywall.wav` | misma grabacion que `impact_concrete` (el pladur comparte familia mineral) | idem |
+| `impact_flesh.wav` | Gamemaster Audio - Bullet Impact Sounds (`bullet_impact_body_thump_02`) | idem |
+| `ricochet.wav` | Pole Position - The Warfare Library (`warfare_t3_mg_whizzes_ricochets_bullet_cracks_M10`), recortado | idem |
+| `bullet_flyby.wav` | Gamemaster Audio - Bullet Impact Sounds (`bullet_flyby_fast_05`) | idem |
+| `slide_hand.wav` | SoundHolder - Metal Contact (`contact small metal box lid subtle hits`), recortado | idem |
+
+Fuente: Sonniss #GameAudioGDC Bundle 2017, espejo publico
+`http://ftpmirror.your.org/pub/misc/sonniss2017/`. El EULA esta en
+`http://ftpmirror.your.org/pub/misc/sonniss2017/Licensing.pdf`: licencia
+mundial, no exclusiva, libre de regalias, para proyectos personales y
+comerciales, sin necesidad de atribucion. Se acredita igualmente aqui.
+
+Nota de licencia descartada: Freesound tiene buenas grabaciones CC0 de recarga
+(p. ej. el sonido 456195), pero solo ofrece previsualizaciones MP3 con perdida
+sin cuenta; no se han usado.

@@ -44,13 +44,27 @@ const SOUNDS := {
     "empty": {"stream": preload("res://assets/audio/empty_b.wav"), "db": -8.0, "bus": BUS_WEAPONS},
     "slide_rear": {"stream": preload("res://assets/audio/slide_rear.wav"), "db": -14.0, "bus": BUS_WEAPONS},
     "slide_battery": {"stream": preload("res://assets/audio/slide_battery.wav"), "db": -18.0, "bus": BUS_WEAPONS},
+    # Mano sobre la corredera: no es un disparo mecanico, es un golpe de acero
+    # seco y corto (SoundHolder, Metal Contact). Antes no existia y el gesto de
+    # agarrar la corredera era mudo hasta que volvia a bateria.
+    "slide_hand": {"stream": preload("res://assets/audio/slide_hand.wav"), "db": -16.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
+    # Impactos: grabaciones reales de impacto de bala (Gamemaster Audio, Bullet
+    # Impact Sounds). Cada material tiene su propia grabacion; antes hormigon,
+    # pladur y papel compartian el mismo WAV "generico".
     "impact_concrete": {"stream": preload("res://assets/audio/impact_concrete.wav"), "db": -6.0, "bus": BUS_WORLD},
+    "impact_drywall": {"stream": preload("res://assets/audio/impact_drywall.wav"), "db": -7.0, "bus": BUS_WORLD},
     "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -6.0, "bus": BUS_WORLD},
     "impact_wood": {"stream": preload("res://assets/audio/impact_wood.wav"), "db": -6.0, "bus": BUS_WORLD},
+    # Carne: el golpe de cuerpo es su propia grabacion, no una madera con otro
+    # volumen. Solo suena en blancos blandos.
+    "impact_flesh": {"stream": preload("res://assets/audio/impact_flesh.wav"), "db": -8.0, "bus": BUS_WORLD},
     "ricochet": {"stream": preload("res://assets/audio/ricochet.wav"), "db": -8.0, "bus": BUS_WORLD},
+    # Silbido de paso de bala: solo cuando el proyectil cruza cerca del oido
+    # (ver Ballistics.gd), nunca por disparar.
+    "bullet_flyby": {"stream": preload("res://assets/audio/bullet_flyby.wav"), "db": -12.0, "bus": BUS_WORLD},
     "shell_drop": {"stream": preload("res://assets/audio/shell_drop.wav"), "db": -14.0, "bus": BUS_WORLD},
 }
 
