@@ -1,32 +1,75 @@
 # Créditos de modelos 3D
 
-## Desert Eagle | First Person Animations — 1Matzh  (BRAZOS)
+Los créditos se quedan mientras el asset esté en el repo o de él salga contenido
+distribuido. Este archivo guarda además el **diagnóstico de los modelos que se
+van a reemplazar**, con las medidas que lo justifican, para no repetir la
+búsqueda.
 
-- Archivo: `assets/models/deagle_arms.glb` (102 MB tras `trim_glb.py` y
-  `downscale_glb_textures.py` a 1024 para el perfil Mobile; original de 221 MB
-  descargado por el usuario desde Sketchfab).
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/desert-eagle-first-person-animations-09a213d8510a42d1b747135e85712eff
+## Brazos — 1Matzh  (EN REEMPLAZO: ver "Diagnóstico")
+
+- Archivo: `assets/models/arms.glb` (13,42 MB), derivado; ver "Cómo se hizo".
+- Fuente: Sketchfab —
+  https://sketchfab.com/3d-models/desert-eagle-first-person-animations-09a213d8510a42d1b747135e85712eff
 - Autor: **1Matzh** — https://sketchfab.com/1Matzh
 - Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
-  Atribución: *"Desert Eagle | First Person Animations" by 1Matzh,
-  licensed under CC-BY 4.0, via Sketchfab*.
-- Del asset se usan **solo los brazos**: su pistola, skybox y ayudantes de
-  apuntado se borran en runtime; el arma visible es la de Urpo o la DE.
-- **1068 huesos** (1015 apagados en runtime) y **9 animaciones**: Equip, Idle,
-  Walk, Run, Fire, Reload (3.33 s), Reload_Empty (2.93 s), Inspect, Unequip.
-  La pistola del pack viene a otra escala que los brazos: el anclaje se mide
-  en sus huesos (`Magazine`/`Weapon`/`Trigger`), nunca en su malla.
+  Atribución: *"Desert Eagle | First Person Animations" by 1Matzh, licensed
+  under CC-BY 4.0, via Sketchfab*.
+- Cómo se hizo: el GLB que llegó del pack (`deagle_arms.glb`, 102 MB) ya no vive
+  en el repo; se recupera con `git show fb95cc3:assets/models/deagle_arms.glb` y
+  lo poda `tools/prune_arms.py`, que deja **solo lo que el viewmodel usa**: las
+  cinco mallas del personaje (`Sleeves`, `Watch`, `Watch_Emission`, `Body`,
+  `Gloves`), los 78 huesos que las deforman, los cinco clips (`Idle`, `Fire`,
+  `Reload`, `Reload_Empty`, `Inspect`) remuestreados a 60 FPS y las diez texturas
+  que pintan esos materiales. La pistola, el skybox y los ayudantes de apuntado
+  del pack se van en el podado, no en runtime.
+- Contenido: 21 705 triángulos (14 384 de ellos solo en los guantes), 78 huesos
+  y diez texturas: seis de 1024² y cuatro de 512².
 
-## Fps Rig — J-Toastie  (REEMPLAZADO)
+### Diagnóstico: por qué se reemplazan
 
-- Archivo eliminado del repo (`assets/models/fps_rig.glb`, 706 KB): sus
-  hombros se veian feos al apuntar. Lo sustituyen los brazos de 1Matzh (arriba).
-  Se conserva la atribucion: *"Fps Rig" by J-Toastie, licensed under CC-BY 3.0*.
+Medido sobre `assets/models/arms.glb` (13,42 MB):
+
+| Parte | Peso | |
+|---|---|---|
+| Texturas (10 PNG) | 11,03 MB | 82 % del archivo |
+| Malla (5 mallas, 21 705 tris) | 1,57 MB | 12 % |
+| Animación (5 clips a 60 FPS) | 0,72 MB | 5 % |
+| Esqueleto + JSON | 0,10 MB | 1 % |
+
+- **El tamaño lo ponen las texturas.** El mismo asset con todo a 512² mide
+  4,81 MB (2,42 MB de texturas). Bajar a 512 es el único mando que queda dentro
+  de este asset, y no toca el problema de fondo.
+- **El rig de 706 KB no es la alternativa.** `fps_rig.glb` de J-Toastie (commit
+  `490f22a`) pesa 706 KB porque **no trae ni una textura** (0 imágenes) y sus
+  cuatro clips (`Grip`, `Idle`, `Reload`, `Shoot`) mueven 2–4 canales cada uno:
+  no existe `Reload_Empty` ni `Inspect`, que el juego sí reproduce, y las manos
+  vuelven a verse sin material. Reponerlo es lo que motivó `fb95cc3`.
+- **Lo que de verdad ata estos brazos es la coreografía.** Los clips se animaron
+  para la Desert Eagle del autor, que no se ve. Nuestra Glock va fija al pivote,
+  con su sitio en dos constantes calibradas a mano (`GRIP_POS` / `GRIP_ROT`), y
+  los dos tiempos del cargador son instantes del clip, medidos con
+  `tools/check_reload.gd` y escritos como `RELOAD_*_T` en `Glock.gd`. El rig no
+  tiene un hueso del arma que se pueda leer: cada vez que un clip cambie hay que
+  volver a medir.
+- **Android:** 13,42 MB de brazos más 11 MB de texturas para un viewmodel es la
+  dirección contraria a la del proyecto, aunque todavía no hay una medición
+  Android.
+
+### Qué tiene que traer el reemplazo
+
+1. Texturas ≤512² (o ninguna) y un presupuesto total ≤5 MB.
+2. Cinco clips por acción (`Idle`, `Fire`, `Reload`, `Reload_Empty`, `Inspect`) y
+   muchos menos huesos.
+3. Un hueso del arma (o socket equivalente) **dentro del rig**, para colgar la
+   Glock de él y no volver a calibrar posiciones ni medir instantes.
+
+El día que entre, este bloque, `tools/prune_arms.py` y `arms.glb` se van juntos.
 
 ## 9mm Pistol — Urpo  (ARMA VISIBLE)
 
 - Archivo: `assets/models/glock_urpo.glb` (15,9 MB).
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-30222f9a59104426ba526a6b20cd7532
+- Fuente: Sketchfab —
+  https://sketchfab.com/3d-models/9mm-pistol-30222f9a59104426ba526a6b20cd7532
 - Autor: **Urpo** — https://sketchfab.com/Urpo
 - Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
   Atribución: *"9mm Pistol" by Urpo, licensed under CC-BY 4.0, via Sketchfab*.
@@ -36,58 +79,15 @@
   sobre la malla. Resultado: el arma es un árbol de piezas rígidas, sin
   esqueleto, y mover una pieza es escribir un `transform`.
 
-Es la MISMA geometría de pistola que trae el asset de 1Matzh de abajo (que la
-usa como base), así que la sustitución no cambia el aspecto del arma.
-
----
-
-## Desert Eagle — ELIZION  (SEGUNDA ARMA)
-
-- Archivo: `assets/models/desert_eagle.glb`.
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95
-- Autor: **ELIZION**
-- Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
-  Atribución: *"Desert Eagle" by ELIZION, licensed under CC-BY 4.0, via
-  Sketchfab*.
-- 13 279 triángulos, PBR con texturas de hasta 4096². Llega con cada pieza en su
-  propio nodo (armazón, corredera, cañón, gatillo, cargador, miras, aguja).
-  `tools/make_weapon_parts.py` la agrupa en las piezas que entiende el juego.
-
----
-
-## 9mm Pistol | First Person Animations — 1Matzh  (REEMPLAZADO)
-
-- Archivo fuera del repo (`assets/models/full9mm_2k.glb`, 38,26 MB): sirvió de
-  puente y lo sustituye el pack Desert Eagle del mismo autor (arriba), con las
-  mismas manos y animaciones por arma.
-- Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f
-- Autor: **1Matzh** — https://sketchfab.com/1Matzh
-- Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en
-  `asset.extras` del propio GLB (que se conserva) y verificada por API antes de
-  integrar. Atribución: *"9mm Pistol | First Person Animations" by 1Matzh,
-  licensed under CC-BY 4.0, via Sketchfab*.
-- **Cadena de licencia comprobada hasta la malla original**: la pistola es
-  `9mm Pistol` de **Urpo** (`30222f9a59104426ba526a6b20cd7532`, CC-BY 4.0) y los
-  brazos, `Modern Soldier` de **Blue-Spirit**
-  (`358b4fb07f0146cb9b9063342db5897a`, CC-BY 4.0). Acreditar también a ambos.
-- Del asset se usan **solo los brazos**: la malla de la pistola que trae dentro
-  se apaga en runtime, porque el arma visible es la de Urpo.
-- 29 321 triángulos: brazos 6 164 (`Object_0`, antebrazos) + 14 312 (`Object_1`,
-  manos con guantes), pistola 8 357 (`Object_2/3/4`). **928 huesos** y **10
-  animaciones**: Equip, Idle, Idle_2, Walk, Run, Fire, Reload, Reload_Empty,
-  Inspect, Unequip. Materiales con albedo, metallic-roughness y normal.
-- Ese esqueleto es SOLO de los brazos: el arma ya no cuelga de él.
-- Procesado reproducible con `tools/trim_glb.py` (materiales y texturas
-  huérfanas fuera) y `tools/downscale_glb_textures.py` (4096 -> 2048 para el
-  perfil Mobile). El skybox de presentación y los ayudantes de apuntado se apagan
-  en runtime.
----
-
 ## Assets evaluados y descartados
 
 Nada de esto está en el repo. Se conserva únicamente como registro de **qué se
-midió y por qué se descartó**, para no repetir la busqueda.
+midió y por qué se descartó**, para no repetir la búsqueda.
 
+- **Fps Rig** — J-Toastie, CC-BY 3.0 (`fps_rig.glb`, 706 KB). Estuvo en el repo
+  (commit `490f22a`) y se sustituyó en `fb95cc3`: sin texturas, con cuatro clips
+  que mueven dos huesos cada uno, los hombros se veían feos al apuntar.
+  Atribución que se conserva: *"Fps Rig" by J-Toastie, licensed under CC-BY 3.0*.
 - **OWK 19 Pistol 9mm (G19)** — OKgamedev, CC-BY 4.0. Fue la unica arma visible
   hasta sustituirse por el viewmodel completo de 1Matzh. 11 568 tris en 9 piezas
   rigidas; no traia esqueleto ni animaciones a proposito. **Eliminada del repo.**
@@ -100,8 +100,6 @@ midió y por qué se descartó**, para no repetir la busqueda.
 - **Godot FPS Hands** (addon de Godot, modelos de DJMaesen, CC-BY 4.0): su malla
   de brazos son manos y antebrazos muy cortos — para un encuadre FPS el corte
   queda mas cerca de la camara que el del asset actual. Descartado por forma.
-- **Desert Eagle | First Person Animations** (1Matzh, CC-BY 4.0): mismo autor y
-  misma calidad de manos, pero es una Desert Eagle y FlowFire es de Glock.
 - **GDQuest `godot-4-FPS-arms`**: el mejor aspecto de los gratuitos (3 152 tris,
   8 animaciones) y el mas peligroso. Su LICENSE pone los **modelos** en
   CC-BY-NC-SA 4.0 aunque el codigo sea MIT.
@@ -111,3 +109,16 @@ midió y por qué se descartó**, para no repetir la busqueda.
 - **wwwriks/wrad-arms** (CC0): la licencia mas limpia de todas, pero es un asset
   retro PSX de 512² y sin animaciones.
 
+## Assets que salieron del repo
+
+Solo viven en la historia de git: no queda nada de ellos en el árbol ni en lo que
+se distribuye.
+
+- `desert_eagle.glb` — **ELIZION**, CC-BY 4.0. *"Desert Eagle" by ELIZION,
+  licensed under CC-BY 4.0, via Sketchfab*.
+  https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95
+- `full9mm_2k.glb` — **1Matzh**, CC-BY 4.0. Antes de integrarlo se comprobó su
+  cadena de licencia: los brazos son `Modern Soldier` de **Blue-Spirit**, CC-BY
+  4.0, y la pistola es la `9mm Pistol` de Urpo de arriba. *"9mm Pistol | First
+  Person Animations" by 1Matzh, licensed under CC-BY 4.0, via Sketchfab*.
+  https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f

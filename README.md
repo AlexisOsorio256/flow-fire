@@ -43,8 +43,8 @@ rendimiento → calidad audiovisual → features.
 |---|---|
 | Arranque y escena | `scripts/Main.gd` |
 | Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga | `scripts/Glock.gd` |
-| Piezas del arma y tabla de armas (Glock, Desert Eagle) | `scripts/GlockWeapon.gd` |
-| Viewmodel: brazos, ADS, pose, animación, sockets | `scripts/GlockViewmodel.gd` |
+| Piezas del arma (Glock 19: Frame, Slide, Trigger, Magazine, puntos) | `scripts/GlockWeapon.gd` |
+| Viewmodel: brazos, anclaje del arma, ADS, pose, clips | `scripts/GlockViewmodel.gd` |
 | Retroceso y peso: el arma en el agarre + cesión de las manos | `scripts/GlockRecoil.gd` |
 | Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
 | Audio | `scripts/GameAudio.gd` |
@@ -61,36 +61,42 @@ Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
 
 **El arma no está en el esqueleto.** Es un árbol de piezas rígidas: `Frame`,
-`Slide`, `Trigger`, `Magazine`, `Barrel` y los puntos de boca, miras y puerto.
-Los brazos son el único esqueleto y su pose la manda el `AnimationPlayer`. El
-ownership de cada nodo vive al principio de `scripts/GlockViewmodel.gd`.
+`Slide`, `Trigger`, `Magazine` y los puntos de boca, miras y puerto. Su sitio lo
+fijan **dos constantes calibradas** de `GlockViewmodel.gd` (`ARMS_MOUNT_POS` y
+`GRIP_POS`/`GRIP_ROT`), no una medición en runtime: no hay nada que buscar en el
+rig de brazos ni nada que se rompa si el rig cambia.
 
-**Dos armas:** Glock 19 y Desert Eagle, con el mismo viewmodel y los mismos
-brazos. Cambiar de arma es **una línea** (`const ARMA` en
-`GlockViewmodel.gd`); añadir otra es una entrada en la tabla `ARMAS` de
-`GlockWeapon.gd` más su `.glb` preparado con `tools/make_weapon_parts.py`. No
-hay código por arma.
+**Una pistola.** Glock 19. No hay tabla de armas ni código por arma a propósito.
 
-Los eventos de la recarga (agarre del cargador, entrega, sonidos) no usan
-tiempos escritos a mano: se disparan sobre los mínimos reales de la distancia
-mano↔brocal, medidos cada frame. Ver `scripts/Glock.gd`.
+**Los brazos son `assets/models/arms.glb`**, podado por
+`tools/prune_arms.py`: solo las mallas del personaje (mangas, guantes, reloj),
+los 78 huesos que las deforman y los cinco clips que el juego reproduce (`Idle`,
+`Fire`, `Reload`, `Reload_Empty`, `Inspect`). La pistola que traía el asset
+original estaba anclada en el espacio, no en la mano, así que el arma va anclada
+igual: fija al pivote, con las manos del clip trabajando alrededor. **Están en
+evaluación de reemplazo**; el porqué está medido en `CREDITS_MODELS.md`.
+
+Los eventos que dependen de un gesto del clip —los dos tiempos del cargador y
+los de la inspección— son **instantes del propio clip**: se miden con
+`tools/check_reload.gd` (que imprime las constantes listas para pegar) y viven
+junto a su clip en `Glock.gd`. Si un clip cambia, se vuelven a medir.
 
 ### Dónde se pide cada ajuste
 
 | Petición | Un solo sitio |
 |---|---|
 | "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, 3 constantes juntas |
-| "el arma está mal encuadrada" | `_colocar_arma_en_la_mano` en `GlockViewmodel.gd` (copia la referencia del autor) |
-| "la corredera no llega / recorre de más" | `corredera` en la tabla `ARMAS` |
-| "quiero otra pistola" | `const ARMA` + entrada en `ARMAS` + `.glb` |
-| "un sonido no cae en el gesto" | no hay segundos que tocar: el evento sale del gesto |
+| "el arma está mal encuadrada" | `GRIP_POS` / `GRIP_ROT` en `GlockViewmodel.gd` |
+| "los brazos salen mal encuadrados" | `ARMS_MOUNT_POS` / `ARMS_SCALE` en `GlockViewmodel.gd` |
+| "la corredera no llega / recorre de más" | `CORREDERA` en `GlockWeapon.gd` |
+| "un evento de la recarga cae fuera del gesto" | los `RELOAD_*_T` de `Glock.gd`, re-midiendo con `tools/check_reload.gd` |
 
-Invariantes objetivas: `tools/check_weapon.gd` (orientación y montaje),
-`tools/check_reload.gd` (dónde cae cada evento) y, en Blender,
-`tools/check_weapon_parts.py` (piezas, tamaño real y puntos mecánicos). Lo
-visual se comprueba abriendo Godot directamente en la pantalla del usuario
-(`:0`, X11) y tomando capturas ahí. Prohibido headless, display virtual y
-GPU virtual: no concuerdan con lo que ve el usuario.
+Invariantes objetivas: `tools/check_weapon.gd` (orientación y montaje) y
+`tools/prune_arms.py` (que el rig de brazos sea solo lo que se usa). En Blender,
+`tools/make_weapon_parts.py` (piezas del arma, tamaño real y puntos mecánicos).
+Lo visual se comprueba abriendo Godot en la pantalla del usuario (`:0`, X11) y
+tomando capturas ahí. Prohibido headless, display virtual y GPU virtual: no
+concuerdan con lo que ve el usuario.
 
 ## Workflow IA + usuario
 
@@ -108,6 +114,10 @@ GPU virtual: no concuerdan con lo que ve el usuario.
   atrasan: brazos y gestos, lo justo para que se vea bien y barato de
   mantener. La PISTOLA es lo que vende: calidad excelente de primer nivel en
   modelo, físicas y sensación, sin sacrificar velocidad de desarrollo.
+- **Pendiente de assets:** los brazos actuales pesan 13,42 MB, de los que 11 MB
+  son diez texturas PNG. El rig ligero de 706 KB se probó y no sirve (sin
+  texturas y sin `Reload_Empty` ni `Inspect`): el diagnóstico medido, lo
+  descartado y lo que debe traer el sustituto están en `CREDITS_MODELS.md`.
 - **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
   justifica si el usuario la pide explícitamente o autoriza una invariante
   concreta (pregunta objetiva que el usuario no responde mejor mirando o

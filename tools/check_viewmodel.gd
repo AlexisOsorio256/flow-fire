@@ -73,8 +73,6 @@ func _ready() -> void:
 			" Barrel=", arma.barrel != null)
 		print("  puntos: boca=", arma.muzzle != null, " puerto=", arma.ejection_port != null,
 			" mira_t=", arma.sight_rear != null, " mira_d=", arma.sight_front != null)
-	print("  malla brazos=", vm.arms_mesh_visible.name if vm.arms_mesh_visible else "NINGUNA",
-		" manga=", vm.arms_sleeve_visible.name if vm.arms_sleeve_visible else "NINGUNA")
 	if vm.arms_skeleton != null:
 		print("  huesos del rig de brazos=", vm.arms_skeleton.get_bone_count())
 	# Cuantas mallas quedan visibles y cuantos triangulos suman.

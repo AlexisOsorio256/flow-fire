@@ -1,12 +1,9 @@
 class_name GlockWeapon
 extends Node3D
 
-## EL ARMA: piezas rigidas, sin esqueleto.
+## EL ARMA: la Glock 19 en piezas rigidas, sin esqueleto y sin tabla.
 ##
-## Cada arma es una entrada de la tabla ARMAS de abajo. NO hay codigo por arma:
-## cambiar de modelo o anadir otro es anadir una entrada y su .glb, nada mas.
-##
-## Un .glb de arma (lo prepara tools/make_weapon_parts.py) trae las piezas como
+## El .glb del arma (lo prepara tools/make_weapon_parts.py) trae las piezas como
 ## nodos, cada una con su PROPIO origen:
 ##
 ##   Frame      armazon. Es el origen del arma y no lo mueve nadie.
@@ -17,36 +14,28 @@ extends Node3D
 ##   Muzzle / EjectionPort / SightRear / SightFront
 ##              puntos medidos sobre la malla, colgados de la corredera.
 ##
-## DONDE SE PIDE CADA COSA
+## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
+## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
 ##
-##   "el recoil se ve falso"     -> scripts/GlockRecoil.gd (3 constantes juntas)
-##   "el arma esta mal encuadrada" -> GlockViewmodel.ARMA_EMPUNADURA (1 linea)
-##   "la corredera no llega"     -> `corredera` en la tabla de abajo
-##   "quiero otra pistola"       -> `arma` en GlockViewmodel + entrada aqui + .glb
-##
-## La autoridad de cada pieza es siempre Glock.gd: aqui solo se representa.
+##   "la corredera no llega" -> CORREDERA
+##   "el arma esta mal encuadrada" -> GlockViewmodel.GRIP_POS / GRIP_ROT
 
-## Tabla de armas. `largo` y `corredera` van en METROS reales: la escala sale de
-## dividir por el largo medido de la propia malla, asi que un modelo nuevo entra
-## sin calibrar nada a mano.
-const ARMAS := {
-	"glock": {
-		"ruta": "res://assets/models/glock_urpo.glb",
-		"nombre": "Glock 19",
-		"largo": 0.187,
-		"corredera": 0.039,
-		"adelante": Vector3(0.0, 0.0, -1.0),
-		"cargador": 17,
-	},
-	"de": {
-		"ruta": "res://assets/models/desert_eagle.glb",
-		"nombre": "Desert Eagle",
-		"largo": 0.270,
-		"corredera": 0.045,
-		"adelante": Vector3(0.0, 0.0, 1.0),
-		"cargador": 7,
-	},
-}
+const MALLA := "res://assets/models/glock_urpo.glb"
+## Largo real de la pistola, extremo a extremo. De aqui sale la escala del
+## modelo: no hay que calibrarla a mano.
+const LARGO := 0.187
+## Recorrido real de la corredera. Es la unica autoridad del recorrido: la
+## mecanica de Glock.gd y el dibujo la leen de aqui.
+const CORREDERA := 0.039
+## Cartuchos que entran en el cargador. El 9x19 de la Glock 19 son 17.
+const CARGADOR := 17
+## La boca del arma en la malla. La corredera retrocede al reves.
+const ADELANTE := Vector3(0.0, 0.0, -1.0)
+
+var corredera := CORREDERA
+var capacidad := CARGADOR
+var adelante := ADELANTE
+var escala := 1.0
 
 var frame: Node3D
 var slide: Node3D
@@ -58,10 +47,6 @@ var ejection_port: Node3D
 var sight_rear: Node3D
 var sight_front: Node3D
 
-var escala := 1.0
-var capacidad := 17
-var adelante := Vector3(0.0, 0.0, -1.0)
-
 var _slide_rest := Vector3.ZERO
 var _trigger_rest := Vector3.ZERO
 ## Recorrido de la corredera en unidades del modelo (metros reales / escala).
@@ -69,23 +54,12 @@ var _slide_travel := 0.0
 ## Sitio exacto del cargador dentro del arma. Lo usa el viewmodel para
 ## devolverlo al brocal cuando la mano lo suelta.
 var magazine_rest := Vector3.ZERO
-## Punto del arma que la mano agarra, en espacio local del arma. Es el origen
-## del Frame: el armazon nace en la union empunadura-corredera (ver
-## tools/make_weapon_parts.py). El viewmodel lo usa para ponerla en la mano.
-var empunadura := Vector3.ZERO
 
 
-func build(clave: String) -> void:
-	if not ARMAS.has(clave):
-		push_warning("Arma desconocida: " + clave)
-		return
-	var spec: Dictionary = ARMAS[clave]
-	capacidad = int(spec["cargador"])
-	adelante = spec["adelante"]
-
-	var packed := load(spec["ruta"]) as PackedScene
+func build() -> void:
+	var packed := load(MALLA) as PackedScene
 	if packed == null:
-		push_warning("No se pudo cargar el arma: " + str(spec["ruta"]))
+		push_warning("No se pudo cargar el arma: " + MALLA)
 		return
 	var raiz := packed.instantiate()
 	add_child(raiz)
@@ -100,29 +74,28 @@ func build(clave: String) -> void:
 	sight_rear = _buscar(raiz, "SightRear")
 	sight_front = _buscar(raiz, "SightFront")
 	if frame == null or slide == null or magazine == null:
-		push_warning("El arma " + clave + " no trae Frame/Slide/Magazine")
+		push_warning("El arma no trae Frame/Slide/Magazine")
 		return
 
 	_slide_rest = slide.position
 	magazine_rest = magazine.position
-	empunadura = frame.position
 	if trigger != null:
 		_trigger_rest = trigger.position
 
 	# La escala sale de medir el largo de la malla contra el largo REAL del arma.
 	var largo_medido := _largo(raiz)
-	escala = float(spec["largo"]) / maxf(largo_medido, 0.0001)
+	escala = LARGO / maxf(largo_medido, 0.0001)
 	scale = Vector3(escala, escala, escala)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
-	_slide_travel = float(spec["corredera"]) / escala
+	_slide_travel = CORREDERA / escala
 
 	var faltan: Array = []
 	for par in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
 		if par[1] == null:
 			faltan.append(par[0])
-	print("ARMA ", spec["nombre"], " escala=", snappedf(escala, 0.0001),
+	print("ARMA Glock 19 escala=", snappedf(escala, 0.0001),
 		" largo_modelo=", snappedf(largo_medido, 3),
-		" corredera=", snappedf(float(spec["corredera"]) * 1000.0, 0.1), "mm",
+		" corredera=", snappedf(CORREDERA * 1000.0, 0.1), "mm",
 		" sin_pieza=", faltan if not faltan.is_empty() else "nada")
 
 

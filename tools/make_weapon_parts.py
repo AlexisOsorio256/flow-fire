@@ -43,7 +43,7 @@ argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 SRC, DST = argv[0], argv[1]
 ARMA = argv[2] if len(argv) > 2 else "glock"
 
-# Tabla por arma: los NOMBRES de los nodos del origen y la altura del agarre.
+# NOMBRES de los nodos del origen y altura del agarre. Hay UNA pistola: la Glock.
 ARMAS = {
     "glock": {
         "piezas": {
@@ -52,28 +52,6 @@ ARMAS = {
             "Magazine": "Magazine",
         },
         "agarre": 0.12,
-    },
-    "de": {
-        "piezas": {
-            "Slide_low": "Slide",
-            "SlidePart_low": "Slide",
-            "SlideHolder_low": "Slide",
-            "Safety_low": "Slide",
-            "BoltMain_low": "Slide",
-            "BoltAdd_low": "Slide",
-            "BoltBack_low": "Slide",
-            "BoltButton_low": "Slide",
-            "Barrel_low": "Barrel",
-            "Trigger_low": "Trigger",
-            "Magazine_low": "Magazine",
-            "MagazineBase_low": "Magazine",
-            "BaseInside_low": "Magazine",
-            "Bullet_low": "Magazine",
-            "BulletCase_low": "Magazine",
-            "RearSight_low": "Slide",
-            "FrontSight_low": "Slide",
-        },
-        "agarre": 0.10,
     },
 }
 if ARMA not in ARMAS:

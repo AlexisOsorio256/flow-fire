@@ -14,6 +14,10 @@ config/name="FlowFire Bodycam"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 
+[audio]
+
+driver/output_latency=8
+
 [autoload]
 
 GameAudio="*res://scripts/GameAudio.gd"
@@ -24,10 +28,6 @@ Ballistics="*res://scripts/Ballistics.gd"
 
 window/size/viewport_width=1920
 window/size/viewport_height=1080
-
-[audio]
-
-driver/output_latency=8
 
 [physics]
 

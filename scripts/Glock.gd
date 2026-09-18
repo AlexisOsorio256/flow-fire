@@ -20,34 +20,47 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## mover la corredera o el cargador es escribir un transform, no una pose de
 ## hueso.
 ##
-## EL CARGADOR no usa tiempos escritos a mano. `_update_reload` mide, frame a
-## frame, la distancia entre la MANO IZQUIERDA y el BROCAL, y dispara el agarre
-## y la entrega en el instante de minimo local de esa distancia. Si el clip
-## cambia, los eventos siguen cayendo en el gesto. Los valores de abajo son solo
-## una red de seguridad.
+## LOS INSTANTES SON DEL CLIP. Esta pistola se anima con clips que no escribimos
+## nosotros, asi que los eventos de la recarga (`RELOAD_*_T`) y de la inspeccion
+## (`INSPECT_*_T`) son los tiempos de sus gestos, medidos una vez con
+## `tools/check_reload.gd` y escritos aqui al lado. Si un dia se cambia o se
+## retoca un clip, se vuelven a medir con la herramienta: no hay nada que
+## adivinar y nada que se desincronice solo.
 
-## Capacidad del cargador: la fija el arma (GlockWeapon.ARMAS). Se lee al
-## montar; aqui solo queda el valor de arranque.
+## Capacidad del cargador: la fija el arma (GlockWeapon.CARGADOR) al montar.
 var MAG_SIZE := 17
-const SLIDE_TRAVEL := 0.039
+## Recorrido de la corredera en metros reales. La autoridad es el arma
+## (GlockWeapon.corredera); aqui se copia al montar.
+var _travel := GlockWeapon.CORREDERA
+## Corredera: rigidez y amortiguacion del resorte, y en FRACCION del recorrido
+## donde pasa cada cosa. Asi el unico numero que describe el arma es su recorrido.
 const SLIDE_K := 4000.0
 const SLIDE_C := 80.0
 const SLIDE_IMPULSE := 6.50
 const SLIDE_RESTITUTION := 0.25
-const SLIDE_EJECT_AT := 0.030
+const SLIDE_EJECT_AT := 0.77      # ya salio la vaina
+const SLIDE_OPEN_AT := 0.51       # la corredera esta abierta
+const SLIDE_BATTERY_AT := 0.10    # ya volvio a bateria
+const SLIDE_CLOSED_AT := 0.026    # cerrada del todo
+## 9x19 de la Glock 19: punta de 115 granos a ~372 m/s. `TRAZADORA` es la
+## fraccion de balas que sale trazadora.
+const BALA_VELOCIDAD := 372.0
+const BALA_TRAZADORA := 0.42
 
-## Red de seguridad de la recarga, en segundos, para clips inesperados.
-## Clavada a los clips del pack Desert Eagle de 1Matzh (`Reload` 3.33 s,
-## `Reload_Empty` 2.93 s): el agarre cae al inicio del gesto y la entrega
-## cuando la mano vuelve al brocal. La logica total cubre el clip, no al
-## reves: si el clip termina antes, las manos vuelven a idle mientras el
-## arma sigue "recargando".
+## Duracion de cada recarga: un pelo mas que su clip (`Reload` 3,33 s,
+## `Reload_Empty` 2,93 s), para que las manos ya hayan vuelto a idle cuando la
+## mecanica termina.
 const RELOAD_TOTAL := 3.45
 const RELOAD_EMPTY_TOTAL := 3.05
+## Recarga en seco: instante del clip en el que la mano suelta la corredera.
 const RELOAD_SLIDE_T := 2.15
-const RELOAD_MAG_OUT_T := 0.75
-const RELOAD_MAG_IN_T := 2.40
-const RELOAD_EMPTY_MAG_IN_T := 2.51
+## Los DOS instantes de cada clip de recarga en los que el cargador cambia de
+## mano: cuando la mano izquierda se lo lleva y cuando lo deja en el brocal. Son
+## los dos minimos de la distancia mano<->brocal, medidos en el clip.
+const RELOAD_MAG_OUT_T := 0.24
+const RELOAD_MAG_IN_T := 3.27
+const RELOAD_EMPTY_MAG_OUT_T := 0.15
+const RELOAD_EMPTY_MAG_IN_T := 2.80
 ## Instantes del clip Inspect (3.73 s en este pack).
 const INSPECT_TOTAL := 3.85
 const INSPECT_GRAB_T := 0.64
@@ -108,10 +121,6 @@ var shot_pulse := 0.0
 # --- Cargador: eventos medidos, no cronometrados ---------------------------
 var _mag_grab_done := false
 var _mag_handoff_done := false
-var _mag_out_sound := false
-var _mag_in_sound := false
-var _dist_prev := 1e9
-var _dist_rising := 0
 
 
 func _ready() -> void:
@@ -123,6 +132,7 @@ func _ready() -> void:
 	viewmodel.mount()
 	if viewmodel.weapon != null:
 		MAG_SIZE = viewmodel.weapon.capacidad
+		_travel = viewmodel.weapon.corredera
 		mag = MAG_SIZE
 		reserve = MAG_SIZE * 4
 	if viewmodel.muzzle != null:
@@ -160,7 +170,7 @@ func _process(delta: float) -> void:
 	# El arma dibuja el estado ya decidido: una sola direccion, sin correcciones
 	# posteriores sobre el esqueleto ni sobre los huesos de nadie.
 	if viewmodel.weapon != null:
-		viewmodel.weapon.set_slide(slide_pos / maxf(SLIDE_TRAVEL, 0.0001))
+		viewmodel.weapon.set_slide(slide_pos / maxf(_travel, 0.0001))
 		viewmodel.weapon.set_trigger(trigger_visual)
 
 	shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
@@ -210,10 +220,6 @@ func start_reload() -> bool:
 	reload_pose_blend = 0.0
 	_mag_grab_done = false
 	_mag_handoff_done = false
-	_mag_out_sound = false
-	_mag_in_sound = false
-	_dist_prev = 1e9
-	_dist_rising = 0
 	aim = false
 	trigger_held = false
 	viewmodel.play_reload(reload_empty)
@@ -271,7 +277,7 @@ func _fire() -> void:
 	var move_amount := clampf(player_speed / 4.35, 0.0, 1.0)
 	var spread := 0.00055 if aim_blend > 0.55 else 0.0036 + move_amount * 0.0052
 	dir = (dir + right * randf_range(-spread, spread) + up * randf_range(-spread, spread)).normalized()
-	Ballistics.fire(origin, dir, 372.0, 0.42)
+	Ballistics.fire(origin, dir, BALA_VELOCIDAD, BALA_TRAZADORA)
 	fx.fire(origin, cam_fwd)
 	emit_signal("shot_fired")
 	_emit_ammo()
@@ -279,7 +285,7 @@ func _fire() -> void:
 
 func _update_slide(delta: float) -> void:
 	if slide_locked:
-		slide_pos = SLIDE_TRAVEL
+		slide_pos = _travel
 		slide_vel = 0.0
 	else:
 		const SUBSTEP := 0.0025
@@ -292,26 +298,26 @@ func _update_slide(delta: float) -> void:
 			if slide_pos < 0.0:
 				slide_pos = 0.0
 				slide_vel = maxf(0.0, slide_vel)
-			if slide_pos > SLIDE_TRAVEL:
-				slide_pos = SLIDE_TRAVEL
+			if slide_pos > _travel:
+				slide_pos = _travel
 				slide_vel = -slide_vel * SLIDE_RESTITUTION
 				_emit_slide_rear_event()
-			if not slide_extracted and slide_pos > SLIDE_EJECT_AT:
+			if not slide_extracted and slide_pos > _travel * SLIDE_EJECT_AT:
 				slide_extracted = true
 				_spawn_shell()
-			if slide_pos > 0.02:
+			if slide_pos > _travel * SLIDE_OPEN_AT:
 				slide_open = true
-			if slide_open and not slide_battery_emitted and slide_pos <= 0.004 and slide_vel <= 0.0:
+			if slide_open and not slide_battery_emitted and slide_pos <= _travel * SLIDE_BATTERY_AT and slide_vel <= 0.0:
 				slide_battery_emitted = true
 				GameAudio.play_2d("slide_battery", 0.0, randf_range(0.97, 1.03))
-			if slide_open and slide_pos <= 0.001 and chamber <= 0 and mag > 0:
+			if slide_open and slide_pos <= _travel * SLIDE_CLOSED_AT and chamber <= 0 and mag > 0:
 				slide_open = false
 				mag -= 1
 				chamber = 1
 				_emit_ammo()
-	if slide_pos > SLIDE_TRAVEL * 0.87 and mag <= 0 and chamber <= 0 and not reloading:
+	if slide_pos > _travel * 0.87 and mag <= 0 and chamber <= 0 and not reloading:
 		slide_locked = true
-		slide_pos = SLIDE_TRAVEL
+		slide_pos = _travel
 		slide_vel = 0.0
 		_emit_slide_rear_event()
 
@@ -323,78 +329,49 @@ func _emit_slide_rear_event() -> void:
 	GameAudio.play_2d("slide_rear", 0.0, randf_range(0.98, 1.06))
 
 
-## RECARGA guiada por el GESTO, no por el reloj.
-##
-## Cada frame se mide la distancia MANO IZQUIERDA <-> BROCOL en el espacio del
-## arma. El agarre del cargador se dispara cuando esa distancia deja de bajar
-## (la mano llego y empieza a llevarselo) y la entrega cuando vuelve a bajar
-## (la mano regresa al brocal). Asi el sonido y el movimiento del cargador
-## caen siempre sobre lo que se ve, aunque el clip cambie de velocidad.
+## RECARGA. La mano izquierda del clip sale con el cargador vacio y vuelve con
+## el lleno; los dos instantes en que eso pasa son `RELOAD_*_MAG_*_T`. La pose
+## del arma sigue al cargador: sube cuando se lo llevan y baja cuando vuelve.
 func _update_reload(delta: float) -> void:
 	if not reloading:
 		return
 	reload_elapsed += delta
-	var dist := _distancia_mano_brocal()
-	if dist < _dist_prev:
-		_dist_prev = dist
-		_dist_rising = 0
-	else:
-		_dist_rising += 1
 
-	# Agarre: la mano toca el cargador y empieza a bajarlo.
-	if not _mag_grab_done and _dist_rising >= 2:
+	# El cargador cambia de mano en los dos tiempos del clip.
+	if not _mag_grab_done and reload_elapsed >= _mag_out_t():
 		_mag_grab_done = true
-		_mag_out_sound = true
 		viewmodel.magazine_to_hand()
 		GameAudio.play_2d("magout", 1.0, randf_range(0.96, 1.03))
-
-	# Entrega: la mano vuelve al brocal. Si el clic no llego por un clip raro, se
-	# fuerza al final (red de seguridad, no cronometro).
-	var entrega_forzada := reload_elapsed >= _mag_in_t() - 0.35
-	if not _mag_handoff_done and (dist < _dist_prev - 0.02 or entrega_forzada):
+	if not _mag_handoff_done and reload_elapsed >= _mag_in_t():
 		_mag_handoff_done = true
 		viewmodel.magazine_to_weapon()
 		_seat_reload_mag()
 		recoil.kick_mag_seat()
-		_mag_in_sound = true
 		GameAudio.play_2d("magin", 1.0, randf_range(0.96, 1.03))
 
-	# Red de seguridad: sin gesto detectable, se mantiene el ritmo nominal.
-	if not _mag_grab_done and reload_elapsed >= RELOAD_MAG_OUT_T:
-		_mag_grab_done = true
-		viewmodel.magazine_to_hand()
-		GameAudio.play_2d("magout", 1.0, randf_range(0.96, 1.03))
-
+	# Recarga en seco: la mano suelta la corredera.
 	if reload_empty and not reload_slide_released and reload_elapsed >= RELOAD_SLIDE_T:
 		reload_slide_released = true
 		slide_locked = false
-		slide_pos = SLIDE_TRAVEL
+		slide_pos = _travel
 		slide_vel = -4.2
 		slide_battery_emitted = false
 		GameAudio.play_2d("slide_hand", 0.0, randf_range(0.98, 1.04))
 
 	var mag_in_t := _mag_in_t()
-	var up_t := clampf((reload_elapsed - 0.34) / 0.52, 0.0, 1.0)
+	var up_t := clampf((reload_elapsed - (_mag_out_t() + 0.10)) / 0.52, 0.0, 1.0)
 	var down_t := clampf((reload_elapsed - (mag_in_t + 0.06)) / 0.42, 0.0, 1.0)
 	reload_pose_blend = _smooth(up_t) * (1.0 - _smooth(down_t))
 	if reload_elapsed >= reload_total:
 		_finish_reload()
 
 
+func _mag_out_t() -> float:
+	return RELOAD_EMPTY_MAG_OUT_T if reload_empty else RELOAD_MAG_OUT_T
+
+
 func _mag_in_t() -> float:
 	return RELOAD_EMPTY_MAG_IN_T if reload_empty else RELOAD_MAG_IN_T
-
-
-## Distancia entre la mano izquierda y el brocal, medida en el frame real.
-func _distancia_mano_brocal() -> float:
-	var sk := viewmodel.arms_skeleton
-	var hand := viewmodel.hand_bone_index()
-	if sk == null or hand < 0 or viewmodel.weapon == null:
-		return 1e9
-	sk.force_update_all_bone_transforms()
-	var mano := sk.global_transform * sk.get_bone_global_pose(hand).origin
-	var brocal := viewmodel.weapon.global_position
-	return mano.distance_to(brocal)
 
 
 func inspect_weapon() -> void:
