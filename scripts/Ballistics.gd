@@ -45,6 +45,7 @@ func fire(origin: Vector3, direction: Vector3, speed: float = 372.0) -> void:
         "penetrations": 0,
         "ricochets": 0,
         "flyby": false,
+        "charged": [],
     }
     bullets.append(b)
 
@@ -118,27 +119,39 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         penetration_resistance = float(collider.get_meta("penetration_resistance", 0.0))
         thin_shell = bool(collider.get_meta("thin_shell", false))
         wall_thickness = float(collider.get_meta("wall_thickness", 0.0))
+    # Un cuerpo, un cobro: la separacion de salida (1,5 mm) puede caer dentro
+    # del slack de contacto de Jolt y el rayo repisa el mismo cuerpo en el
+    # subpaso siguiente (medido: 5 cobros en una lata = 4,7x momento). El
+    # transito ya se pago en el primer evento; repetirlo crea energia.
+    var already_charged := false
+    var body_id := 0
+    if collider is RigidBody3D:
+        body_id = (collider as Node).get_instance_id()
+        already_charged = (b.charged as Array).has(body_id)
 
     var p_in: float = PROJECTILE_MASS * speed
     if penetrable:
         if penetration_resistance <= 0.0:
             push_warning("Penetrable sin penetration_resistance: " + str(collider))
-            ImpactFX.spawn_impact(point, normal, collider, surface, false)
-            _push_body(collider, point, dir, p_in)
+            if not already_charged:
+                ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                _push_body(collider, point, dir, p_in)
             b.active = false
             return
         var exit := _find_exit_geometry(point, dir, collider)
         if exit.is_empty():
-            ImpactFX.spawn_impact(point, normal, collider, surface, false)
-            _push_body(collider, point, dir, p_in)
+            if not already_charged:
+                ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                _push_body(collider, point, dir, p_in)
             b.active = false
             return
         var exit_point: Vector3 = exit["point"]
         var exit_normal: Vector3 = exit["normal"]
         var geometric_thickness: float = exit["distance"]
         if geometric_thickness <= PENETRATION_EPSILON:
-            ImpactFX.spawn_impact(point, normal, collider, surface, false)
-            _push_body(collider, point, dir, p_in)
+            if not already_charged:
+                ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                _push_body(collider, point, dir, p_in)
             b.active = false
             return
         # Grosor BALISTICO con angulo: macizo = cuerda; cascara fina = 2 paredes
@@ -147,21 +160,31 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         var thickness := geometric_thickness
         if thin_shell:
             if wall_thickness <= 0.0:
-                ImpactFX.spawn_impact(point, normal, collider, surface, false)
-                _push_body(collider, point, dir, p_in)
+                if not already_charged:
+                    ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                    _push_body(collider, point, dir, p_in)
                 b.active = false
                 return
             thickness = 2.0 * wall_thickness / maxf(incidence_in, 0.3)
         var retained_energy := exp(-penetration_resistance * thickness)
         var exit_speed := speed * sqrt(retained_energy)
         if exit_speed < EXIT_SPEED_MIN:
-            ImpactFX.spawn_impact(point, normal, collider, surface, false)
-            _push_body(collider, point, dir, p_in)
+            if not already_charged:
+                ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                _push_body(collider, point, dir, p_in)
             b.active = false
             return
         ImpactFX.spawn_impact(point, normal, collider, surface, false)
         ImpactFX.spawn_impact(exit_point, exit_normal, collider, surface, true)
+        if already_charged:
+            # Repisada del mismo cuerpo: el transito ya se cobro.
+            # Avanza sin cobrar, sin perder energia y sin duplicar decal.
+            b.pos = exit_point + dir * PENETRATION_EPSILON
+            b.distance += geometric_thickness + PENETRATION_EPSILON
+            return
         _push_body(collider, point, dir, p_in - PROJECTILE_MASS * exit_speed)
+        if collider is RigidBody3D:
+            (b.charged as Array).append(body_id)
         b.vel *= sqrt(retained_energy)
         # Dejamos sólo una separación numérica de la cara de salida: la próxima
         # colisión debe ser con la geometría que haya detrás, no con el mismo
