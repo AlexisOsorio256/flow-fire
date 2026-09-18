@@ -36,16 +36,17 @@ func _setup_environment() -> void:
     sky.sky_material = sky_mat
     env.sky = sky
 
-    env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-    # 1.30 con lamparas a 8: interior normal, sombras sin negro. Si el arma
-    # se quema en ADS se baja el punto y se retoca ambiente (ver World.gd).
-    env.ambient_light_energy = 1.30
+    # Sala cerrada: el ambiente es COLOR controlado, no cielo. El cielo solo
+    # alimenta reflejos; la luz la ponen las luminarias con caida real.
+    env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    env.ambient_light_color = Color(0.44, 0.43, 0.42)
+    env.ambient_light_energy = 1.05
     env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
     env.tonemap_mode = Environment.TONE_MAPPER_ACES
-    env.tonemap_exposure = 1.15
+    env.tonemap_exposure = 1.1
     env.adjustment_enabled = true
-    env.adjustment_contrast = 1.08
-    env.adjustment_saturation = 0.94
+    env.adjustment_contrast = 1.05
+    env.adjustment_saturation = 1.0
     env.ssao_enabled = false
     env.ssil_enabled = false
     env.glow_enabled = true
@@ -61,8 +62,8 @@ func _setup_environment() -> void:
     env.set("glow_levels/3", 0.0)
     env.set("glow_levels/4", 0.0)
     env.fog_enabled = true
-    env.fog_light_color = Color(0.20, 0.21, 0.23)
-    env.fog_density = 0.008
+    env.fog_light_color = Color(0.16, 0.16, 0.17)
+    env.fog_density = 0.010
     env.fog_sky_affect = 0.25
     env.volumetric_fog_enabled = false
 

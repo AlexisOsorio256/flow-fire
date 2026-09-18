@@ -43,7 +43,7 @@ func _materials() -> void:
     concrete_mat.normal_scale = 0.9
     concrete_mat.uv1_scale = Vector3(6, 8, 6)
     concrete_mat.albedo_color = Color(0.85, 0.85, 0.85)
-    concrete_mat.roughness = 0.92
+    concrete_mat.roughness = 0.75
 
     wall_mat = StandardMaterial3D.new()
     wall_mat.albedo_texture = CONCRETE_ALBEDO
@@ -55,7 +55,7 @@ func _materials() -> void:
     wall_mat.uv1_scale = Vector3(4, 2, 4)
 
     ceiling_mat = StandardMaterial3D.new()
-    ceiling_mat.albedo_color = Color(0.42, 0.43, 0.45)
+    ceiling_mat.albedo_color = Color(0.40, 0.40, 0.41)
     ceiling_mat.roughness = 0.95
 
     wood_mat = StandardMaterial3D.new()
@@ -106,7 +106,7 @@ func _materials() -> void:
     lamp_mat.emission = Color(1.0, 0.94, 0.78)
     # La luminancia visible de la pantalla no debe convertirse en un halo de
     # lente. La iluminación que produce la Omni se calibra por separado abajo.
-    lamp_mat.emission_energy_multiplier = 2.0
+    lamp_mat.emission_energy_multiplier = 1.8
     lamp_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
     stand_mat = StandardMaterial3D.new()
@@ -222,7 +222,10 @@ func _build_lights() -> void:
     # del tirador quedaba en un pozo negro y el arma en silueta.
     for z in [2.0, -4.0, -12.0, -20.0, -28.0, -38.0, -50.0, -60.0]:
         for x in [-5.0, 5.0]:
-            _make_lamp(x, z)
+            # Sombras reales solo en la fila del puesto (z=2): es lo que el
+            # tirador ve (arma, manos, prop cercano). El resto baña sin sombra
+            # por rendimiento (una omni con sombra son 6 caras en Mobile).
+            _make_lamp(x, z, z > 0.0)
     # Estacion bidon/latas (6.6, -11): el bidon quedaba en silueta pura y los
     # agujeros no se leian. Misma luminaria, un punto mas (14 -> 15 omnis).
     _make_lamp(6.6, -11.0)
@@ -232,7 +235,7 @@ func _build_lights() -> void:
     _make_pendant(0.0, 0.5)
 
 
-func _make_lamp(x: float, z: float) -> void:
+func _make_lamp(x: float, z: float, shadow := false) -> void:
     # La luminaria visible tambien existe para la bala: antes era solo una
     # malla y los tiros la atravesaban como si no hubiese objeto. Reutilizamos
     # la misma caja para render + colision y la declaramos metal.
@@ -245,11 +248,12 @@ func _make_lamp(x: float, z: float) -> void:
     var light := OmniLight3D.new()
     light.position = Vector3(x, 3.55, z)
     light.light_color = Color(1.0, 0.96, 0.88)
-    # 8/12: luz normal de interior, el techo y el fondo se leen. Si el arma
-    # se quema en ADS se baja el punto y se sube ambiente (ver Main.gd).
-    light.light_energy = 8.0
-    light.omni_range = 12.0
-    light.shadow_enabled = false
+    # Pozos de luz con caida real: cada luminaria cubre ~8 m y el techo
+    # intermedio respira. Sin esto (8/12 + ambiente cielo) todo se aplana en
+    # una banda blanca continua.
+    light.light_energy = 6.0
+    light.omni_range = 13.0
+    light.shadow_enabled = shadow
     add_child(light)
 
 
@@ -270,7 +274,8 @@ func _make_pendant(x: float, z: float) -> void:
         shade_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     # Foco hacia abajo (la pantalla dirige, como un pendiente real): el suelo
     # del puesto se lee sin freir el techo (con omni, 25 daba 190 abajo pero
-    # lavaba el techo en blanco). Sin sombras por rendimiento, como el resto.
+    # lavaba el techo en blanco). Este foco SI da sombras: es el que asienta el
+    # arma y los props del puesto (un spot son 1 cara, barato).
     var spot := SpotLight3D.new()
     spot.position = Vector3(x, 2.85, z)
     spot.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
@@ -279,7 +284,7 @@ func _make_pendant(x: float, z: float) -> void:
     spot.spot_range = 9.0
     spot.spot_angle = 55.0
     spot.spot_attenuation = 1.0
-    spot.shadow_enabled = false
+    spot.shadow_enabled = true
     add_child(spot)
 
 
