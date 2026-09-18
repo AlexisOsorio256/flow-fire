@@ -23,8 +23,8 @@
 # `magin`, `magout`) salen siempre de ahi; el resto de la foley heredada esta
 # congelada en sus WAV versionados (ver `process`).
 #
-# OJO: los seis WAV de foley del arma (`mag_drop`, `mag_slap`, `slide_release`,
-# `reload_rustle`, `mag_insert`) NO salen de los masters: son
+# OJO: los tres WAV de foley del arma (`mag_drop`, `slide_release`,
+# `mag_insert`) NO salen de los masters: son
 # síntesis y los genera `tools/make_weapon_sounds.py`. Este script no los toca;
 # si hay que cambiarlos, se cambian en el generador y se vuelve a ejecutar.
 #
@@ -360,7 +360,6 @@ SHOT_CUTS=(
 # Ventanas medidas con la envolvente de 1 ms sobre
 # assets/audio/source/g36c_mag_in_out_excerpt.wav (recorte 11.28-11.70 s de la
 # toma `..._mag_in_&_out.wav`; ciclo con 0 muestras al ras):
-#   handling 0.005-0.105 roce de manos antes del gesto (ataque ~0.010)
 #   magout   0.105-0.210 clic del reten + friccion de extraccion (ataque a 0.110)
 #   magin    0.210-0.400 insercion + asiento (el clack cae a 0.270, o sea ~60 ms
 #            dentro de la muestra: Glock.gd dispara el evento 60 ms ANTES del
@@ -408,7 +407,6 @@ process_mag() {
 }
 
 echo "== Cargador (extracto G36C close-up, misma toma) =="
-process_mag handling 0.005 0.105 -14.0 0.03
 process_mag magout 0.105 0.210 -8.0 0.03
 process_mag magin 0.210 0.400 -1.5 0.05
 

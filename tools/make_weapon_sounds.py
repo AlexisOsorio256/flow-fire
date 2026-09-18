@@ -8,9 +8,7 @@ Escribe en assets/audio/ (16 bits, mono, 44,1 kHz, que es lo que importa Godot):
 
   trigger_reset.wav  click del reset del disparador (40 ms)
   mag_drop.wav       UN golpe del cargador contra hormigon
-  mag_slap.wav       la palma dando en la culata del cargador al asentarlo
   slide_release.wav  el reten de la corredera al soltarse
-  reload_rustle.wav  roce de correaje y ropa mientras se recarga
   mag_insert.wav     el cargador rozando el brocal mientras sube
 
 Cada sonido se piensa para un unico golpe audible: ataque corto, cola corta y
@@ -95,39 +93,12 @@ def mag_drop():
     return normalize(band(body + hit, 120.0, 9000.0), 0.62)
 
 
-def mag_slap():
-    """Palma enguantada dando en la culata del cargador: golpe sordo, sin brillo,
-    con un resto de metal al final (el cargador entrando del todo)."""
-    n = int(0.16 * SR)
-    t = np.arange(n) / SR
-    thud = np.sin(2.0 * np.pi * 132.0 * t) * decay(n, 0.045) * 1.0
-    knock = np.sin(2.0 * np.pi * 430.0 * t) * decay(n, 0.022) * 0.5
-    leather = band(noise(n, 7), 300.0, 1800.0) * decay(n, 0.014) * 0.8
-    metal = partials(n, [1900.0, 3100.0], [0.010, 0.006], 8) * 0.25
-    return normalize((thud + knock + leather + metal) * 1.2, 0.5)
-
-
 def slide_release():
     """Reten de corredera: un tic de acero corto y agudo, sin cola."""
     n = int(0.10 * SR)
     tick = click(n, 0.0035, 31, 2600.0, 9000.0)
     ring = partials(n, [2450.0, 4180.0, 6350.0], [0.010, 0.007, 0.004], 32)
     return normalize(tick + ring * 0.6, 0.38)
-
-
-def reload_rustle():
-    """Ropa y correaje: ruido de banda con dos agarres marcados (sacar el
-    cargador, coger el lleno) y nada mas. Es el fondo que hace que la recarga
-    no suene a dos clics flotando en silencio."""
-    n = int(1.20 * SR)
-    t = np.arange(n) / SR
-    shape = np.zeros(n)
-    for at, width, amp in [(0.10, 0.10, 1.0), (0.42, 0.13, 0.8), (0.78, 0.11, 0.9)]:
-        shape += amp * np.exp(-((t - at) ** 2) / (2.0 * width * width))
-    wobble = 0.65 + 0.35 * np.abs(np.sin(2.0 * np.pi * 5.5 * t + 0.7))
-    cloth = band(noise(n, 51), 700.0, 5200.0) * shape * wobble
-    grit = band(noise(n, 52), 180.0, 900.0) * shape * 0.5
-    return normalize(cloth + grit, 0.30)
 
 
 def mag_insert():
@@ -162,9 +133,7 @@ def main():
     print("generando sonidos del arma en", OUT)
     write("trigger_reset.wav", trigger_reset())
     write("mag_drop.wav", mag_drop())
-    write("mag_slap.wav", mag_slap())
     write("slide_release.wav", slide_release())
-    write("reload_rustle.wav", reload_rustle())
     write("mag_insert.wav", mag_insert())
     print("listo. reimporta con: godot --headless --path . --import")
 

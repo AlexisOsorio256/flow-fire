@@ -4,7 +4,7 @@ Sólo créditos: archivo actual, fuente, autor, licencia y qué se le hizo. La
 investigación (pruebas, descartes y medidas) vive en la historia de Git, no aquí.
 
 La mayoria de WAV se convierten a 44,1 kHz mono 16-bit con `tools/process_audio.sh`
-(ffmpeg), alineados a su ataque y normalizados por familia. Los cinco de Foley
+(ffmpeg), alineados a su ataque y normalizados por familia. Los cuatro de Foley
 sintetizado NO los toca ese script: los genera `tools/make_weapon_sounds.py`.
 Los masters versionados estan en `assets/audio/source/` (con `.gdignore` para
 que Godot no los importe).
@@ -14,7 +14,7 @@ que Godot no los importe).
 | archivo | fuente | autor / licencia | transformación |
 |---|---|---|---|
 | `shot_1..5.wav` | PLACEHOLDER compuesto (no G19 pura): crack de Glock 18c a 1 m, micrófono MKH416 — Sonniss #GameAudioGDC Bundle 2016; cuerpo de una Beretta 93R a 1 m, mismo bundle y mismo tipo de micro | Pole Position Production / Sonniss EULA (comercial, sin atribución) | 5 disparos cortados en su ataque desde `assets/audio/source/sonniss_gdc2016_glock18c_1m.wav`; `tools/build_shot.py` les monta el cuerpo grave de `assets/audio/source/beretta93r_body_excerpt.wav` (paso bajo a 900 Hz, −4 dB, alineado por ataque) DRY sin sala horneada (la sala la pone el bus World). Quedan en 360 ms, pico −1,2 dBFS, cresta ~17-19, centroide ~1,3 kHz e igual loudness de ataque que el propio maestro |
-| `magin.wav`, `magout.wav`, `handling.wav` | foley de cargador, micro MKH60 close-up — Sonniss #GameAudioGDC Bundle 2016 | Heckler & Koch G36C (Sonniss EULA) | cortes de `assets/audio/source/g36c_mag_in_out_excerpt.wav`; el clack del asiento cae ~60 ms dentro de `magin.wav` y `Glock.gd` lo adelanta ese tiempo |
+| `magin.wav`, `magout.wav` | foley de cargador, micro MKH60 close-up — Sonniss #GameAudioGDC Bundle 2016 | Heckler & Koch G36C (Sonniss EULA) | cortes de `assets/audio/source/g36c_mag_in_out_excerpt.wav`; el clack del asiento cae ~60 ms dentro de `magin.wav` y `Glock.gd` lo adelanta ese tiempo |
 | `empty_b.wav` | "9mm Handgun Being Dry Fired" | serøutōnin--deprivəd — https://freesound.org/s/674568/ — CC0 | alineado al ataque |
 | `slide_rear.wav` | "Glock 19 Handgun Pistol Slide Cocking Sounds" (evento de 10,972 s) | jackthemurray — https://freesound.org/s/393734/ — CC0 | corte al ataque (tope trasero de la corredera) |
 | `slide_battery.wav` | "Sig Sauer P229 Handgun slide rack.wav" (evento de 4,016 s) | nikkolaus — https://freesound.org/s/442560/ — CC0 | corte al ataque (vuelta a batería) |
@@ -31,10 +31,8 @@ ejecutarlo y reimportar.
 |---|---|---|
 | `trigger_reset.wav` | click del reset del disparador | sintesis 50 ms, un transitorio (ver `make_weapon_sounds.py`) |
 | `mag_drop.wav` | el cargador golpeando hormigon | UN golpe (220 ms); cada contacto dispara uno con nivel/pitch por velocidad |
-| `mag_slap.wav` | la palma en la culata al asentarlo | golpe sordo con resto de metal |
 | `mag_insert.wav` | el cargador rozando el brocal al subir | metal contra metal, costillas y resorte |
 | `slide_release.wav` | el retén de la corredera al soltarse | tic de acero corto y agudo |
-| `reload_rustle.wav` | ropa y correaje durante la recarga | ruido de banda con tres agarres |
 
 ## Familia mundo (bus `World`)
 

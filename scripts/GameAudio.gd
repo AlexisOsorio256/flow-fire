@@ -60,15 +60,9 @@ const SOUNDS := {
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     # Mecanica de recarga: reten, insercion, asiento y reten de corredera.
     # Sin Foley de manos/ropa/palma mientras no haya mano (ver Glock.gd).
-    # SIN MANO no se usa (placeholder hasta mano rigida): se versiona pero no suena.
-    "reload_rustle": {"stream": preload("res://assets/audio/reload_rustle.wav"), "db": -16.0, "bus": BUS_WEAPONS},
-    # SIN MANO no se usa: palma sin mano es Foley falso.
-    "mag_slap": {"stream": preload("res://assets/audio/mag_slap.wav"), "db": -11.0, "bus": BUS_WEAPONS},
     "slide_release": {"stream": preload("res://assets/audio/slide_release.wav"), "db": -18.0, "bus": BUS_WEAPONS},
     # El cargador cae al mundo, no al arma: bus de mundo y 3D en el suelo.
     "mag_drop": {"stream": preload("res://assets/audio/mag_drop.wav"), "db": -13.0, "bus": BUS_WORLD},
-    # SIN MANO no se usa.
-    "handling": {"stream": preload("res://assets/audio/handling.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     # El roce del cargador contra el brocal mientras sube: es el tramo que iba
     # mudo entre que el lleno entra en cuadro y asienta. Suena al entrar y su
     # cola muere justo en el clack del asiento.
