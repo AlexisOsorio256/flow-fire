@@ -17,6 +17,9 @@ func _ready() -> void:
     set_meta("dynamic_decal", true)
     set_meta("surface", "wood")
     set_meta("penetrable", true)
+    # Caja HUECA de 6 paneles: cascara fina de 12 mm, dos paredes por tiro.
+    set_meta("thin_shell", true)
+    set_meta("wall_thickness", 0.012)
     # Pino en paneles de 12 mm: la 9 mm pasa dos paredes sin frenarse.
     set_meta("penetration_resistance", 7.0)
 

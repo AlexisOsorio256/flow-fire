@@ -211,30 +211,33 @@ func _push_body(collider: Object, point: Vector3, dir: Vector3, impulse: float) 
 func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object) -> Dictionary:
     if not collider is CollisionObject3D:
         return {}
+    var hollow := bool((collider as CollisionObject3D).get_meta("thin_shell", false))
     var body := collider as CollisionObject3D
     var best := {}
-    var best_distance := PENETRATION_SEARCH_DISTANCE
+    var best_distance := -1.0 if hollow else PENETRATION_SEARCH_DISTANCE
     for owner_id in body.get_shape_owners():
         var shape_transform: Transform3D = body.global_transform * body.shape_owner_get_transform(owner_id)
         for shape_index in range(body.shape_owner_get_shape_count(owner_id)):
             var shape := body.shape_owner_get_shape(owner_id, shape_index)
-            var hit := _exit_of_shape(shape, shape_transform, entry, direction)
+            var hit := _exit_of_shape(shape, shape_transform, entry, direction, hollow)
             if hit.is_empty():
                 continue
             var distance: float = hit["distance"]
-            if distance <= PENETRATION_EPSILON or distance >= best_distance:
+            if distance <= PENETRATION_EPSILON:
+                continue
+            if (hollow and distance <= best_distance) or (not hollow and distance >= best_distance):
                 continue
             best = hit
             best_distance = distance
     return best
 
 
-func _exit_of_shape(shape: Shape3D, shape_transform: Transform3D, entry: Vector3, direction: Vector3) -> Dictionary:
+func _exit_of_shape(shape: Shape3D, shape_transform: Transform3D, entry: Vector3, direction: Vector3, hollow := false) -> Dictionary:
     var inv := shape_transform.affine_inverse()
     var local_entry := inv * entry
     var local_direction := (inv * (entry + direction)) - local_entry
     if shape is BoxShape3D:
-        return _exit_box(shape as BoxShape3D, shape_transform, entry, local_entry, local_direction)
+        return _exit_box(shape as BoxShape3D, shape_transform, entry, local_entry, local_direction, hollow)
     if shape is CylinderShape3D:
         return _exit_cylinder(shape as CylinderShape3D, shape_transform, entry, local_entry, local_direction)
     if shape is SphereShape3D:
@@ -256,7 +259,7 @@ func _exit_point(shape_transform: Transform3D, entry: Vector3, local_entry: Vect
 
 
 func _exit_box(box: BoxShape3D, shape_transform: Transform3D, entry: Vector3,
-        local_entry: Vector3, local_direction: Vector3) -> Dictionary:
+        local_entry: Vector3, local_direction: Vector3, hollow := false) -> Dictionary:
     var half := box.size * 0.5
     var t_near := -INF
     var t_far := INF
@@ -271,7 +274,9 @@ func _exit_box(box: BoxShape3D, shape_transform: Transform3D, entry: Vector3,
         var t2 := (half[axis] - origin_axis) / direction_axis
         t_near = maxf(t_near, minf(t1, t2))
         t_far = minf(t_far, maxf(t1, t2))
-    if t_far <= PENETRATION_EPSILON or t_near > PENETRATION_EPSILON * 4.0:
+    if t_far <= PENETRATION_EPSILON or t_far <= t_near:
+        return {}
+    if not hollow and t_near > PENETRATION_EPSILON * 4.0:
         return {}
     var local_exit := local_entry + local_direction * t_far
     var exit_axis := 0
