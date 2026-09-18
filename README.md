@@ -79,22 +79,26 @@ cargador sale por su eje medido.
 
 ## Mano y viewmodel
 
-La capa provisional es deliberadamente pequeña:
+El rig es deliberadamente mínimo (v1: agarre, clips por venir):
 
 ```text
 BodyGive
-├── RightHand       right_hand.glb: 1 mesh, 4.224 tris, 1 material
+├── RightHand       right_hand.glb: ArmsRig 20 huesos, 1 mesh 3.360 tris, 1 material
 └── WeaponGrip
     └── WeaponSocket
         └── Glock
 ```
 
-`right_hand.glb` es una mano derecha con antebrazo/manga, pose horneada sobre el
-`Grip`, cero huesos y cero animaciones. La mano no escribe ningún transform del
-arma; `WeaponSocket` aplica el retroceso rápido y `BodyGive` la cesión lenta.
-No hay mano izquierda, IK, retarget ni `AnimationPlayer` para brazos. Durante la
-recarga el cargador puede moverse solo: la mecánica visible sigue siendo
-coherente y no se inventan Foley de manos inexistentes.
+`right_hand.glb` es mano derecha + antebrazo/manga con 20 deform bones y pose
+de agarre horneada sobre el `Grip` de NUESTRA Glock (falanges rígidas, un hueso
+por segmento). La mano no escribe ningún transform del arma; `WeaponSocket`
+aplica el retroceso rápido y `BodyGive` la cesión lenta (la mano RESISTE: el
+arma cabecea rápido dentro del agarre y el conjunto cede después). No hay mano
+izquierda, IK, retarget ni `AnimationPlayer` todavía: los clips
+Idle->Fire->ReloadEmpty->Reload->Inspect vendrán por retarget del donante
+histórico en Blender y bake. Durante la recarga el cargador puede moverse solo:
+la mecánica visible sigue siendo coherente y no se inventan Foley de manos
+inexistentes.
 
 ## Rango de medición
 
@@ -188,7 +192,8 @@ inspector headless no certifica un viewmodel.
 Para regenerar los dos assets Blender:
 
 ```text
-blender --background --python tools/build_range_assets.py
+blender --background --python tools/build_range_assets.py  # shell
+blender --background --python tools/build_hand_rig.py      # mano riggeada
 ```
 
 ## Fuera de alcance

@@ -12,7 +12,7 @@ extends Node3D
 ##   Viewmodel
 ##   └── PoseRoot          cadera / ADS / sprint / bob / sway / respiracion
 ##       └── BodyGive      cesion lenta del conjunto (GlockRecoil.give_*)
-##           ├── RightHand    mesh unico, 0 huesos, pose fija
+##           ├── RightHand    ArmsRig 20 huesos + 1 malla, agarre horneado
 ##           └── WeaponGrip  el arma dentro del pivote (GRIP_POS / GRIP_ROT)
 ##               └── WeaponSocket   retroceso: UNICA transformacion del arma
 ##                   └── Weapon -> Frame / Slide / Barrel / Magazine / ...
@@ -23,9 +23,9 @@ extends Node3D
 ##   Corredera, gatillo y cargador .. Glock.gd -> GlockWeapon
 ##   Camara ......................... Player.gd (aqui no se toca)
 ##
-## Solo entra la mano derecha provisional: 1 malla, 1 material, sin esqueleto ni
-## clips. El arma sigue siendo el hero asset y la mano no escribe transforms de
-## ninguna pieza.
+## Mano derecha riggeada minima (v1): 1 malla, 1 material, ~20 deform bones,
+## agarre horneado sobre el Grip, 0 clips. El arma sigue siendo el hero asset
+## y la mano no escribe transforms de ninguna pieza.
 ##
 ## EL ARMA NO ESTA EN NINGUN ESQUELETO, ni se busca dentro de uno: `GlockWeapon`
 ## es un arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS
@@ -158,7 +158,7 @@ func _apply_hand_material(root_node: Node) -> void:
 	# bajo los Omni del rango para que la mano siga siendo secundaria y no se
 	# queme como una superficie blanca en la capa de viewmodel.
 	var glove := StandardMaterial3D.new()
-	glove.albedo_color = Color(0.004, 0.006, 0.008)
+	glove.albedo_color = Color(0.020, 0.024, 0.030)
 	glove.metallic = 0.0
 	glove.roughness = 0.94
 	glove.metallic_specular = 0.12

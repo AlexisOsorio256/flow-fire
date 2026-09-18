@@ -302,79 +302,12 @@ def build_range_shell() -> None:
 
 
 def build_right_hand() -> None:
-    reset_scene()
-    bpy.ops.import_scene.gltf(filepath=str(MODELS / "g19_pistol.glb"))
-    grip = bpy.data.objects.get("Grip")
-    if grip is None:
-        raise RuntimeError("g19_pistol.glb has no Grip socket")
-    grip_position = grip.matrix_world.translation.copy()
-
-    # Remove the reference weapon before authoring the hand.  The asset is
-    # intentionally a single mesh and cannot become a second weapon source.
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=False)
-
-    root = bpy.data.objects.new("RightHand", None)
-    bpy.context.collection.objects.link(root)
-    glove = flat_material("RightHand_Glove", (0.0001, 0.0002, 0.0003), metallic=0.0, roughness=0.94)
-    glove_shader = next(node for node in glove.node_tree.nodes if node.type == "BSDF_PRINCIPLED")
-    glove_shader.inputs["Specular IOR Level"].default_value = 0.24
-
-    pieces = []
-    # The local pose is authored around the measured Grip socket.  The palm
-    # overlaps the grip, four short fingers wrap its front edge, and a separate
-    # forearm/cuff keeps the silhouette readable without a rig or animation.
-    pieces.append(add_ellipsoid(
-        "Palm",
-        grip_position + Vector((0.010, 0.004, -0.026)),
-        (0.033, 0.041, 0.064),
-        glove,
-    ))
-    pieces.append(add_ellipsoid(
-        "Forearm",
-        grip_position + Vector((0.010, -0.024, -0.090)),
-        (0.037, 0.046, 0.074),
-        glove,
-    ))
-    pieces.append(add_ellipsoid(
-        "Cuff",
-        grip_position + Vector((0.010, -0.042, -0.135)),
-        (0.044, 0.050, 0.024),
-        glove,
-    ))
-    for index, x in enumerate((-0.018, -0.006, 0.006, 0.018)):
-        pieces.append(add_ellipsoid(
-            f"Finger_{index + 1}",
-            grip_position + Vector((x, 0.022, -0.039)),
-            (0.010, 0.032, 0.014),
-            glove,
-        ))
-    pieces.append(add_ellipsoid(
-        "Thumb",
-        grip_position + Vector((-0.026, 0.014, -0.014)),
-        (0.018, 0.034, 0.016),
-        glove,
-    ))
-
-    hand = join_objects("RightHand", pieces, root)
-    bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
-    bpy.ops.object.select_all(action="DESELECT")
-    hand.select_set(True)
-    bpy.context.view_layer.objects.active = hand
-    bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
-    hand["asset_role"] = "baked right hand presentation"
-    hand["bones"] = 0
-    hand["animations"] = 0
-    hand["material_count"] = 1
-    triangles = sum(max(0, len(polygon.vertices) - 2) for polygon in hand.data.polygons)
-    hand["approx_triangles"] = triangles
-    if not 2000 <= triangles <= 5000:
-        raise RuntimeError(f"right hand triangle contract failed: {triangles}")
-
-    export_root(root, MODELS / "right_hand.glb")
-    print("built", MODELS / "right_hand.glb", "triangles", triangles)
+    raise RuntimeError(
+        "la mano procedural de elipsoides se retiro: usa "
+        "blender --background --python tools/build_hand_rig.py "
+        "(rig minimo 20 huesos, agarre horneado, 1 malla, 1 material)")
 
 
 if __name__ == "__main__":
     build_range_shell()
-    build_right_hand()
+    print("mano: ver tools/build_hand_rig.py")
