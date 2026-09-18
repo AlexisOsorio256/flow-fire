@@ -16,7 +16,7 @@ extends Node3D
 ##   Slide      corredera            <- set_slide(0..1)       (Glock.gd)
 ##   Magazine   cargador             <- set_magazine_offset   (Glock.gd)
 ##   Trigger    gatillo              <- set_trigger(0..1)     (Glock.gd)
-##   Barrel     cañon + Muzzle       <- cae con la corredera (set_slide)
+##   Barrel     cañon + Muzzle + cartucho visible  <- cae con la corredera (set_slide)
 ##   EjectionPort / SightRear / SightFront / Grip / Magwell
 ##              sockets REALES dentro del GLB (canonicalizado en Blender:
 ##              Muzzle en la boca del canon a 0,0 mm, miras sobre la corredera,
@@ -88,6 +88,9 @@ var magwell: Node3D
 
 var _slide_rest := Vector3.ZERO
 var _barrel_rest := Vector3.ZERO
+## Cartucho en recamara, hijo de Barrel (cae con el cañon). Solo representacion:
+## Glock.gd decide si hay cartucho (`chamber`) y si el puerto esta abierto.
+var cartridge: Node3D
 ## Base local de cada pieza que gira: se multiplica por el giro del frame del
 ## padre, asi no importa como venga orientada la pieza en el archivo.
 var _trigger_rest_basis := Basis.IDENTITY
@@ -154,6 +157,7 @@ func build() -> void:
 		var g := muzzle.global_transform
 		barrel.add_child(muzzle)
 		muzzle.global_transform = g
+	_build_cartridge()
 
 	var missing: Array = []
 	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port], ["Grip", grip], ["Magwell", magwell]]:
@@ -164,6 +168,65 @@ func build() -> void:
 		" corredera=", snappedf(SLIDE_TRAVEL * 1000.0, 0.1), "mm",
 		" gatillo=", snappedf(TRIGGER_TRAVEL / _trigger_lever * 57.2958, 0.1), "grados",
 		" sin_pieza=", missing if not missing.is_empty() else "nada")
+
+
+## Cartucho 9x19 en la recamara: laton 19,15 mm + punta cobriza. Nace mirando
+## a la boca (eje Y del cilindro sobre la linea boca-origen del cañon) con el
+## culote en la cara de culata. Sin slide abierto no se ve; con slide abierto y
+## `chamber == 0` tampoco: inspeccionar con recamara vacia muestra vacio.
+func _build_cartridge() -> void:
+	if barrel == null or muzzle == null:
+		return
+	cartridge = Node3D.new()
+	cartridge.name = "Cartridge"
+	barrel.add_child(cartridge)
+	var bore: Vector3 = (muzzle.position - Vector3.ZERO)
+	if bore.length() < 0.01:
+		bore = -muzzle_axis
+	bore = bore.normalized()
+	var right: Vector3 = bore.cross(Vector3.UP)
+	if right.length() < 0.01:
+		right = Vector3.RIGHT
+	right = right.normalized()
+	cartridge.basis = Basis(right, bore, right.cross(bore))
+	var brass := StandardMaterial3D.new()
+	brass.albedo_color = Color(0.72, 0.53, 0.18)
+	brass.metallic = 0.9
+	brass.roughness = 0.35
+	var case_mesh := CylinderMesh.new()
+	case_mesh.top_radius = 0.0049
+	case_mesh.bottom_radius = 0.0049
+	case_mesh.height = 0.01915
+	case_mesh.radial_segments = 12
+	var case_inst := MeshInstance3D.new()
+	case_inst.name = "Case"
+	case_inst.mesh = case_mesh
+	case_inst.material_override = brass
+	case_inst.position = Vector3(0.0, 0.0096, 0.0)
+	cartridge.add_child(case_inst)
+	var copper := StandardMaterial3D.new()
+	copper.albedo_color = Color(0.55, 0.32, 0.18)
+	copper.metallic = 0.9
+	copper.roughness = 0.4
+	var nose_mesh := CylinderMesh.new()
+	nose_mesh.top_radius = 0.0028
+	nose_mesh.bottom_radius = 0.0045
+	nose_mesh.height = 0.009
+	nose_mesh.radial_segments = 12
+	var nose_inst := MeshInstance3D.new()
+	nose_inst.name = "Bullet"
+	nose_inst.mesh = nose_mesh
+	nose_inst.material_override = copper
+	nose_inst.position = Vector3(0.0, 0.01915 + 0.0045, 0.0)
+	cartridge.add_child(nose_inst)
+	cartridge.visible = false
+
+
+## El cartucho se ve solo con puerto abierto y recamara cargada. Lo decide
+## Glock.gd cada frame junto a la corredera.
+func set_chamber_visible(v: bool) -> void:
+	if cartridge != null:
+		cartridge.visible = v
 
 
 ## Pivote del cabeceo en unidades del WeaponSocket: el Grip MEDIDO en el GLB.

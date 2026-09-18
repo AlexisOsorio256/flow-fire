@@ -199,6 +199,7 @@ func _process(delta: float) -> void:
 	if viewmodel.weapon != null:
 		viewmodel.weapon.set_slide(slide_pos / maxf(_travel, 0.0001))
 		viewmodel.weapon.set_trigger(trigger_visual)
+		viewmodel.weapon.set_chamber_visible(chamber > 0 and slide_pos > _travel * 0.15)
 
 	shot_pulse = maxf(0.0, shot_pulse - delta * 8.0)
 	if fx != null:
