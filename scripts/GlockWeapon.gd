@@ -192,6 +192,11 @@ func _build_cartridge() -> void:
 		right = Vector3.RIGHT
 	right = right.normalized()
 	cartridge.basis = Basis(right, bore, right.cross(bore))
+	# La recamara se MIDE: el culote va sobre la cara de culata (centroide de
+	# los vertices traseros del canon sobre el eje del anima). El origen del
+	# nodo Barrel no esta garantizado sobre el anima: plantarlo en cero lo
+	# dejaba flotando al lado derecho de la corredera en inspeccion.
+	cartridge.position = _breech_face(barrel, bore)
 	var brass := StandardMaterial3D.new()
 	brass.albedo_color = Color(0.72, 0.53, 0.18)
 	brass.metallic = 0.9
@@ -223,6 +228,56 @@ func _build_cartridge() -> void:
 	nose_inst.position = Vector3(0.0, 0.01915 + 0.0045, 0.0)
 	cartridge.add_child(nose_inst)
 	cartridge.visible = false
+
+
+## Cara de culata en espacio del Barrel: vertices a <2 mm de la maxima
+## profundidad trasera, recentrados a <10 mm del primer centroide para que un
+## resalte (rampa, teton) no tire el eje fuera del anima.
+func _breech_face(part: Node3D, bore: Vector3) -> Vector3:
+	var back := -bore
+	var verts: Array[Vector3] = []
+	var stack: Array = [part]
+	while not stack.is_empty():
+		var n = stack.pop_back()
+		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+			var mi := n as MeshInstance3D
+			# A espacio del Barrel por cadena de padres (vale anidado y sin
+			# globales asentados).
+			var xform := mi.transform
+			var par := mi.get_parent()
+			while par != null and par != part:
+				if par is Node3D:
+					xform = (par as Node3D).transform * xform
+				par = par.get_parent()
+			for s in range(mi.mesh.get_surface_count()):
+				for v in mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+					verts.append(xform * v)
+		for c in n.get_children():
+			if c != cartridge:
+				stack.append(c)
+	if verts.is_empty():
+		return Vector3.ZERO
+	var deepest := -1e9
+	for v in verts:
+		deepest = maxf(deepest, v.dot(back))
+	var center := Vector3.ZERO
+	var count := 0
+	for v in verts:
+		if deepest - v.dot(back) < 0.002:
+			center += v
+			count += 1
+	if count == 0:
+		return Vector3.ZERO
+	center /= float(count)
+	var refined := Vector3.ZERO
+	var n2 := 0
+	for v in verts:
+		if deepest - v.dot(back) < 0.002 and v.distance_to(center) < 0.010:
+			refined += v
+			n2 += 1
+	if n2 > 0:
+		center = refined / float(n2)
+	return center + bore * 0.001
 
 
 ## El cartucho se ve solo con puerto abierto y recamara cargada. Lo decide
