@@ -4,7 +4,7 @@ Sólo créditos: archivo actual, fuente, autor, licencia y qué se le hizo. La
 investigación (pruebas, descartes y medidas) vive en la historia de Git, no aquí.
 
 La mayoria de WAV se convierten a 44,1 kHz mono 16-bit con `tools/process_audio.sh`
-(ffmpeg), alineados a su ataque y normalizados por familia. Los seis de Foley
+(ffmpeg), alineados a su ataque y normalizados por familia. Los cinco de Foley
 sintetizado NO los toca ese script: los genera `tools/make_weapon_sounds.py`.
 Los masters versionados estan en `assets/audio/source/` (con `.gdignore` para
 que Godot no los importe).
@@ -34,7 +34,6 @@ ejecutarlo y reimportar.
 | `mag_slap.wav` | la palma en la culata al asentarlo | golpe sordo con resto de metal |
 | `mag_insert.wav` | el cargador rozando el brocal al subir | metal contra metal, costillas y resorte |
 | `slide_release.wav` | el retén de la corredera al soltarse | tic de acero corto y agudo |
-| `chamber_check.wav` | comprobar la recámara | dos clics de acero con el muelle tensándose |
 | `reload_rustle.wav` | ropa y correaje durante la recarga | ruido de banda con tres agarres |
 
 ## Familia mundo (bus `World`)

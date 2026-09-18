@@ -24,7 +24,7 @@
 # congelada en sus WAV versionados (ver `process`).
 #
 # OJO: los seis WAV de foley del arma (`mag_drop`, `mag_slap`, `slide_release`,
-# `reload_rustle`, `mag_insert`, `chamber_check`) NO salen de los masters: son
+# `reload_rustle`, `mag_insert`) NO salen de los masters: son
 # síntesis y los genera `tools/make_weapon_sounds.py`. Este script no los toca;
 # si hay que cambiarlos, se cambian en el generador y se vuelve a ejecutar.
 #

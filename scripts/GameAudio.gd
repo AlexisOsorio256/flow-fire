@@ -73,10 +73,6 @@ const SOUNDS := {
     # mudo entre que el lleno entra en cuadro y asienta. Suena al entrar y su
     # cola muere justo en el clack del asiento.
     "mag_insert": {"stream": preload("res://assets/audio/mag_insert.wav"), "db": -13.0, "bus": BUS_WEAPONS},
-    # Comprobacion de recamara: la corredera llevada atras contra el muelle. Dos
-    # clics de acero con su resorte, mas seco que la corredera a bateria.
-    # SIN MANIPULACION real no se usa: la inspeccion es slide_rear/battery.
-    "chamber_check": {"stream": preload("res://assets/audio/chamber_check.wav"), "db": -17.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
     # Impactos: grabaciones reales de impacto de bala (Gamemaster Audio, Bullet
     # Impact Sounds). Cada material tiene su propia grabacion; antes hormigon,

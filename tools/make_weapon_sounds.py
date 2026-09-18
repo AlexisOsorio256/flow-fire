@@ -12,7 +12,6 @@ Escribe en assets/audio/ (16 bits, mono, 44,1 kHz, que es lo que importa Godot):
   slide_release.wav  el reten de la corredera al soltarse
   reload_rustle.wav  roce de correaje y ropa mientras se recarga
   mag_insert.wav     el cargador rozando el brocal mientras sube
-  chamber_check.wav  la corredera llevada atras un pelo para ver la recamara
 
 Cada sonido se piensa para un unico golpe audible: ataque corto, cola corta y
 nada de reverb. Despues de generarlos hay que reimportar:
@@ -148,26 +147,6 @@ def mag_insert():
     return normalize(band(drag + body + spring, 140.0, 9000.0) * decay(n, 0.42), 0.34)
 
 
-def chamber_check():
-    """Comprobacion de recamara: la corredera se lleva atras un pelo contra el
-    muelle y vuelve. Dos clics de acero separados 70 ms y un resorte corto entre
-    ellos; no es el golpe del disparo ni la corredera a tope."""
-    n = int(0.22 * SR)
-    out = np.zeros(n)
-    for i, (at, amp, pitch) in enumerate([(0.000, 1.00, 1.00), (0.070, 0.72, 0.92)]):
-        start = int(at * SR)
-        m = int(0.09 * SR)
-        tick = click(m, 0.0028, 71 + i, 2800.0, 9500.0)
-        ring = partials(m, [2350.0 * pitch, 4020.0 * pitch, 6120.0 * pitch],
-                        [0.008, 0.006, 0.004], 73 + i) * 0.55
-        out[start:start + m] += normalize(tick + ring, 1.0) * amp
-    # Resorte tensandose entre los dos clics.
-    t = np.arange(n) / SR
-    zip_ = band(noise(n, 75), 900.0, 3800.0) * np.exp(-np.maximum(t - 0.012, 0.0) / 0.018)
-    zip_[:int(0.012 * SR)] = 0.0
-    return normalize(out + zip_ * 0.35, 0.42)
-
-
 def trigger_reset():
     """Click del reset del disparador: acero diminuto, 40 ms, sin cola.
     El reset sigue al movimiento real del gatillo (ver Glock.gd); esto es solo
@@ -187,7 +166,6 @@ def main():
     write("slide_release.wav", slide_release())
     write("reload_rustle.wav", reload_rustle())
     write("mag_insert.wav", mag_insert())
-    write("chamber_check.wav", chamber_check())
     print("listo. reimporta con: godot --headless --path . --import")
 
 
