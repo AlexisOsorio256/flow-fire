@@ -52,6 +52,11 @@ static func spawn(scene: Node, source: Node3D, velocity: Vector3, spin: Vector3,
 	_set_world_layers(visual)
 	mag.add_child(visual)
 
+	# Dentro del arbol ANTES de medir: fuera del arbol `global_transform` falla
+	# y la caja sale en el marco equivocado (el tamano cuela, el centro no).
+	scene.add_child(mag)
+	mag.global_transform = source.global_transform
+
 	var box: AABB = _visual_aabb(visual)
 	var shape := BoxShape3D.new()
 	shape.size = box.size
@@ -67,8 +72,6 @@ static func spawn(scene: Node, source: Node3D, velocity: Vector3, spin: Vector3,
 	mag.linear_damp = 0.08
 	mag.angular_damp = 0.30
 
-	scene.add_child(mag)
-	mag.global_transform = source.global_transform
 	mag.linear_velocity = velocity
 	mag.angular_velocity = spin
 	return mag
