@@ -6,8 +6,8 @@ extends Node
 ## Comprueba lo que el ojo no mide: que la pistola este en METROS REALES en el
 ## mundo (174 mm de largo), que existan las piezas que el juego mueve, que la
 ## corredera retroceda de verdad (alejandose de la boca) y que el cargador viaje
-## hacia abajo en el espacio del arma. Si algo falla, imprime
-## FALLO y sale con codigo 1.
+## hacia abajo en el espacio del arma. Si algo falla, imprime FALLO y sale con
+## codigo 1.
 
 const REAL_LENGTH := 0.174
 const TOLERANCE := 0.002
@@ -121,7 +121,7 @@ func _ready() -> void:
 	# mismo nodo del autor, asi que al expulsar el cargador se iba el gatillo.
 	if weapon.trigger != null and weapon.magazine != null:
 		var trigger_before: Vector3 = weapon.trigger.global_transform.origin
-		weapon.set_magazine_offset(1.0)
+		weapon.set_magazine_offset(weapon.magazine_travel)
 		var trigger_after: Vector3 = weapon.trigger.global_transform.origin
 		weapon.set_magazine_offset(0.0)
 		print("gatillo quieto con el cargador fuera mm ",

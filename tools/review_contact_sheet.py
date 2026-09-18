@@ -50,7 +50,18 @@ CELL_W = 320
 CROP = (230, 250, 730, 540)
 # Pen entra por los ojos del tirador: cuadro completo para leer el blanco.
 # Ads mira por las miras: centro del encuadre.
-CROPS = {"pen": (0, 0, 960, 540), "ads": (330, 150, 630, 390), "crate": (0, 0, 960, 540), "steel": (0, 0, 960, 540)}
+# Recarga e inspeccion: el arma sube al centro-bajo y el cargador sale por
+# debajo, asi que el recorte baja hasta el borde para poder juzgar el gesto
+# (a 500 px el arma son 30 px y no se ve ni el cargador ni el brocal).
+CROPS = {
+    "pen": (0, 0, 960, 540),
+    "ads": (330, 150, 630, 390),
+    "crate": (0, 0, 960, 540),
+    "steel": (0, 0, 960, 540),
+    "reload": (300, 235, 700, 540),
+    "reload_empty": (300, 235, 700, 540),
+    "inspect": (300, 235, 700, 540),
+}
 
 
 def parse_ms(name):

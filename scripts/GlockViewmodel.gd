@@ -31,8 +31,8 @@ extends Node3D
 ## es un arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS
 ## (GRIP_POS / GRIP_ROT), no una medicion en runtime.
 ##
-## ESCALA: el arma va en metros reales (187 mm). Nadie la escala para que quepa
-## en un encuadre; el encuadre se calibra alrededor de ella.
+## ESCALA: el arma va en metros reales (174 mm, lo que mide su malla). Nadie la
+## escala para que quepa en un encuadre; el encuadre se calibra alrededor.
 
 ## El arma dentro del pivote. CALIBRADO mirando en :0: pone la pistola en el
 ## encuadre bodycam y la deja apuntando como la apuntaba el autor. Radianes.
@@ -49,7 +49,9 @@ const ADS_SIGHT_DISTANCE := 0.44
 ## ensenar el brocal y se acerca al cuerpo, que es como se recarga de verdad.
 ## Antes eran 10 cm de subida y 8 grados de cante: el arma practicamente no se
 ## movia y la recarga se leia como un cargador deslizandose solo. El brocal
-## tiene que quedar mirando al suelo, delante del tirador.
+## tiene que quedar mirando al suelo, delante del tirador. El golpe del asiento
+## se suma como una excursion NEGATIVA de esta misma pose: el arma se hunde un
+## pelo cuando el cargador entra.
 const RELOAD_POSE_UP := 0.14
 const RELOAD_POSE_RIGHT := -0.035
 const RELOAD_POSE_FWD := 0.085
@@ -130,10 +132,10 @@ func mount() -> void:
 		recoil.set_pivot(Vector3.ZERO)
 
 
-## Avance del cargador en la recarga (0 asentado, 1 fuera). Lo decide Glock.gd.
-func set_magazine_offset(t: float, extra: float = 0.0) -> void:
+## Cargador fuera del brocal, en metros (0 asentado). Lo decide Glock.gd.
+func set_magazine_offset(offset_m: float) -> void:
 	if weapon != null:
-		weapon.set_magazine_offset(t, extra)
+		weapon.set_magazine_offset(offset_m)
 
 
 func set_magazine_visible(v: bool) -> void:

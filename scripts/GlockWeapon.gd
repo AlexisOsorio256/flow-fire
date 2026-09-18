@@ -60,6 +60,8 @@ const BARREL_DROP := 0.026
 const SIDE_AXIS := Vector3(1.0, 0.0, 0.0)
 
 var slide_offset := SLIDE_TRAVEL
+## Recorrido del cargador desde asentado hasta libre. Espejo de MAG_TRAVEL.
+var magazine_travel := MAG_TRAVEL
 var capacity := MAG_CAPACITY
 var muzzle_axis := MUZZLE_AXIS
 var model_scale := 1.0
@@ -82,8 +84,6 @@ var _trigger_lever := 0.0
 var _barrel_rest_basis := Basis.IDENTITY
 ## Recorrido de la corredera en unidades del modelo (metros reales / escala).
 var _slide_travel := 0.0
-## Recorrido del cargador en unidades del modelo (metros reales / escala).
-var _mag_travel := 0.0
 ## Sitio exacto del cargador dentro del arma. Lo usa el viewmodel para
 ## devolverlo al brocal cuando la mano lo suelta.
 var magazine_rest := Vector3.ZERO
@@ -131,7 +131,6 @@ func build() -> void:
 		_trigger_lever = maxf(_lever(trigger), 0.001)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
 	_slide_travel = SLIDE_TRAVEL / model_scale
-	_mag_travel = MAG_TRAVEL / model_scale
 
 	var missing: Array = []
 	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
@@ -229,20 +228,14 @@ func set_trigger(t: float) -> void:
 	trigger.transform.basis = Basis(Quaternion(SIDE_AXIS, angle)) * _trigger_rest_basis
 
 
-## Cargador: 0 = asentado en el brocal, 1 = fuera del todo. UNICA autoridad:
-## Glock.gd, que le pasa su avance en la recarga. El eje de salida es el del
-## propio modelo (el cargador cuelga por debajo del arma) y el recorrido es el
-## real: MAG_TRAVEL.
-##
-## `extra` es recorrido de mas, en unidades del modelo, SOLO para la caida: el
-## cargador vacio no se queda a 7 cm del brocal, sigue cayendo. Se pasa como
-## parametro en vez de alargar MAG_TRAVEL porque MAG_TRAVEL es una medida del
-## arma (cuanto asoma el cargador) y esto es coreografia.
-func set_magazine_offset(t: float, extra: float = 0.0) -> void:
+## Cargador: distancia desde el brocal, EN METROS (0 = asentado, positivo =
+## fuera del arma, cayendo). UNICA autoridad: Glock.gd, que le pasa la
+## coreografia de la recarga. Aqui solo se convierte a unidades del modelo: el
+## cargador entra y sale por MAGAZINE_OUT_AXIS, que es el del modelo.
+func set_magazine_offset(offset_m: float) -> void:
 	if magazine == null:
 		return
-	var travel := _mag_travel * clampf(t, 0.0, 1.0) + maxf(extra, 0.0)
-	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * travel
+	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * (offset_m / maxf(model_scale, 0.0001))
 
 
 ## Tumba del cargador (radianes sobre el eje lateral del arma): el vacio cae
