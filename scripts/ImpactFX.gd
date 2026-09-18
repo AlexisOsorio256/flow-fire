@@ -131,33 +131,38 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
     GameAudio.play_3d(sound_name, point, volume, pitch)
 
 
-## Humo de boca: una voluta palida que se lee contra el fondo negro del rango.
+## Humo de boca: combustion breve -> gas -> voluta residual a la deriva.
+## El fogonazo dura milisegundos; el humo persiste: deriva, expansion, fade y
+## ligera turbulencia con variacion contenida. Sale del bore (misma direccion
+## del proyectil), no de la camara.
 ## CALIBRADO: el gris 0.55 a alfa 0.24 no se veia en juego; 0.72/0.42 si, sin
-## parecer humo de pelicula (9 particulas, 0.9 s, a la deriva).
+## parecer humo de pelicula (12 particulas, 1,4 s, a la deriva).
 func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     var pm := ParticleProcessMaterial.new()
     pm.direction = direction.normalized()
-    pm.spread = 24.0
-    pm.initial_velocity_min = 0.2
-    pm.initial_velocity_max = 0.6
-    pm.gravity = Vector3(0, 0.12, 0)
-    pm.scale_min = 0.45
-    pm.scale_max = 1.8
+    pm.spread = 28.0
+    pm.initial_velocity_min = 0.3
+    pm.initial_velocity_max = 0.9
+    pm.gravity = Vector3(0, 0.18, 0)
+    pm.scale_min = 0.5
+    pm.scale_max = 2.0
     pm.color = Color(0.72, 0.72, 0.70, 0.38)
-    pm.damping_min = 1.6
-    pm.damping_max = 2.4
+    pm.damping_min = 1.2
+    pm.damping_max = 2.0
+    # Sin turbulencia runtime: en Mobile/Mesa colgaba el readback y pintaba
+    # negro. La deriva sale de spread + damping + gravedad leve.
 
     var particles := GPUParticles3D.new()
-    particles.amount = 9
-    particles.lifetime = 0.9
+    particles.amount = 12
+    particles.lifetime = 1.4
     particles.one_shot = true
-    particles.explosiveness = 1.0
+    particles.explosiveness = 0.92
     particles.process_material = pm
     particles.draw_pass_1 = _particle_quad(SOFT_TEXTURE, Color(0.75, 0.75, 0.73, 0.42), false, Vector2(0.075, 0.075))
     particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(particles)
     particles.global_position = point
-    get_tree().create_timer(1.5).timeout.connect(particles.queue_free)
+    get_tree().create_timer(2.0).timeout.connect(particles.queue_free)
 
 
 ## Agujero de bala: UN `Decal` anclado a la superficie, con la cavidad hundida

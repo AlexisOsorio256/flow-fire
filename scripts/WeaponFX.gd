@@ -23,14 +23,16 @@ extends Node3D
 ## identicos pintan o no, sin errores de compilacion), y la malla es la misma
 ## ruta que el resto del arma.
 
-## Duración visible del evento. 40 ms: extremadamente corto, no una llama que se
-## pueda mirar.
-const FLASH_TIME := 0.04
+## Duración visible del evento. 55 ms: extremadamente corto, no una llama que se
+## pueda mirar. A 40 ms el fogonazo no caia en ningun frame de revision
+## (30 ms de juego por frame) y en sala luminosa no se percibia; 55 ms sigue
+## siendo milisegundos y cae en 1-2 frames.
+const FLASH_TIME := 0.055
 ## Apagado relativo. El núcleo es un fogonazo de milisegundos (cae a plomo); los
 ## gases son lo único que sobrevive hasta el final del evento.
 const CORE_DECAY := 4.0
 const GAS_DECAY := 1.4
-const CORE_EMISSION := 1.7
+const CORE_EMISSION := 2.8
 
 var muzzle_light: OmniLight3D
 var world_flash: OmniLight3D
@@ -126,10 +128,11 @@ func update(delta: float) -> void:
 	_gas_mat.albedo_color = Color(1.0, 1.0, 1.0) * pow(f, GAS_DECAY)
 	_core_mat.emission_energy_multiplier = CORE_EMISSION * pow(f, CORE_DECAY)
 	if muzzle_light != null:
-		muzzle_light.light_energy = randf_range(0.35, 0.60) * f
+		muzzle_light.light_energy = randf_range(0.60, 0.90) * f
 	if world_flash != null:
 		# Pulso corto al mundo: una Glock en interior si marca las paredes.
-		world_flash.light_energy = randf_range(1.2, 2.0) * f * f
+		# 2-3 de energia frente a omnis de 6: se lee sin parecer linterna.
+		world_flash.light_energy = randf_range(2.0, 3.0) * f * f
 
 
 ## Evento de disparo completo: fogonazo + humo de boca.
@@ -150,9 +153,11 @@ func pop_flash() -> void:
 	core_mesh.rotation = Vector3(0.0, 0.0, roll)
 	# La aleatoriedad es de gesto, no un fogonazo que cambia de escala a cada
 	# tiro: la nube siempre muere a la misma distancia de la boca.
-	var s := randf_range(0.90, 1.05)
-	flash_mesh.scale = Vector3(s, randf_range(0.90, 1.08), randf_range(0.90, 1.00))
-	core_mesh.scale = Vector3.ONE * randf_range(0.85, 1.15)
+	# Escala 1,35x sobre la malla de 26 mm (~35 mm): en sala luminosa a 0,6 m
+	# el halo tiene que asomar por los cantos de la corredera para leerse.
+	var s := randf_range(1.28, 1.42)
+	flash_mesh.scale = Vector3(s, randf_range(1.25, 1.45), randf_range(1.25, 1.40))
+	core_mesh.scale = Vector3.ONE * randf_range(1.15, 1.30)
 	_gas_mat.albedo_color = Color.WHITE
 	_core_mat.emission_energy_multiplier = CORE_EMISSION
 	flash_mesh.visible = true
