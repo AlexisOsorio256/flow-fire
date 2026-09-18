@@ -49,9 +49,9 @@ const GRIP_ANCHOR := Vector3(0.0, -0.088, 0.038)
 const GRIP_AHEAD := 0.080
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
-const HIP_POS := Vector3(0.13, -0.06, -0.38)
+const HIP_POS := Vector3(0.15, -0.015, -0.42)
 ## Ojo -> mira trasera en ADS.
-const ADS_SIGHT_DISTANCE := 0.32
+const ADS_SIGHT_DISTANCE := 0.44
 ## Pose de recarga: el arma sube al centro-bajo y se inclina para
 ## ensenar el brocal; el objetivo queda libre (verificado en :0).
 const RELOAD_POSE_UP := 0.10
