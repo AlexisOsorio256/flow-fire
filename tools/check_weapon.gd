@@ -3,17 +3,21 @@ extends Node
 ##
 ##   godot --headless --path . tools/check_weapon.tscn
 ##
-## Comprueba lo que el ojo no mide: malla 174 mm en metros (referencia Gen5 185 mm, que existan las piezas que el juego mueve, que la
+## Comprueba lo que el ojo no mide: el contrato del GLB (174 mm) separado de la
+## referencia física publicada (185 mm), que existan las piezas que el juego mueve, que la
 ## boca de la malla caiga sobre la boca del cañon, que la corredera retroceda de
 ## verdad (alejandose de esa boca), que las miras esten en su orden y que al
 ## apuntar la linea de miras quede sobre el eje de la camara. Si algo falla,
 ## imprime FALLO y sale con codigo 1.
 
-const MESH_LENGTH := 0.174
-const REFERENCE_LENGTH := 0.185
+## Contratos independientes del runtime: si se cambia GlockWeapon para que el
+## check se dé la razón a sí mismo, estas referencias siguen siendo las mismas.
+const CANONICAL_MESH_LENGTH_M := 0.174
+const REFERENCE_LENGTH_M := 0.185
+const REFERENCE_TRIGGER_TRAVEL_M := 0.0125
+const REFERENCE_SLIDE_TRAVEL_M := 0.039
 const MAG_STANDARD := 15
 const TOLERANCE := 0.002
-const REAL_SLIDE_TRAVEL := 0.039
 ## El rig del viewmodel: la sonda monta el mismo que el juego para medir el ADS.
 const PLAYER := preload("res://scripts/Player.gd")
 
@@ -47,22 +51,43 @@ func _ready() -> void:
 	# con la escala que el arma tiene de verdad: asi se caza cualquier escala
 	# heredada de un padre (era el bug de los brazos a ARMS_SCALE).
 	var world_scale: float = weapon.global_transform.basis.get_scale().x
-	var length: float = _local_length(weapon) * world_scale
 	_local_aabb(weapon, true)
+	var length: float = _local_length(weapon) * world_scale
 	print("largo en el mundo mm ", snappedf(length * 1000.0, 0.1),
-		"  (malla %.1f, ref %.1f, escala %.4f)" % [MESH_LENGTH * 1000.0, REFERENCE_LENGTH * 1000.0, world_scale])
-	if absf(length - MESH_LENGTH) > TOLERANCE:
+		"  (GLB canonico %.1f, ref %.1f, escala %.4f)" % [CANONICAL_MESH_LENGTH_M * 1000.0, REFERENCE_LENGTH_M * 1000.0, world_scale])
+	if absf(length - CANONICAL_MESH_LENGTH_M) > TOLERANCE:
 		failures += 1
-		print("FALLO: la pistola no esta en escala real en el mundo")
+		print("FALLO: el GLB canonico no conserva su longitud declarada")
+	if not is_equal_approx(world_scale, 1.0):
+		failures += 1
+		print("FALLO: el runtime esta escalando la Glock")
 
 	if weapon.muzzle == null or weapon.ejection_port == null \
 			or weapon.sight_rear == null or weapon.sight_front == null \
-			or weapon.frame == null or weapon.slide == null or weapon.magazine == null:
+			or weapon.frame == null or weapon.slide == null or weapon.magazine == null \
+			or weapon.trigger == null or weapon.barrel == null \
+			or weapon.grip == null or weapon.magwell == null:
 		failures += 1
-		print("FALLO: falta una pieza o un punto que el juego usa")
-	# Trigger/Barrel/Grip/Magwell existen en el GLB canonicalizado; si faltan avisa.
-	print("trigger ", "si" if weapon.trigger != null else "NO (opcional)",
-		"  barrel ", "si" if weapon.barrel != null else "NO (opcional)")
+		print("FALLO: falta una pieza obligatoria o un punto del GLB canonico")
+	print("piezas obligatorias: Frame/Slide/Barrel/Trigger/Magazine + Muzzle/EjectionPort/SightRear/SightFront/Grip/Magwell")
+	if vm.get("right_hand") == null:
+		failures += 1
+		print("FALLO: falta RightHand en BodyGive")
+	else:
+		var hand_meshes := _mesh_nodes(vm.get("right_hand"))
+		var hand_tris := 0
+		for mesh_instance: MeshInstance3D in hand_meshes:
+			for surface in range(mesh_instance.mesh.get_surface_count()):
+				var indices: PackedInt32Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
+				hand_tris += indices.size() / 3
+		var has_skeleton := _contains_type(vm.get("right_hand"), Skeleton3D)
+		var has_animation := _contains_type(vm.get("right_hand"), AnimationPlayer)
+		print("mano derecha: mallas=", hand_meshes.size(), " triangulos=", hand_tris,
+			" huesos=", int(has_skeleton), " animaciones=", int(has_animation))
+		if hand_meshes.size() != 1 or hand_tris < 2000 or hand_tris > 5000 \
+				or has_skeleton or has_animation:
+			failures += 1
+			print("FALLO: RightHand debe ser una malla de 2k-5k triangulos, sin huesos ni animaciones")
 
 	var sight_axis: Vector3 = (weapon.sight_front.global_position - weapon.sight_rear.global_position).normalized()
 	var up: Vector3 = weapon.slide.global_transform.basis.y.normalized()
@@ -131,8 +156,8 @@ func _ready() -> void:
 		var pin_shift: float = pivot.distance_to(weapon.trigger.global_transform.origin)
 		print("gatillo mm ", snappedf(trigger_travel * 1000.0, 0.1),
 			"  (recorrido Gen5 %.1f)  pasador movido mm %.2f" % [
-				weapon.TRIGGER_TRAVEL * 1000.0, pin_shift * 1000.0])
-		if absf(trigger_travel - weapon.TRIGGER_TRAVEL) > 0.0012 or pin_shift > 0.0002:
+				REFERENCE_TRIGGER_TRAVEL_M * 1000.0, pin_shift * 1000.0])
+		if absf(trigger_travel - REFERENCE_TRIGGER_TRAVEL_M) > 0.0012 or pin_shift > 0.0002:
 			failures += 1
 			print("FALLO: el gatillo no gira sobre su pasador")
 		weapon.set_trigger(0.0)
@@ -168,8 +193,8 @@ func _ready() -> void:
 
 	var slide_travel: float = (weapon.slide_offset / weapon.model_scale) * world_scale
 	print("recorrido de corredera mm ", snappedf(slide_travel * 1000.0, 0.1),
-		"  (real %.1f)" % (REAL_SLIDE_TRAVEL * 1000.0))
-	if absf(slide_travel - REAL_SLIDE_TRAVEL) > TOLERANCE * 0.5:
+		"  (real %.1f)" % (REFERENCE_SLIDE_TRAVEL_M * 1000.0))
+	if absf(slide_travel - REFERENCE_SLIDE_TRAVEL_M) > TOLERANCE * 0.5:
 		failures += 1
 		print("FALLO: la corredera no recorre la distancia real")
 
@@ -234,6 +259,29 @@ func _witness_vertex(part: Node3D) -> Array:
 		for c in n.get_children():
 			stack.append(c)
 	return witness
+
+
+func _mesh_nodes(root: Node) -> Array[MeshInstance3D]:
+	var result: Array[MeshInstance3D] = []
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+			result.append(node as MeshInstance3D)
+		for child in node.get_children():
+			stack.append(child)
+	return result
+
+
+func _contains_type(root: Node, type: Variant) -> bool:
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if is_instance_of(node, type):
+			return true
+		for child in node.get_children():
+			stack.append(child)
+	return false
 
 
 ## Centroide en mundo de la cara frontal del cañon: la corona donde termina el

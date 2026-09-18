@@ -21,10 +21,11 @@ extends Node3D
 ##              sockets REALES dentro del GLB (canonicalizado en Blender:
 ##              Muzzle en la boca del canon a 0,0 mm, miras sobre la corredera,
 ##              Grip en el centroide de la empunadura, Magwell en la boca del
-##              cargador). Sin heuristicas AABB en runtime.
+##              cargador). Los sockets no se buscan por AABB; la AABB total sólo
+##              valida la longitud declarada del asset.
 ##
 ## Muzzle cuelga de Barrel en el GLB: el fogonazo no viaja con la corredera.
-## El reparent en build queda como red por si un GLB futuro lo trae mal.
+## Esa relacion forma parte del contrato del asset; el runtime no la repara.
 ##
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
@@ -36,9 +37,7 @@ const MODEL := "res://assets/models/g19_pistol.glb"
 ## Largo de la MALLA actual, extremo a extremo (174 mm medidos). No es la ficha:
 ## la Gen5 real mide 185 mm. El GLB canonico llega ya en metros; Godot solo
 ## VALIDA, no corrige en silencio (avisa si la escala se desvia >3%).
-const REAL_LENGTH := 0.174
-const REFERENCE_LENGTH := 0.185
-const REFERENCE_NAME := "Glock 19 Gen5 stock"
+const ASSET_LENGTH_M := 0.174
 ## Recorrido real de la corredera. Es la unica autoridad del recorrido: la
 ## mecanica de Glock.gd y el dibujo la leen de aqui.
 const SLIDE_TRAVEL := 0.039
@@ -104,11 +103,11 @@ var magazine_rest := Vector3.ZERO
 var _magazine_rest_basis := Basis()
 
 
-func build() -> void:
+func build() -> bool:
 	var packed := load(MODEL) as PackedScene
 	if packed == null:
-		push_warning("No se pudo cargar el arma: " + MODEL)
-		return
+		push_error("No se pudo cargar el GLB canonico: " + MODEL)
+		return false
 	var root := packed.instantiate()
 	add_child(root)
 
@@ -123,59 +122,68 @@ func build() -> void:
 	sight_front = _find_child(root, "SightFront")
 	grip = _find_child(root, "Grip")
 	magwell = _find_child(root, "Magwell")
-	if frame == null or slide == null or magazine == null:
-		push_warning("El arma no trae Frame/Slide/Magazine")
-		return
-
-	_slide_rest = slide.position
-	if barrel != null:
-		_barrel_rest = barrel.position
-	magazine_rest = magazine.position
-	_magazine_rest_basis = magazine.transform.basis
-	if trigger != null:
-		_trigger_rest_basis = trigger.transform.basis
-	if barrel != null:
-		_barrel_rest_basis = barrel.transform.basis
-
-	# El GLB canonico llega en metros: Godot solo VALIDA, nunca corrige.
-	# Dentro del 3% la escala es 1.0 exacta; fuera es bug visible y se queda en
-	# 1.0 para no gobernar el encuadre con un numero heredado.
-	var measured_length := _model_length(root)
-	var raw_scale := REAL_LENGTH / maxf(measured_length, 0.0001)
-	model_scale = 1.0
-	scale = Vector3.ONE
-	if absf(raw_scale - 1.0) > 0.03:
-		push_error("GLB no canonico: escala %.4f (malla %.1f mm), se dibuja a 1.0" % [raw_scale, measured_length * 1000.0])
-	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
-	## TRIGGER_TRAVEL esta en metros. Con escala canonica 1.0 es identidad.
-	if trigger != null:
-		_trigger_lever = maxf(_lever(trigger), 0.001)
-	# El recorrido visible se ancla al real, no al hueco de la malla.
-	_slide_travel = SLIDE_TRAVEL / model_scale
-	if barrel != null and muzzle != null and muzzle.get_parent() != barrel:
-		var g := muzzle.global_transform
-		barrel.add_child(muzzle)
-		muzzle.global_transform = g
-	_build_cartridge()
-
-	var missing: Array = []
-	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port], ["Grip", grip], ["Magwell", magwell]]:
+	var missing: Array[String] = []
+	for pair in [["Frame", frame], ["Slide", slide], ["Barrel", barrel], ["Trigger", trigger],
+			["Magazine", magazine], ["Muzzle", muzzle], ["EjectionPort", ejection_port],
+			["SightRear", sight_rear], ["SightFront", sight_front], ["Grip", grip], ["Magwell", magwell]]:
 		if pair[1] == null:
 			missing.append(pair[0])
+	if not missing.is_empty():
+		push_error("GLB de Glock roto: faltan piezas obligatorias " + ", ".join(missing))
+		return false
+	if muzzle.get_parent() != barrel:
+		push_error("GLB de Glock roto: Muzzle debe colgar de Barrel")
+		return false
+	if grip.get_parent() != frame or magwell.get_parent() != frame:
+		push_error("GLB de Glock roto: Grip y Magwell deben colgar de Frame")
+		return false
+	if ejection_port.get_parent() != slide or sight_rear.get_parent() != slide or sight_front.get_parent() != slide:
+		push_error("GLB de Glock roto: puerto y miras deben colgar de Slide")
+		return false
+
+	_slide_rest = slide.position
+	_barrel_rest = barrel.position
+	magazine_rest = magazine.position
+	_magazine_rest_basis = magazine.transform.basis
+	_trigger_rest_basis = trigger.transform.basis
+	_barrel_rest_basis = barrel.transform.basis
+
+	# El GLB canonico llega en metros: Godot solo VALIDA, nunca corrige. Fuera
+	# del contrato es un asset roto y se detiene antes de montar el viewmodel.
+	var measured_length := _model_length(root)
+	if measured_length <= 0.0:
+		push_error("GLB de Glock roto: no contiene geometria medible")
+		return false
+	if absf(measured_length - ASSET_LENGTH_M) > 0.003:
+		push_error("GLB de Glock fuera de contrato: largo %.1f mm, esperado %.1f mm" % [measured_length * 1000.0, ASSET_LENGTH_M * 1000.0])
+		return false
+	model_scale = 1.0
+	scale = Vector3.ONE
+	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
+	## TRIGGER_TRAVEL esta en metros. Con escala canonica 1.0 es identidad.
+	_trigger_lever = _lever(trigger)
+	if _trigger_lever <= 0.0:
+		push_error("GLB de Glock roto: Trigger no tiene brazo de palanca medible")
+		return false
+	# El recorrido visible se ancla al real, no al hueco de la malla.
+	_slide_travel = SLIDE_TRAVEL / model_scale
+	if not _build_cartridge():
+		return false
+
 	print("ARMA Glock 19 escala=", snappedf(model_scale, 0.0001),
 		" largo_modelo_m=", snappedf(measured_length, 0.001),
 		" corredera=", snappedf(SLIDE_TRAVEL * 1000.0, 0.1), "mm",
 		" gatillo=", snappedf(TRIGGER_TRAVEL / _trigger_lever * 57.2958, 0.1), "grados",
-		" sin_pieza=", missing if not missing.is_empty() else "nada")
+		" piezas=Frame/Slide/Barrel/Trigger/Magazine + 6 sockets")
+	return true
 
 
 ## Cartucho 9x19 en la recamara: laton 19,15 mm + punta cobriza. Nace mirando
 ## a la boca (eje Y del cilindro sobre la linea boca-origen del cañon) con el
 ## culote en la cara de culata. Sin slide abierto no se ve; con slide abierto y
 ## `chamber == 0` tampoco: inspeccionar con recamara vacia muestra vacio.
-func _build_cartridge() -> void:
-	if barrel == null or muzzle == null:
-		return
+func _build_cartridge() -> bool:
+	assert(barrel != null and muzzle != null)
 	cartridge = Node3D.new()
 	cartridge.name = "Cartridge"
 	barrel.add_child(cartridge)
@@ -184,19 +192,23 @@ func _build_cartridge() -> void:
 	# inventar un eje en el marco equivocado.
 	var bore: Vector3 = (muzzle.position - Vector3.ZERO)
 	if bore.length() < 0.01:
-		push_warning("Barrel sin eje medible: Muzzle degenerado en el GLB")
-		bore = muzzle_axis
+		push_error("GLB de Glock roto: Muzzle no define un eje de anima medible")
+		return false
 	bore = bore.normalized()
 	var right: Vector3 = bore.cross(Vector3.UP)
 	if right.length() < 0.01:
-		right = Vector3.RIGHT
+		push_error("GLB de Glock roto: el eje del anima no permite construir el cartucho")
+		return false
 	right = right.normalized()
 	cartridge.basis = Basis(right, bore, right.cross(bore))
 	# La recamara se MIDE: el culote va sobre la cara de culata (centroide de
 	# los vertices traseros del canon sobre el eje del anima). El origen del
 	# nodo Barrel no esta garantizado sobre el anima: plantarlo en cero lo
 	# dejaba flotando al lado derecho de la corredera en inspeccion.
-	cartridge.position = _breech_face(barrel, bore)
+	var breech_face = _breech_face(barrel, bore)
+	if breech_face == null:
+		return false
+	cartridge.position = breech_face
 	var brass := StandardMaterial3D.new()
 	brass.albedo_color = Color(0.72, 0.53, 0.18)
 	brass.metallic = 0.9
@@ -228,12 +240,13 @@ func _build_cartridge() -> void:
 	nose_inst.position = Vector3(0.0, 0.01915 + 0.0045, 0.0)
 	cartridge.add_child(nose_inst)
 	cartridge.visible = false
+	return true
 
 
 ## Cara de culata en espacio del Barrel: vertices a <2 mm de la maxima
 ## profundidad trasera, recentrados a <10 mm del primer centroide para que un
 ## resalte (rampa, teton) no tire el eje fuera del anima.
-func _breech_face(part: Node3D, bore: Vector3) -> Vector3:
+func _breech_face(part: Node3D, bore: Vector3) -> Variant:
 	var back := -bore
 	var verts: Array[Vector3] = []
 	var stack: Array = [part]
@@ -256,7 +269,8 @@ func _breech_face(part: Node3D, bore: Vector3) -> Vector3:
 			if c != cartridge:
 				stack.append(c)
 	if verts.is_empty():
-		return Vector3.ZERO
+		push_error("GLB de Glock roto: Barrel no tiene vertices para medir la recamara")
+		return null
 	var deepest := -1e9
 	for v in verts:
 		deepest = maxf(deepest, v.dot(back))
@@ -267,7 +281,8 @@ func _breech_face(part: Node3D, bore: Vector3) -> Vector3:
 			center += v
 			count += 1
 	if count == 0:
-		return Vector3.ZERO
+		push_error("GLB de Glock roto: no se pudo medir la cara de culata")
+		return null
 	center /= float(count)
 	var refined := Vector3.ZERO
 	var n2 := 0
@@ -283,17 +298,16 @@ func _breech_face(part: Node3D, bore: Vector3) -> Vector3:
 ## El cartucho se ve solo con puerto abierto y recamara cargada. Lo decide
 ## Glock.gd cada frame junto a la corredera.
 func set_chamber_visible(v: bool) -> void:
-	if cartridge != null:
-		cartridge.visible = v
+	assert(cartridge != null, "Glock requiere cartucho construido")
+	cartridge.visible = v
 
 
 ## Pivote del cabeceo en unidades del WeaponSocket: el Grip MEDIDO en el GLB.
-## Sin el nodo, aproximacion calibrada (pendiente de nada: el GLB lo trae).
+## El nodo es obligatorio; no hay pivote calibrado de reserva.
 func grip_pivot() -> Vector3:
-	if grip != null:
-		var p_model: Vector3 = global_transform.affine_inverse() * grip.global_position
-		return p_model * model_scale
-	return Vector3(0.0, -0.055, 0.025)
+	assert(grip != null, "Glock requiere Grip para definir el pivote")
+	var p_model: Vector3 = global_transform.affine_inverse() * grip.global_position
+	return p_model * model_scale
 
 
 func _find_child(root: Node, node_name: String) -> Node3D:
@@ -336,18 +350,16 @@ func _mesh_aabb(root: Node) -> AABB:
 ## Corredera: 0 = cerrada, 1 = atras del todo. UNICA autoridad: Glock.gd.
 ## El sentido lo da MUZZLE_AXIS: la corredera retrocede al reves de la boca.
 func set_slide(t: float) -> void:
-	if slide == null:
-		return
+	assert(slide != null, "Glock requiere Slide")
 	var amount := clampf(t, 0.0, 1.0)
 	slide.position = _slide_rest - muzzle_axis * (_slide_travel * amount)
 	## Cañon Glock: retrocede JUNTO a la corredera ~4 mm, luego se detiene y cae.
 	## Muzzle cuelga de Barrel, asi que el fogonazo no viaja con la corredera.
-	if barrel != null:
-		var slide_m := SLIDE_TRAVEL * amount
-		var joint_m := minf(slide_m, BARREL_LOCK_TRAVEL)
-		barrel.position = _barrel_rest - muzzle_axis * (joint_m / maxf(model_scale, 0.0001))
-		var unlock := clampf((slide_m - BARREL_LOCK_TRAVEL) / maxf(SLIDE_TRAVEL - BARREL_LOCK_TRAVEL, 0.0001), 0.0, 1.0)
-		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * unlock)) * _barrel_rest_basis
+	var slide_m := SLIDE_TRAVEL * amount
+	var joint_m := minf(slide_m, BARREL_LOCK_TRAVEL)
+	barrel.position = _barrel_rest - muzzle_axis * (joint_m / model_scale)
+	var unlock := clampf((slide_m - BARREL_LOCK_TRAVEL) / (SLIDE_TRAVEL - BARREL_LOCK_TRAVEL), 0.0, 1.0)
+	barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * unlock)) * _barrel_rest_basis
 
 
 ## Brazo de palanca del gatillo EN METROS DE MUNDO: distancia PERPENDICULAR al
@@ -378,11 +390,9 @@ func _lever(part: Node3D) -> float:
 ## Gatillo: 0 = suelto, 1 = a fondo. UNICA autoridad: Glock.gd.
 ## Gira sobre el pasador, que es el ORIGEN de la pieza: por eso el giro se
 ## aplica sobre la base del padre y no sobre la de la pieza.
-## Si el modelo no trae el gatillo como pieza suelta no hay nada que mover, y el
-## arma sigue funcionando igual.
+## El GLB canónico siempre trae Trigger; si falta, `build()` detiene el arma.
 func set_trigger(t: float) -> void:
-	if trigger == null:
-		return
+	assert(trigger != null, "Glock requiere Trigger")
 	var angle := -(TRIGGER_TRAVEL / _trigger_lever) * clampf(t, 0.0, 1.0)
 	trigger.transform.basis = Basis(Quaternion(SIDE_AXIS, angle)) * _trigger_rest_basis
 
@@ -392,23 +402,21 @@ func set_trigger(t: float) -> void:
 ## coreografia de la recarga. Aqui solo se convierte a unidades del modelo: el
 ## cargador entra y sale por MAGAZINE_OUT_AXIS, que es el del modelo.
 func set_magazine_offset(offset_m: float) -> void:
-	if magazine == null:
-		return
-	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * (offset_m / maxf(model_scale, 0.0001))
+	assert(magazine != null, "Glock requiere Magazine")
+	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * (offset_m / model_scale)
 
 
 ## Tumba del cargador (radianes sobre el eje lateral del arma): el vacio cae
 ## girando, el lleno entra inclinado y se endereza. UNICA autoridad: Glock.gd.
 func set_magazine_tumble(angle: float) -> void:
-	if magazine == null:
-		return
+	assert(magazine != null, "Glock requiere Magazine")
 	magazine.transform.basis = Basis(Quaternion(SIDE_AXIS, angle)) * _magazine_rest_basis
 
 
 ## Cargador: dentro del arma o fuera. UNICA autoridad: Glock.gd.
 func set_magazine_attached(attached: bool) -> void:
-	if magazine != null:
-		magazine.visible = attached
+	assert(magazine != null, "Glock requiere Magazine")
+	magazine.visible = attached
 
 
 ## Eje por el que el cargador sale del arma, en espacio del arma. CALIBRADO

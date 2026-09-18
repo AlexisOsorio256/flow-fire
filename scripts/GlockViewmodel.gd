@@ -1,7 +1,8 @@
 class_name GlockViewmodel
 extends Node3D
 
-## VIEWMODEL: la pistola montada y la pose de camara. Sin brazos.
+## VIEWMODEL: la pistola montada y la pose de camara. La mano es una capa de
+## presentacion horneada; no participa en la mecanica.
 ##
 ## NO decide gameplay. Recibe el estado ya decidido por `Glock.gd` y lo
 ## representa.
@@ -11,9 +12,10 @@ extends Node3D
 ##   Viewmodel
 ##   └── PoseRoot          cadera / ADS / sprint / bob / sway / respiracion
 ##       └── BodyGive      cesion lenta del conjunto (GlockRecoil.give_*)
-##           └── WeaponGrip    el arma dentro del pivote (GRIP_POS / GRIP_ROT)
+##           ├── RightHand    mesh unico, 0 huesos, pose fija
+##           └── WeaponGrip  el arma dentro del pivote (GRIP_POS / GRIP_ROT)
 ##               └── WeaponSocket   retroceso: UNICA transformacion del arma
-##                   └── Weapon -> Frame / Slide / Magazine / Muzzle / ...
+##                   └── Weapon -> Frame / Slide / Barrel / Magazine / ...
 ##
 ## AUTORIDAD (una sola por cosa; nada de dos capas sobre el mismo transform)
 ##
@@ -21,11 +23,9 @@ extends Node3D
 ##   Corredera, gatillo y cargador .. Glock.gd -> GlockWeapon
 ##   Camara ......................... Player.gd (aqui no se toca)
 ##
-## LOS BRAZOS NO ESTAN EN PRODUCCION. El asset de brazos (13,4 MB, 78 huesos y
-## cinco clips que habia que remedir cada vez) esta congelado fuera del arbol:
-## la pistola flota montada en el pivote y sigue siendo el hero asset. Cuando el
-## arma este cerrada entraran unos brazos limpios como capa de presentacion, no
-## como columna de la mecanica. Git conserva el asset y su podado.
+## Solo entra la mano derecha provisional: 1 malla, 1 material, sin esqueleto ni
+## clips. El arma sigue siendo el hero asset y la mano no escribe transforms de
+## ninguna pieza.
 ##
 ## EL ARMA NO ESTA EN NINGUN ESQUELETO, ni se busca dentro de uno: `GlockWeapon`
 ## es un arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS
@@ -39,6 +39,7 @@ extends Node3D
 ## viene recentrado y el encuadre se calibra moviendo el pivote. Radianes.
 const GRIP_POS := Vector3(0.010168, -0.114451, 0.095923)
 const GRIP_ROT := Vector3(0.086880, 0.039442, -0.020152)
+const HAND_MODEL := "res://assets/models/right_hand.glb"
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
 ## CALIBRADO con la pistola en metros reales: la distancia al ojo es la de un
@@ -69,6 +70,7 @@ var pose_root: Node3D
 var body_give: Node3D
 var weapon_grip: Node3D
 var weapon_socket: Node3D
+var right_hand: Node3D
 
 # --- arma ------------------------------------------------------------------
 var weapon: GlockWeapon
@@ -115,22 +117,58 @@ func _ready() -> void:
 	_build_viewmodel_light()
 
 
-## Monta el arma en el pivote. Sin brazos: la pistola es todo el viewmodel.
-func mount() -> void:
+## Monta la mano y el arma en el mismo espacio de Grip. Ninguno de los dos
+## assets contiene animacion: el WeaponSocket es el unico que mueve la Glock
+## entera durante el recoil.
+func mount() -> bool:
 	weapon = GlockWeapon.new()
 	weapon.name = "Weapon"
 	weapon_socket.add_child(weapon)
-	weapon.build()
-	if weapon.frame == null:
+	if not weapon.build():
+		push_error("Viewmodel detenido: el GLB canonico de Glock no monto")
+		weapon.queue_free()
 		weapon = null
-		return
+		return false
+	var hand_scene := load(HAND_MODEL) as PackedScene
+	if hand_scene == null:
+		push_error("Falta el asset obligatorio de mano derecha: " + HAND_MODEL)
+		weapon.queue_free()
+		weapon = null
+		return false
+	right_hand = hand_scene.instantiate()
+	right_hand.name = "RightHand"
+	body_give.add_child(right_hand)
+	body_give.move_child(right_hand, 0)
+	_apply_hand_material(right_hand)
+	right_hand.position = GRIP_POS
+	right_hand.rotation = GRIP_ROT
 	weapon_grip.position = GRIP_POS
 	weapon_grip.rotation = GRIP_ROT
 	muzzle = weapon.muzzle
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
+	_apply_viewmodel_layer(right_hand)
 	if recoil != null:
 		recoil.set_pivot(weapon.grip_pivot())
+	return true
+
+
+func _apply_hand_material(root_node: Node) -> void:
+	# El GLB conserva un único material; este override fija su respuesta mate
+	# bajo los Omni del rango para que la mano siga siendo secundaria y no se
+	# queme como una superficie blanca en la capa de viewmodel.
+	var glove := StandardMaterial3D.new()
+	glove.albedo_color = Color(0.004, 0.006, 0.008)
+	glove.metallic = 0.0
+	glove.roughness = 0.94
+	glove.metallic_specular = 0.12
+	var stack: Array = [root_node]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is GeometryInstance3D:
+			(node as GeometryInstance3D).material_override = glove
+		for child in node.get_children():
+			stack.append(child)
 
 
 ## Cargador fuera del brocal, en metros (0 asentado). Lo decide Glock.gd.
@@ -170,7 +208,7 @@ func _build_viewmodel_light() -> void:
 	var key := OmniLight3D.new()
 	key.name = "ViewmodelKey"
 	key.light_color = Color(0.94, 0.96, 1.0)
-	key.light_energy = 2.0
+	key.light_energy = 0.42
 	key.omni_range = 1.5
 	key.omni_attenuation = 1.35
 	key.shadow_enabled = false
@@ -181,7 +219,7 @@ func _build_viewmodel_light() -> void:
 	var fill := OmniLight3D.new()
 	fill.name = "ViewmodelFill"
 	fill.light_color = Color(0.95, 0.97, 1.0)
-	fill.light_energy = 1.4
+	fill.light_energy = 0.22
 	fill.omni_range = 1.3
 	fill.omni_attenuation = 1.2
 	fill.shadow_enabled = false

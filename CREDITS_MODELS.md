@@ -16,8 +16,8 @@
   (http://creativecommons.org/licenses/by/4.0/)*
 - El archivo del autor trae la pistola **dos veces dentro de una sola malla**:
   una copia armada y otra despiezada, más un cargador de repuesto suelto y tres
-  piezas flotantes que son parte del expositor. `tools/build_g19_parts.py`, en un
-  solo paso de Blender, se queda con la copia armada, la reparte por islas de
+  piezas flotantes que son parte del expositor. La herramienta histórica
+  `tools/build_g19_parts.py`, en un solo paso de Blender, se quedó con la copia armada, la reparte por islas de
   malla, recorta el gatillo del armazón, reasienta los orígenes (el gatillo
   sobre su pasador, el cargador sobre el brocal, el cañón sobre la recámara),
   endereza el arma al convenio del motor (morro a -Z, arriba +Y, cargador
@@ -32,18 +32,31 @@
   dentro del GLB y el runtime solo los lee (Muzzle bajo Barrel).
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
   `Barrel`— sin esqueleto y sin animaciones.
-- GLB canonicalizado (2026-09-18, Blender headless desde el propio GLB):
+- GLB canonicalizado (2026-09-18, Blender headless desde el propio GLB; la
+  herramienta de canonicalización se conserva sólo en la historia):
   arma recentrada (fuera la herencia -19,8 mm en X), `Muzzle` en el centroide
   de la corona del cañón (1,3 mm, lo mide `tools/check_weapon.gd`) colgando de
   `Barrel`, miras sobre la corredera (146,3 mm), `Grip` en el centroide de la
   empuñadura y `Magwell` en la boca del cargador. El arma compensa el
   recentrado moviendo el pivote (`GRIP_POS.x`); el ADS se resuelve solo desde
-  las miras. `tools/build_g19_parts.py` cumplió y se retiró al historial de
-  Git (el GLB es la fuente canónica).
+  las miras. `tools/build_g19_parts.py` cumplió y se retiró al historial de Git
+  (el GLB es la fuente canónica).
 - Importador en extraccion (`embedded_image_handling=1`): el modo embebido
   BasisU lee el ORM como sRGB y la corredera sale cromada bajo los focos; en
   extraccion el metal sale satinado como el autor. Los `*_Image_*.png` son
   derivados ignorados que el importador regenera, no otra representacion. Ajustes de importacion de esas texturas (disco, los regenera el importador): VRAM + mipmaps en las cuatro; `Image_6` (normal) marcada como normal map.
+
+## RangeShell y mano derecha — geometria original de FlowFire
+
+- `assets/models/range_shell.glb`: carcasa estatica del rango, con suelo, muros,
+  columnas, vigas, separadores de lane, luminarias, rodapies, marcaciones de
+  distancia y bullet trap visual. Reutiliza y embebe texturas CC0 de
+  `CREDITS_TEXTURES.md`; no contiene latas, drywall, cajas, blancos ni metadata
+  balistica. Sus colisiones funcionales viven en `scenes/RangeShell.tscn`.
+- `assets/models/right_hand.glb`: mano derecha provisional original, horneada en
+  la coordenada del socket `Grip`. Es una sola malla de 4.224 triangulos, un
+  material, cero huesos y cero animaciones. `tools/build_range_assets.py` es su
+  fuente reproducible; no sustituye la Glock ni escribe su mecanica.
 
 ## Fuera del repo
 

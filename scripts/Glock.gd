@@ -158,7 +158,11 @@ func _ready() -> void:
 	viewmodel.name = "Viewmodel"
 	viewmodel.recoil = recoil
 	add_child(viewmodel)
-	viewmodel.mount()
+	if not viewmodel.mount():
+		push_error("Glock no puede arrancar sin sus assets canonicos")
+		process_mode = Node.PROCESS_MODE_DISABLED
+		get_tree().quit(1)
+		return
 	if viewmodel.weapon != null:
 		MAG_SIZE = viewmodel.weapon.capacity
 		_travel = viewmodel.weapon.slide_offset
@@ -327,10 +331,8 @@ func _fire() -> void:
 
 func _apply_dispersion(bore: Vector3) -> Vector3:
 	var side := bore.cross(Vector3.UP)
-	if side.length() < 0.001:
-		side = Vector3.RIGHT
-	else:
-		side = side.normalized()
+	assert(side.length() >= 0.001, "El anima de la Glock no puede ser paralelo a UP")
+	side = side.normalized()
 	var up := side.cross(bore).normalized()
 	var cone := side * randfn(0.0, SHOT_DISPERSION_SIGMA) + up * randfn(0.0, SHOT_DISPERSION_SIGMA)
 	return (bore + cone).normalized()

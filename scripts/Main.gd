@@ -3,6 +3,7 @@ extends Node3D
 const WORLD_SCRIPT := preload("res://scripts/World.gd")
 const PLAYER_SCRIPT := preload("res://scripts/Player.gd")
 const HUD_SCRIPT := preload("res://scripts/HUD.gd")
+const RANGE_SHELL_SCENE := preload("res://scenes/RangeShell.tscn")
 
 var world: Node3D
 var player: CharacterBody3D
@@ -13,6 +14,7 @@ var environment_node: WorldEnvironment
 func _ready() -> void:
     randomize()
     _setup_environment()
+    _build_range_shell()
     _build_world()
     _build_player()
     _build_hud()
@@ -75,6 +77,12 @@ func _build_world() -> void:
     world.name = "World"
     add_child(world)
     world.build()
+
+
+func _build_range_shell() -> void:
+    var shell := RANGE_SHELL_SCENE.instantiate()
+    shell.name = "RangeShell"
+    add_child(shell)
 
 
 func _build_player() -> void:
