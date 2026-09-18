@@ -147,6 +147,9 @@ func _process(_delta: float) -> void:
 	if _frame == warmup - 4 and (action == "pen" or action == "crate" or action == "steel" or action == "can" or action == "wall"):
 		var player := _game.get_node_or_null("Player")
 		if player != null:
+			# Defaults: cada rama los pisa si necesita otro encuadre.
+			player.set("yaw", 0.0)
+			player.set("yaw_target", 0.0)
 			if action == "wall":
 				# Delante del tabique de x=8.6 (z=-18): a 2 m, al centro del
 				# panel (2,6 x 2,4 m: no hay como fallar).
@@ -161,13 +164,14 @@ func _process(_delta: float) -> void:
 				(player as Node3D).global_position = Vector3(0.0, 0.05, -24.0)
 			elif action == "can":
 				# A 4 m de las latas del suelo (x=-1.6/-1.4, z=-13.6): las
-				# miras van a la chapa y el encuadre respira (a 2 m habia que
-				# picar 33 grados y la mira tapaba la lata).
+				# miras van a la chapa de x=-1.4 (medido: a yaw 0.0/0.05 las
+				# dos fallan, a 0.075 la lata vuela 3,4 m; 0.025 la centra).
+				# La de x=-1.6 queda de testigo.
 				(player as Node3D).global_position = Vector3(-1.3, 0.05, -9.6)
 				player.set("pitch", -0.37)
 				player.set("pitch_target", -0.37)
-				player.set("yaw", 0.05)
-				player.set("yaw_target", 0.05)
+				player.set("yaw", 0.025)
+				player.set("yaw_target", 0.025)
 			else:
 				# Ligeramente a un lado de las cajas: se ven junto al arma y
 				# el tiro les da de lleno (centradas quedarian tras el arma).
@@ -176,8 +180,6 @@ func _process(_delta: float) -> void:
 				# las cajas si no se apunta hacia abajo, como haria un tirador.
 				player.set("pitch", -0.12)
 				player.set("pitch_target", -0.12)
-			player.set("yaw", 0.0)
-			player.set("yaw_target", 0.0)
 	if _frame == warmup:
 		_trigger()
 	if _frame >= warmup and (_frame - warmup) < total:
