@@ -36,7 +36,6 @@ func _ready() -> void:
         plate_width = 0.66
         set_meta("surface", "paper")
         set_meta("penetrable", true)
-        set_meta("penetration_resistance", Ballistics.MATERIALS["paper"])
     else:
         plate_height = 0.62
         plate_width = 0.62
@@ -85,12 +84,3 @@ func _build_visuals() -> void:
         collider.shape = shape
         collider.rotation_degrees = Vector3(90, 0, 0)
         add_child(collider)
-
-
-## El aviso del impacto lo ponen Ballistics (impulso a Jolt) e ImpactFX
-## (agujero + particulas + sonido): el papel no se enciende al recibir.
-## Aqui no hay fisica propia ni torques aleatorios.
-func take_bullet_hit(_point: Vector3, _normal: Vector3, _speed: float, _energy: float, _direction := Vector3.ZERO) -> void:
-    pass
-func bullet_flash() -> void:
-    pass

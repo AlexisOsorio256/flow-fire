@@ -19,12 +19,3 @@ func _ready() -> void:
     # Caja HUECA de 6 paneles: cascara fina de 12 mm, dos paredes por tiro.
     set_meta("thin_shell", true)
     set_meta("wall_thickness", 0.012)
-    # Pino en paneles de 12 mm: la 9 mm pasa dos paredes sin frenarse.
-    set_meta("penetration_resistance", Ballistics.MATERIALS["pine"])
-
-
-## Fisica centralizada en Ballistics (delta-p). Aqui solo material/geometria.
-func take_bullet_hit(_point: Vector3, _normal: Vector3, _speed: float, _energy: float, _direction := Vector3.ZERO) -> void:
-    pass
-func bullet_flash() -> void:
-    pass

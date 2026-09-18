@@ -42,7 +42,7 @@ const MAX_HOLES := 128
 const HOLES_PER_SURFACE := 8
 const HOLE_SIZE := {
     "concrete": 0.070,
-    "drywall": 0.064,
+    "gypsum": 0.064,
     "wood": 0.064,
     "metal": 0.048,
     "aluminum": 0.042,
@@ -53,7 +53,7 @@ const HOLE_SIZE := {
 ## silueta: el `Decal` va con `modulate` blanco para no gastar dos decales.
 const CAVITY_TINT := {
     "concrete": Color(0.024, 0.024, 0.022),
-    "drywall": Color(0.085, 0.080, 0.072),
+    "gypsum": Color(0.085, 0.080, 0.072),
     "wood": Color(0.050, 0.031, 0.015),
     "metal": Color(0.055, 0.058, 0.064),
     "aluminum": Color(0.62, 0.63, 0.65),
@@ -61,7 +61,7 @@ const CAVITY_TINT := {
 }
 const LIP_TINT := {
     "concrete": Color(0.38, 0.37, 0.34),
-    "drywall": Color(0.74, 0.71, 0.65),
+    "gypsum": Color(0.74, 0.71, 0.65),
     "wood": Color(0.46, 0.30, 0.14),
     "metal": Color(0.32, 0.33, 0.36),
     "aluminum": Color(0.78, 0.79, 0.81),
@@ -103,28 +103,31 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
     if is_exit:
         return
 
-    var sound_name := "impact_concrete"
+    var sound_name := ""
     var volume := 0.0
     var pitch := randf_range(0.92, 1.08)
     match surface:
+        "concrete":
+            sound_name = "impact_concrete"
         "metal":
             sound_name = "impact_metal"
         "aluminum":
             # Chapa fina de 0,12 mm, no bloque: menos cuerpo (-6 dB) y resonancia
-            # mas aguda que el acero. Misma muestra, otro registro.
-            sound_name = "impact_metal"
-            volume = -6.0
-            pitch = randf_range(1.25, 1.45)
+            # mas aguda que el acero. Tiene su propio master, no un pitch hack.
+            sound_name = "impact_aluminum"
+            volume = 0.0
+            pitch = randf_range(0.96, 1.08)
         "wood":
             sound_name = "impact_wood"
         "paper":
             sound_name = "impact_wood"
             volume = -10.0
-        "drywall":
+        "gypsum":
             sound_name = "impact_drywall"
             volume = -5.0
         _:
-            sound_name = "impact_concrete"
+            push_error("ImpactFX sin perfil de audio para material: " + surface)
+            return
     GameAudio.play_3d(sound_name, point, volume, pitch)
 
 
@@ -161,14 +164,20 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
 ## y el labio de material roto en la misma silueta. El que proyecta es Godot;
 ## aqui solo se eligen tamano y colocacion de la caja de proyeccion.
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
-    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
-    var size := float(HOLE_SIZE.get(surface, 0.030))
+    if not IMPACT_MATERIALS.has(surface) or not HOLE_SIZE.has(surface) \
+            or not CAVITY_TINT.has(surface) or not LIP_TINT.has(surface) \
+            or not _masks.has(surface):
+        push_error("ImpactFX sin perfil completo para material: " + surface)
+        return
+    var profile: Dictionary = IMPACT_MATERIALS[surface]
+    var size := float(HOLE_SIZE[surface])
     if is_exit:
         size *= float(profile.get("exit_scale", 1.35))
 
     var n := normal.normalized()
     if n.length_squared() < 0.01:
-        n = Vector3.UP
+        push_error("ImpactFX recibio una normal invalida para " + surface)
+        return
 
     var holder := Node3D.new()
     holder.name = "BulletExit" if is_exit else "BulletEntry"
@@ -180,7 +189,7 @@ func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: St
     holder.global_transform = Transform3D(basis,
         point - n * (DECAL_DEPTH * 0.5 - PROJECTION_MARGIN))
 
-    _add_decal(holder, _masks.get(surface, _masks["concrete"]), size)
+    _add_decal(holder, _masks[surface], size)
 
     if collider is Node3D and collider.get_meta("dynamic_decal", false):
         holder.reparent(collider, true)
@@ -244,8 +253,8 @@ func _decal_basis(n: Vector3) -> Basis:
 ## canto y el color de cada zona ya cocido (el decal va sin `modulate`). Un solo
 ## decal por agujero porque el motor solo proyecta ocho por malla.
 func _make_hole_texture(surface: String) -> ImageTexture:
-    var cavity: Color = CAVITY_TINT.get(surface, CAVITY_TINT["concrete"])
-    var lip: Color = LIP_TINT.get(surface, LIP_TINT["concrete"])
+    var cavity: Color = CAVITY_TINT[surface]
+    var lip: Color = LIP_TINT[surface]
     var img := Image.create(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8)
     for y in range(MASK_SIZE):
         for x in range(MASK_SIZE):
@@ -308,7 +317,7 @@ const IMPACT_MATERIALS := {
         "exit_scale": 1.25,
         "crater": 0.0045,
     },
-    "drywall": {
+    "gypsum": {
         "dust": {"amount": 18, "color": Color(0.78, 0.76, 0.71, 0.52), "vel": [0.5, 2.0], "gravity": -1.4, "scale": [1.0, 3.6], "life": 1.05, "size": 0.070, "spread": 74.0},
         "debris": {"amount": 4, "color": Color(0.72, 0.70, 0.64, 0.90), "vel": [1.8, 4.4], "gravity": -8.0, "scale": [0.30, 0.80], "life": 0.60, "size": 0.026, "spread": 66.0},
         "exit_scale": 1.80,
@@ -341,14 +350,17 @@ const IMPACT_MATERIALS := {
 
 
 func _spawn_particles(point: Vector3, normal: Vector3, surface: String, is_exit: bool) -> void:
-    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
+    if not IMPACT_MATERIALS.has(surface):
+        push_error("ImpactFX sin perfil de particulas para material: " + surface)
+        return
+    var profile: Dictionary = IMPACT_MATERIALS[surface]
     var n := normal.normalized()
     var strength := 1.0
     if is_exit:
         # La salida no es "la entrada al 55%". Madera/yeso arrancan material
         # hacia fuera; hormigon/papel pierden menos masa visible.
         match surface:
-            "drywall":
+            "gypsum":
                 strength = 1.35
             "wood":
                 strength = 1.15

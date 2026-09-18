@@ -20,7 +20,6 @@ const GRAVITY := 9.81
 const MAX_DISTANCE := 520.0
 const COLLISION_MASK := 1
 const PENETRATION_EPSILON := 0.0015
-const PENETRATION_SEARCH_DISTANCE := 4.0
 ## Velocidad mínima para EMERGER con carácter de proyectil y no de gravilla.
 ## CALIBRADO: por debajo, la bala se queda dentro del material.
 const EXIT_SPEED_MIN := 75.0
@@ -108,22 +107,30 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         return
 
     var point: Vector3 = hit.position
+    var collider: Object = hit.collider
     var normal: Vector3 = hit.normal.normalized()
     if normal.length_squared() < 0.5:
-        normal = -dir
-    var collider: Object = hit.collider
+        push_error("Colision balistica sin normal valida: " + str(collider))
+        b.active = false
+        return
     b.distance += point.distance_to(b.pos)
-    var surface := "concrete"
+    var surface := ""
     var penetrable := false
-    var penetration_resistance := 0.0
     var thin_shell := false
     var wall_thickness := 0.0
     if collider is Node:
-        surface = str(collider.get_meta("surface", "concrete"))
+        surface = str(collider.get_meta("surface", ""))
         penetrable = bool(collider.get_meta("penetrable", false))
-        penetration_resistance = float(collider.get_meta("penetration_resistance", 0.0))
         thin_shell = bool(collider.get_meta("thin_shell", false))
         wall_thickness = float(collider.get_meta("wall_thickness", 0.0))
+    var p_in: float = PROJECTILE_MASS * speed
+    if not MATERIALS.has(surface):
+        push_error("Colision balistica sin material de Ballistics.MATERIALS: " + str(collider))
+        _push_body(collider, point, dir, p_in)
+        b.active = false
+        return
+    var penetration_resistance: float = MATERIALS[surface]
+    var hit_shape := int(hit.get("shape", -1))
     # Un cuerpo, un cobro: la separacion de salida (1,5 mm) puede caer dentro
     # del slack de contacto de Jolt y el rayo repisa el mismo cuerpo en el
     # subpaso siguiente (medido: 5 cobros en una lata = 4,7x momento). El
@@ -134,17 +141,17 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         body_id = (collider as Node).get_instance_id()
         already_charged = (b.charged as Array).has(body_id)
 
-    var p_in: float = PROJECTILE_MASS * speed
     if penetrable:
-        if penetration_resistance <= 0.0:
-            push_warning("Penetrable sin penetration_resistance: " + str(collider))
-            if not already_charged:
-                ImpactFX.spawn_impact(point, normal, collider, surface, false)
-                _push_body(collider, point, dir, p_in)
-            b.active = false
-            return
-        var exit := _find_exit_geometry(point, dir, collider)
+        var exit := _find_exit_geometry(point, dir, collider, hit_shape)
         if exit.is_empty():
+            if already_charged:
+                # Jolt puede devolver una segunda intersección con el mismo
+                # cuerpo dentro del slack numérico de la cara de salida. Ya
+                # se cobró el delta-p; sólo salimos del contacto y dejamos que
+                # el siguiente paso busque la geometría que haya detrás.
+                b.pos = point + dir * PENETRATION_EPSILON
+                b.distance += PENETRATION_EPSILON
+                return
             if not already_charged:
                 ImpactFX.spawn_impact(point, normal, collider, surface, false)
                 _push_body(collider, point, dir, p_in)
@@ -241,54 +248,49 @@ func _try_ricochet(b: Dictionary, point: Vector3, normal: Vector3, surface: Stri
 
 
 ## UNICA autoridad de momento balistico: delta-p (p_in - p_out) a Jolt.
-## Los blancos/cajas solo declaran masa/material/geometria y un flash visual;
-## nada de torques aleatorios (el impulso fuera del centro ya gira solo).
+## Los blancos/cajas solo declaran masa/material/geometria; nada de torques
+## aleatorios ni callbacks fantasma (el impulso fuera del centro ya gira solo).
 func _push_body(collider: Object, point: Vector3, dir: Vector3, impulse: float) -> void:
     if not collider is RigidBody3D:
-        if collider is Node and (collider as Node).has_method("bullet_flash"):
-            (collider as Node).call("bullet_flash")
         return
     var body := collider as RigidBody3D
     if impulse <= 0.0:
         return
     body.apply_impulse(dir.normalized() * impulse, point - body.global_position)
-    if (collider as Node).has_method("bullet_flash"):
-        (collider as Node).call("bullet_flash")
 
 
 ## Busca la cara de salida en la geometria de la forma de colision. Cada forma se
 ## transforma al espacio local y se resuelve la salida real; no se usa grosor de
 ## metadata para fabricar un punto.
-func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object) -> Dictionary:
+func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object, hit_shape := -1) -> Dictionary:
     if not collider is CollisionObject3D:
         return {}
-    var hollow := bool((collider as CollisionObject3D).get_meta("thin_shell", false))
     var body := collider as CollisionObject3D
-    var best := {}
-    var best_distance := -1.0 if hollow else PENETRATION_SEARCH_DISTANCE
+    var shape_id := 0
     for owner_id in body.get_shape_owners():
         var shape_transform: Transform3D = body.global_transform * body.shape_owner_get_transform(owner_id)
         for shape_index in range(body.shape_owner_get_shape_count(owner_id)):
+            if hit_shape >= 0 and shape_id != hit_shape:
+                shape_id += 1
+                continue
             var shape := body.shape_owner_get_shape(owner_id, shape_index)
-            var hit := _exit_of_shape(shape, shape_transform, entry, direction, hollow)
+            var hit := _exit_of_shape(shape, shape_transform, entry, direction)
+            shape_id += 1
             if hit.is_empty():
                 continue
             var distance: float = hit["distance"]
             if distance <= PENETRATION_EPSILON:
                 continue
-            if (hollow and distance <= best_distance) or (not hollow and distance >= best_distance):
-                continue
-            best = hit
-            best_distance = distance
-    return best
+            return hit
+    return {}
 
 
-func _exit_of_shape(shape: Shape3D, shape_transform: Transform3D, entry: Vector3, direction: Vector3, hollow := false) -> Dictionary:
+func _exit_of_shape(shape: Shape3D, shape_transform: Transform3D, entry: Vector3, direction: Vector3) -> Dictionary:
     var inv := shape_transform.affine_inverse()
     var local_entry := inv * entry
     var local_direction := (inv * (entry + direction)) - local_entry
     if shape is BoxShape3D:
-        return _exit_box(shape as BoxShape3D, shape_transform, entry, local_entry, local_direction, hollow)
+        return _exit_box(shape as BoxShape3D, shape_transform, entry, local_entry, local_direction)
     if shape is CylinderShape3D:
         return _exit_cylinder(shape as CylinderShape3D, shape_transform, entry, local_entry, local_direction)
     if shape is SphereShape3D:
@@ -310,7 +312,7 @@ func _exit_point(shape_transform: Transform3D, entry: Vector3, local_entry: Vect
 
 
 func _exit_box(box: BoxShape3D, shape_transform: Transform3D, entry: Vector3,
-        local_entry: Vector3, local_direction: Vector3, hollow := false) -> Dictionary:
+        local_entry: Vector3, local_direction: Vector3) -> Dictionary:
     var half := box.size * 0.5
     var t_near := -INF
     var t_far := INF
@@ -327,7 +329,7 @@ func _exit_box(box: BoxShape3D, shape_transform: Transform3D, entry: Vector3,
         t_far = minf(t_far, maxf(t1, t2))
     if t_far <= PENETRATION_EPSILON or t_far <= t_near:
         return {}
-    if not hollow and t_near > PENETRATION_EPSILON * 4.0:
+    if t_near > PENETRATION_EPSILON * 4.0:
         return {}
     var local_exit := local_entry + local_direction * t_far
     var exit_axis := 0
@@ -420,8 +422,7 @@ func _passes_near_player(b: Dictionary) -> bool:
 
 func _listener_position() -> Vector3:
     var viewport := get_viewport()
-    if viewport != null:
-        var cam := viewport.get_camera_3d()
-        if cam != null:
-            return cam.global_position
-    return Vector3.ZERO
+    assert(viewport != null, "Ballistics necesita un viewport")
+    var cam := viewport.get_camera_3d()
+    assert(cam != null, "Ballistics necesita la camara del jugador")
+    return cam.global_position
