@@ -106,7 +106,7 @@ nunca como columna de la mecánica.
 
 | Petición | Un solo sitio |
 |---|---|
-| "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, 3 constantes juntas |
+| "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, `RECOIL_*_VEL` (rad/s y m/s verdaderos) |
 | "el arma está mal encuadrada" | `GRIP_POS` / `GRIP_ROT` en `GlockViewmodel.gd` |
 | "la corredera no llega / recorre de más" | `SLIDE_TRAVEL` en `GlockWeapon.gd` |
 | "el cargador sale por donde no debe" | `MAGAZINE_OUT_AXIS` / `MAG_TRAVEL` en `GlockWeapon.gd` |
