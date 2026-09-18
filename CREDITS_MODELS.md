@@ -1,25 +1,32 @@
 # Créditos de modelos 3D
 
-## 9mm Pistol — Urpo (EL ARMA)
+## G19 Pistol, Game Ready — Rotuma (EL ARMA)
 
-- Archivo: `assets/models/glock_urpo.glb` (15,9 MB). El GLB lleva sus diez
-  texturas embebidas: es la única representación del arma en el repo.
+- Archivo: `assets/models/g19_pistol.glb` (10,5 MB). Lleva sus texturas
+  embebidas (2048² del arma, 512² de la bala): es la única representación del
+  arma en el repo.
 - Fuente: Sketchfab —
-  https://sketchfab.com/3d-models/9mm-pistol-30222f9a59104426ba526a6b20cd7532
-- Autor: **Urpo** — https://sketchfab.com/Urpo
-- Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
-  Atribución: *"9mm Pistol" by Urpo, licensed under CC-BY 4.0, via Sketchfab*.
-- Transformación, en dos pasos de Blender:
-  1. `tools/make_weapon_parts.py` da a cada pieza su propio origen y añade los
-     puntos medidos sobre la malla (`Muzzle`, `EjectionPort`, `SightRear`,
-     `SightFront`).
-  2. `tools/split_glock_parts.py` parte el nodo `Magazine` del autor, que traía
-     mezclados el cargador, el gatillo, el muelle recuperador y los herrajes del
-     armazón, y **modela el cañón** (102 mm, eje en la línea de la boca, origen
-     en la cara de culata) que el original no traía. El cañón es geometría nueva
-     de este proyecto; el resto sigue siendo la malla de Urpo.
+  https://sketchfab.com/3d-models/g19-pistol-game-ready-free-version-e3412d9803f04bdaa97ad9b68ed665d7
+- Autor: **Rotuma** (Nathan Nilsen) — https://sketchfab.com/Rotuma
+- Licencia: **CC-BY 4.0**, la que trae el `license.txt` del propio autor.
+  Atribución literal:
+  *This work is based on "G19 Pistol, Game Ready, Free version"
+  (https://sketchfab.com/3d-models/g19-pistol-game-ready-free-version-e3412d9803f04bdaa97ad9b68ed665d7)
+  by Rotuma (https://sketchfab.com/Rotuma) licensed under CC-BY-4.0
+  (http://creativecommons.org/licenses/by/4.0/)*
+- El archivo del autor trae la pistola **dos veces dentro de una sola malla**:
+  una copia armada y otra despiezada, más un cargador de repuesto suelto y tres
+  piezas flotantes que son parte del expositor. `tools/build_g19_parts.py`, en un
+  solo paso de Blender, se queda con la copia armada, la reparte por islas de
+  malla, recorta el gatillo del armazón, reasienta los orígenes (el gatillo
+  sobre su pasador, el cargador sobre el brocal, el cañón sobre la recámara),
+  endereza el arma al convenio del motor (morro a -Z, arriba +Y) y la escala al
+  largo real. El cañón es del autor: no hay geometría inventada.
+- Medidas del resultado, comprobadas con `tools/check_weapon.gd`: 174,0 mm de
+  largo, 126,8 mm de alto, 30,8 mm de ancho y 146,3 mm entre miras. La Glock 19
+  real mide 174 × 127 × 30 y ~146 de radio de miras.
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
-  `Barrel`, `RecoilSpring`, `FrameDetail`— sin esqueleto y sin animaciones.
+  `Barrel`— sin esqueleto y sin animaciones.
 
 ## Fuera del repo
 

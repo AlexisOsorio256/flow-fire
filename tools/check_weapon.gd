@@ -4,11 +4,11 @@ extends Node
 ##   godot --headless --path . tools/check_weapon.tscn
 ##
 ## Comprueba lo que el ojo no mide: que la pistola este en METROS REALES en el
-## mundo (187 mm de largo), que existan las piezas que el juego mueve y que el
+## mundo (174 mm de largo), que existan las piezas que el juego mueve y que el
 ## cargador viaje hacia abajo en el espacio del arma. Si algo falla, imprime
 ## FALLO y sale con codigo 1.
 
-const LARGO_REAL := 0.187
+const LARGO_REAL := 0.174
 const TOLERANCIA := 0.002
 const CORREDERA_REAL := 0.039
 

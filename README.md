@@ -115,10 +115,10 @@ nunca como columna de la mecánica.
 Invariantes objetivas: `tools/check_weapon.gd` (escala real, piezas, recorrido de
 corredera, eje del cargador, giro del gatillo sobre su pasador, caída del cañón).
 Sonda visual: `tools/check_viewmodel.gd` (renderiza las poses a PNG);
-rendimiento: `tools/check_fps.gd`. La preparación del asset son dos pasos:
-`tools/make_weapon_parts.py` (agrupa las piezas del autor) y
-`tools/split_glock_parts.py` (separa gatillo, muelle y herrajes del nodo donde
-venían mezclados, y modela el cañón).
+rendimiento: `tools/check_fps.gd`. La preparación del asset es un solo paso:
+`tools/build_g19_parts.py` parte la malla del autor (que trae el arma armada y
+despiezada a la vez) en `Frame`, `Slide`, `Magazine`, `Trigger` y `Barrel`, y
+reasienta los orígenes de cada pieza.
 Prohibido verificar en headless para lo visual: para mirar se abre Godot en la
 pantalla del usuario (`:0`).
 

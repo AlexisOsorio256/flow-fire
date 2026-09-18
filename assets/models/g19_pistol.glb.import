@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cdmjhx5mbuita"
-path="res://.godot/imported/glock_urpo.glb-411ac1fc8c899a318ef618036ec013ab.scn"
+uid="uid://xa7ud7njlsmq"
+path="res://.godot/imported/g19_pistol.glb-29913e3837929ef219dd70eca25d868d.scn"
 
 [deps]
 
-source_file="res://assets/models/glock_urpo.glb"
-dest_files=["res://.godot/imported/glock_urpo.glb-411ac1fc8c899a318ef618036ec013ab.scn"]
+source_file="res://assets/models/g19_pistol.glb"
+dest_files=["res://.godot/imported/g19_pistol.glb-29913e3837929ef219dd70eca25d868d.scn"]
 
 [params]
 
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=2
+gltf/embedded_image_handling=1
 gltf/texture_map_mode=1

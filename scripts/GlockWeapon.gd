@@ -3,7 +3,7 @@ extends Node3D
 
 ## EL ARMA: la Glock 19 en piezas rigidas, sin esqueleto y sin tabla.
 ##
-## El .glb del arma (lo prepara tools/make_weapon_parts.py) trae las piezas como
+## El .glb del arma (lo prepara tools/build_g19_parts.py) trae las piezas como
 ## nodos, cada una con su PROPIO origen:
 ##
 ##   Frame      armazon. Es el origen del arma y no lo mueve nadie.
@@ -11,15 +11,15 @@ extends Node3D
 ##   Magazine   cargador             <- set_magazine_offset   (Glock.gd)
 ##   Trigger    gatillo              <- set_trigger(0..1)     (Glock.gd)
 ##   Barrel     cañon                <- cae con la corredera (set_slide)
-##   RecoilSpring  muelle recuperador, cuelga de la corredera (viaja con ella)
-##   FrameDetail   herrajes del armazon (caja del gatillo, fiador, reten)
 ##   Muzzle / EjectionPort / SightRear / SightFront
 ##              puntos medidos sobre la malla, colgados de la corredera.
 ##
-## El asset los trae desde `tools/split_glock_parts.py`, que partio el nodo
-## "Magazine" del autor (dentro iban el gatillo, el muelle recuperador y los
-## herrajes) y modelo el cañon. Siguen siendo opcionales: si faltan, el arma
-## funciona igual y `build()` lo dice por consola.
+## El asset es la "G19 Pistol, Game Ready" de Rotuma (CC-BY 4.0). Ese archivo
+## trae la pistola DOS veces dentro de una sola malla: armada y despiezada, mas
+## un cargador de repuesto y tres piezas flotantes del expositor. El script
+## tools/build_g19_parts.py se queda con la copia armada, la reparte por islas,
+## recorta el gatillo del armazon y reasienta los origenes. Siguen siendo
+## opcionales: si faltan, el arma funciona igual y `build()` lo dice por consola.
 ##
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
@@ -27,10 +27,11 @@ extends Node3D
 ##   "la corredera no llega" -> CORREDERA
 ##   "el arma esta mal encuadrada" -> GlockViewmodel.GRIP_POS / GRIP_ROT
 
-const MALLA := "res://assets/models/glock_urpo.glb"
+const MALLA := "res://assets/models/g19_pistol.glb"
 ## Largo real de la pistola, extremo a extremo. De aqui sale la escala del
-## modelo: no hay que calibrarla a mano.
-const LARGO := 0.187
+## modelo: no hay que calibrarla a mano. 174 mm es la Glock 19 de verdad, y el
+## asset ya viene a esa medida; si algun dia se cambia, la escala lo corrige.
+const LARGO := 0.174
 ## Recorrido real de la corredera. Es la unica autoridad del recorrido: la
 ## mecanica de Glock.gd y el dibujo la leen de aqui.
 const CORREDERA := 0.039
