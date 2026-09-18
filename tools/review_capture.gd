@@ -95,8 +95,8 @@ func _trigger() -> void:
 			weapon.set("slide_pos", 0.039)
 			weapon.start_reload()
 		"inspect":
-			# Con la corredera atras: verifica que la logica la sujeta durante
-			# el gesto (el clip manda solo con la corredera en casa).
+			# Con la corredera atras: verifica que la mecanica la sujeta
+			# durante el gesto y la suelta al final.
 			weapon.set("slide_locked", true)
 			weapon.set("slide_pos", 0.039)
 			weapon.inspect_weapon()

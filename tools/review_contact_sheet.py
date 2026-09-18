@@ -4,6 +4,9 @@
 No es un test, no calcula metricas, no da veredictos: graba la accion a
 suficientes FPS y reune los frames en UNA sola PNG para mirarla de una vez.
 
+Se ejecuta con el renderer del proyecto (Mobile/Vulkan), no forzando
+Compatibility/OpenGL: la hoja debe ensenar lo que el juego dibuja de verdad.
+
     python3 tools/review_contact_sheet.py fire
     python3 tools/review_contact_sheet.py reload | reload_empty | inspect | idle
     python3 tools/review_contact_sheet.py burst   (rafaga de 4, apila retroceso)
@@ -68,7 +71,6 @@ def main():
             "--audio-driver", "Dummy",
             "--resolution", "960x540",
             "--display-driver", "x11",
-            "--rendering-driver", "opengl3",
             "tools/review_capture.tscn",
             "--", "--action=" + action, "--out=" + tmp,
             "--warmup=40", "--total=%d" % total,

@@ -1,13 +1,18 @@
 extends Node
 ## Renderiza el viewmodel a PNG en varias poses, sin depender de que la ventana
 ## del juego se vea. Es una sonda de lectura: deja mirar que hay montado.
+##
+##   godot --path . tools/check_viewmodel.tscn -- --out=/tmp/vm
+##
+## Escribe idle / ads / fire / reload / reload_empty / inspect.
 
 const POSE := {
-	"idle": [0.0, 0.0, 0.0],
-	"ads": [1.0, 0.0, 0.0],
-	"fire": [0.0, 0.0, 0.0],
-	"reload": [0.0, 0.0, 1.0],
-	"inspect": [0.0, 0.0, 0.0],
+	"idle": [0.0, 0.0, 0.0, 0.0],
+	"ads": [1.0, 0.0, 0.0, 0.0],
+	"fire": [0.0, 0.0, 0.0, 0.0],
+	"reload": [0.0, 0.0, 1.0, 0.55],
+	"reload_empty": [0.0, 0.0, 1.0, 0.15],
+	"inspect": [0.0, 0.0, 0.55, 0.0],
 }
 
 
@@ -66,15 +71,14 @@ func _ready() -> void:
 	vm.mount()
 
 	var arma = vm.get("weapon")
-	print("MONTAJE arma=", "si" if arma != null else "NO", " brazos=", vm.arms_ok)
+	print("MONTAJE arma=", "si" if arma != null else "NO")
 	if arma != null:
 		print("  piezas: Frame=", arma.frame != null, " Slide=", arma.slide != null,
 			" Magazine=", arma.magazine != null, " Trigger=", arma.trigger != null,
 			" Barrel=", arma.barrel != null)
 		print("  puntos: boca=", arma.muzzle != null, " puerto=", arma.ejection_port != null,
 			" mira_t=", arma.sight_rear != null, " mira_d=", arma.sight_front != null)
-	if vm.arms_skeleton != null:
-		print("  huesos del rig de brazos=", vm.arms_skeleton.get_bone_count())
+		print("  eje de salida del cargador ", arma.magazine_out_axis().snapped(Vector3(0.01, 0.01, 0.01)))
 	# Cuantas mallas quedan visibles y cuantos triangulos suman.
 	var visibles := []
 	var tris := 0
@@ -96,14 +100,8 @@ func _ready() -> void:
 	for nombre in POSE:
 		var modo: Array = POSE[nombre]
 		vm.set_pose_inputs(modo[0], 0.0, 0.0, Vector2.ZERO, Vector2.ZERO, modo[2])
-		if nombre == "fire":
-			vm.play_fire()
-		elif nombre == "reload":
-			vm.play_reload(false)
-		elif nombre == "inspect":
-			vm.play_anim("Inspect")
-		else:
-			vm.play_anim("Idle", true)
+		vm.set_magazine_visible(true)
+		vm.set_magazine_offset(modo[3])
 		for i in range(30):
 			vm.update(1.0 / 60.0)
 			await get_tree().process_frame
@@ -111,6 +109,7 @@ func _ready() -> void:
 		var caja := _caja_visible(vm)
 		var centro := caja.get_center()
 		var radio := maxf(caja.size.length() * 0.5, 0.15)
+		print("  %s: largo visible mm %.1f" % [nombre, maxf(caja.size.x, maxf(caja.size.y, caja.size.z)) * 1000.0])
 		cam.global_position = centro + Vector3(radio * 1.1, radio * 0.35, radio * 1.6)
 		cam.look_at(centro, Vector3.UP)
 		for i in range(6):
