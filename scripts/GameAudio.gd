@@ -63,6 +63,13 @@ const SOUNDS := {
     # El cargador cae al mundo, no al arma: bus de mundo y 3D en el suelo.
     "mag_drop": {"stream": preload("res://assets/audio/mag_drop.wav"), "db": -13.0, "bus": BUS_WORLD},
     "handling": {"stream": preload("res://assets/audio/handling.wav"), "db": -10.0, "bus": BUS_WEAPONS},
+    # El roce del cargador contra el brocal mientras sube: es el tramo que iba
+    # mudo entre que el lleno entra en cuadro y asienta. Suena al entrar y su
+    # cola muere justo en el clack del asiento.
+    "mag_insert": {"stream": preload("res://assets/audio/mag_insert.wav"), "db": -13.0, "bus": BUS_WEAPONS},
+    # Comprobacion de recamara: la corredera llevada atras contra el muelle. Dos
+    # clics de acero con su resorte, mas seco que la corredera a bateria.
+    "chamber_check": {"stream": preload("res://assets/audio/chamber_check.wav"), "db": -17.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
     # Impactos: grabaciones reales de impacto de bala (Gamemaster Audio, Bullet
     # Impact Sounds). Cada material tiene su propia grabacion; antes hormigon,

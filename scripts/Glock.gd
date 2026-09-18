@@ -385,6 +385,9 @@ func _update_reload(delta: float) -> void:
 	if not _mag_entered and reload_elapsed >= RELOAD_MAG_IN_T:
 		_mag_entered = true
 		viewmodel.set_magazine_visible(true)
+		## El roce del cargador contra el brocal dura toda la subida: suena al
+		## entrar y muere justo cuando asienta.
+		GameAudio.play_2d("mag_insert", 0.0, randf_range(0.97, 1.04))
 	# 4. El clack de la muestra cae ~60 ms dentro: se adelanta el aviso.
 	if not _magin_sounded and reload_elapsed >= RELOAD_MAG_SEAT_T - MAGIN_SOUND_LEAD:
 		_magin_sounded = true
@@ -513,7 +516,7 @@ func _update_inspect(delta: float) -> void:
 		slide_locked = true
 		slide_pos = _travel
 		slide_vel = 0.0
-		GameAudio.play_2d("slide_hand", 5.0, randf_range(0.99, 1.03))
+		GameAudio.play_2d("chamber_check", 6.0, randf_range(0.98, 1.04))
 	if not inspect_released and inspect_elapsed >= INSPECT_RELEASE_T:
 		inspect_released = true
 		slide_locked = false

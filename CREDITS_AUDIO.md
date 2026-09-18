@@ -19,6 +19,22 @@ Todos los WAV están convertidos a 48 kHz mono 16-bit con `tools/process_audio.s
 | `slide_battery.wav` | "Sig Sauer P229 Handgun slide rack.wav" (evento de 4,016 s) | nikkolaus — https://freesound.org/s/442560/ — CC0 | corte al ataque (vuelta a batería) |
 | `slide_hand.wav` | "Metal Contact" (contact small metal box lid subtle hits) | SoundHolder / Sonniss #GameAudioGDC Bundle 2017, espejo `http://ftpmirror.your.org/pub/misc/sonniss2017/` — EULA comercial sin atribución | recortado |
 
+### Foley sintetizado (sin master)
+
+Estos no vienen de ninguna grabación: son eventos que estaban mudos y se
+sintetizan en `tools/make_weapon_sounds.py`, que es su fuente y su licencia
+(propia, CC-BY-4.0 como el resto del proyecto). Regenerarlos es volver a
+ejecutarlo y reimportar.
+
+| archivo | evento | carácter |
+|---|---|---|
+| `mag_drop.wav` | el cargador vacío rebotando en hormigón | cinco rebotes, cada uno más flojo y grave |
+| `mag_slap.wav` | la palma en la culata al asentarlo | golpe sordo con resto de metal |
+| `mag_insert.wav` | el cargador rozando el brocal al subir | metal contra metal, costillas y resorte |
+| `slide_release.wav` | el retén de la corredera al soltarse | tic de acero corto y agudo |
+| `chamber_check.wav` | comprobar la recámara | dos clics de acero con el muelle tensándose |
+| `reload_rustle.wav` | ropa y correaje durante la recarga | ruido de banda con tres agarres |
+
 ## Familia mundo (bus `World`)
 
 | archivo | fuente | autor / licencia | transformación |

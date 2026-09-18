@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Genera los WAV de la recarga que faltaban. Es sintesis, no grabacion: la
-recarga se contaba con cuatro sonidos que no existian.
+"""Genera los WAV del arma que no salen de ningun master. Es sintesis, no
+grabacion: cada uno cubre un evento que estaba mudo.
 
-    python3 tools/make_reload_sounds.py
+    python3 tools/make_weapon_sounds.py
 
 Escribe en assets/audio/ (16 bits, mono, 44,1 kHz, que es lo que importa Godot):
 
@@ -10,6 +10,8 @@ Escribe en assets/audio/ (16 bits, mono, 44,1 kHz, que es lo que importa Godot):
   mag_slap.wav       la palma dando en la culata del cargador al asentarlo
   slide_release.wav  el reten de la corredera al soltarse
   reload_rustle.wav  roce de correaje y ropa mientras se recarga
+  mag_insert.wav     el cargador rozando el brocal mientras sube
+  chamber_check.wav  la corredera llevada atras un pelo para ver la recamara
 
 Cada sonido se piensa para un unico golpe audible: ataque corto, cola corta y
 nada de reverb. Despues de generarlos hay que reimportar:
@@ -135,13 +137,52 @@ def reload_rustle():
     return normalize(cloth + grit, 0.30)
 
 
+def mag_insert():
+    """El cargador rozando el brocal mientras sube: metal contra metal, con el
+    traqueteo de las costillas y sin golpe final (el asiento es otro sonido).
+    Dura lo que dura la subida: 0,36 s."""
+    n = int(0.36 * SR)
+    t = np.arange(n) / SR
+    # Sube frenando, como el cargador: la friccion es mas fuerte al principio.
+    slide_env = 0.55 + 0.45 * np.exp(-t / 0.22)
+    # Costillas del cargador pasando por el brocal.
+    chatter = 0.6 + 0.4 * np.sin(2.0 * np.pi * 34.0 * t + 0.3) ** 2
+    drag = band(noise(n, 61), 1400.0, 6500.0) * slide_env * chatter
+    body = band(noise(n, 62), 200.0, 900.0) * slide_env * 0.7
+    # Un resto de resorte al final del recorrido.
+    spring = partials(n, [820.0, 1310.0], [0.05, 0.03], 63) * 0.18 * np.exp(-np.maximum(t - 0.20, 0.0) / 0.06)
+    return normalize(band(drag + body + spring, 140.0, 9000.0) * decay(n, 0.42), 0.34)
+
+
+def chamber_check():
+    """Comprobacion de recamara: la corredera se lleva atras un pelo contra el
+    muelle y vuelve. Dos clics de acero separados 70 ms y un resorte corto entre
+    ellos; no es el golpe del disparo ni la corredera a tope."""
+    n = int(0.22 * SR)
+    out = np.zeros(n)
+    for i, (at, amp, pitch) in enumerate([(0.000, 1.00, 1.00), (0.070, 0.72, 0.92)]):
+        start = int(at * SR)
+        m = int(0.09 * SR)
+        tick = click(m, 0.0028, 71 + i, 2800.0, 9500.0)
+        ring = partials(m, [2350.0 * pitch, 4020.0 * pitch, 6120.0 * pitch],
+                        [0.008, 0.006, 0.004], 73 + i) * 0.55
+        out[start:start + m] += normalize(tick + ring, 1.0) * amp
+    # Resorte tensandose entre los dos clics.
+    t = np.arange(n) / SR
+    zip_ = band(noise(n, 75), 900.0, 3800.0) * np.exp(-np.maximum(t - 0.012, 0.0) / 0.018)
+    zip_[:int(0.012 * SR)] = 0.0
+    return normalize(out + zip_ * 0.35, 0.42)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
-    print("generando sonidos de recarga en", OUT)
+    print("generando sonidos del arma en", OUT)
     write("mag_drop.wav", mag_drop())
     write("mag_slap.wav", mag_slap())
     write("slide_release.wav", slide_release())
     write("reload_rustle.wav", reload_rustle())
+    write("mag_insert.wav", mag_insert())
+    write("chamber_check.wav", chamber_check())
     print("listo. reimporta con: godot --headless --path . --import")
 
 

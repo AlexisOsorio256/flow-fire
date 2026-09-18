@@ -22,10 +22,10 @@
 # `magin`, `magout`) salen siempre de ahi; el resto de la foley heredada esta
 # congelada en sus WAV versionados (ver `process`).
 #
-# OJO: los cuatro WAV de la recarga (`mag_drop`, `mag_slap`, `slide_release`,
-# `reload_rustle`) NO salen de los masters: son síntesis y los genera
-# `tools/make_reload_sounds.py`. Este script no los toca; si hay que cambiarlos,
-# se cambian en el generador y se vuelve a ejecutar.
+# OJO: los seis WAV de foley del arma (`mag_drop`, `mag_slap`, `slide_release`,
+# `reload_rustle`, `mag_insert`, `chamber_check`) NO salen de los masters: son
+# síntesis y los genera `tools/make_weapon_sounds.py`. Este script no los toca;
+# si hay que cambiarlos, se cambian en el generador y se vuelve a ejecutar.
 #
 # Después de cambiar un WAV hay que reimportar el proyecto antes de ejecutarlo:
 #   godot4 --headless --path . --editor --quit
