@@ -462,8 +462,9 @@ func _drop_empty_magazine() -> void:
 		return
 	var down: Vector3 = viewmodel.weapon.magazine_out_axis()
 	var spin := Vector3(randf_range(-7.0, -3.0), randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
+	var dropped_rounds := mag
 	MagazineDrop.spawn(scene, viewmodel.weapon.magazine,
-		down * MAG_FALL_SPEED + player_velocity * 0.5, spin)
+		down * MAG_FALL_SPEED + player_velocity * 0.5, spin, dropped_rounds)
 
 
 ## Giro del cargador durante la recarga (radianes sobre el eje lateral del arma).

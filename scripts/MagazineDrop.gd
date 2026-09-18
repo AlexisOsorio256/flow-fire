@@ -16,8 +16,9 @@ extends RigidBody3D
 ## lo saca del brocal pegado al arma y, en cuanto esta libre, Glock lo suelta
 ## aqui. Solo uno de los dos dibuja cada tramo.
 
-## Cargador 9x19 vacio: ~71 g de acero y polimero.
-const MASS := 0.071
+## Cargador vacio ~71 g; cada cartucho 9x19 ~12 g. Lo eyectado se pierde.
+const MASS_EMPTY := 0.071
+const MASS_PER_ROUND := 0.012
 ## Rebote y roce contra hormigon: cae de canto, bota poco y se arrastra.
 const BOUNCE := 0.28
 const FRICTION := 0.55
@@ -33,10 +34,10 @@ var last_ping := -1.0
 
 ## Suelta el cargador de `source` en la escena, con la velocidad con la que sale
 ## del arma. `spin` es su giro (rad/s): un cargador recien soltado voltea.
-static func spawn(scene: Node, source: Node3D, velocity: Vector3, spin: Vector3) -> MagazineDrop:
+static func spawn(scene: Node, source: Node3D, velocity: Vector3, spin: Vector3, rounds := 0) -> MagazineDrop:
 	var mag := MagazineDrop.new()
 	mag.name = "MagazineDrop"
-	mag.mass = MASS
+	mag.mass = MASS_EMPTY + maxf(0.0, float(rounds)) * MASS_PER_ROUND
 	mag.collision_layer = 2
 	mag.collision_mask = 1
 	mag.continuous_cd = true
