@@ -18,6 +18,7 @@ var wall_mat: StandardMaterial3D
 var ceiling_mat: StandardMaterial3D
 var wood_mat: StandardMaterial3D
 var metal_mat: StandardMaterial3D
+var drum_mat: StandardMaterial3D
 var pillar_mat: StandardMaterial3D
 var lamp_mat: StandardMaterial3D
 var stand_mat: StandardMaterial3D
@@ -75,6 +76,20 @@ func _materials() -> void:
     metal_mat.metallic = 0.9
     metal_mat.roughness = 0.38
     metal_mat.uv1_scale = Vector3(2, 2, 2)
+
+    # Bidon de acero PINTADO (negro industrial), no chapa desnuda: un metal
+    # 0,9 en un interior oscuro sale negro puro y los agujeros no se leen.
+    # Dielectrico oscuro con la misma foto de acero debajo: difuso real.
+    drum_mat = StandardMaterial3D.new()
+    drum_mat.albedo_texture = METAL_ALBEDO
+    drum_mat.albedo_color = Color(0.16, 0.17, 0.19)
+    drum_mat.roughness_texture = METAL_ROUGHNESS
+    drum_mat.normal_enabled = true
+    drum_mat.normal_texture = METAL_NORMAL
+    drum_mat.normal_scale = 0.8
+    drum_mat.metallic = 0.0
+    drum_mat.roughness = 0.55
+    drum_mat.uv1_scale = Vector3(2, 2, 2)
 
     pillar_mat = StandardMaterial3D.new()
     pillar_mat.albedo_texture = CONCRETE_ALBEDO
@@ -206,6 +221,9 @@ func _build_lights() -> void:
     for z in [-4.0, -12.0, -20.0, -28.0, -38.0, -50.0, -60.0]:
         for x in [-5.0, 5.0]:
             _make_lamp(x, z)
+    # Estacion bidon/latas (6.6, -11): el bidon quedaba en silueta pura y los
+    # agujeros no se leian. Misma luminaria, un punto mas (14 -> 15 omnis).
+    _make_lamp(6.6, -11.0)
 
 
 func _make_lamp(x: float, z: float) -> void:
@@ -352,7 +370,7 @@ func _make_drum(x: float, z: float) -> void:
     mesh.top_radius = 0.29
     mesh.bottom_radius = 0.29
     mesh.radial_segments = 24
-    mesh.material = metal_mat
+    mesh.material = drum_mat
     mesh_instance.mesh = mesh
     body.add_child(mesh_instance)
 
