@@ -145,8 +145,10 @@ func _build_props() -> void:
     _make_barrier(3.0, -24.5, deg_to_rad(-18.0))
 
     _make_plank_wall(-2.5, -12.0, deg_to_rad(15.0))
-    # Torre de 4: el tiro de pie (~1.37 m a 2.5 m) da al cajon alto, que
-    # vuelca espectacular; el sencillo queda para tiro picado.
+    # Torre de 4: el tiro de pie (~1.37 m a 2.5 m) da al cajon alto. Una 9 mm
+    # que lo atraviesa le deja ~0,2 N.s a 4,2 kg: tiembla, no vuelca (medido:
+    # 0,04 m/s de pico). El vuelco seria inventar momento; la caja responde
+    # con agujeros que viajan con ella. El sencillo queda para tiro picado.
     _make_crate(Vector3(4.8, 0.0, -9.5), 0.35)
     _make_crate(Vector3(4.8, 0.35, -9.5), 0.35)
     _make_crate(Vector3(4.8, 0.70, -9.5), 0.35)

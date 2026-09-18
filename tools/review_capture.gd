@@ -65,37 +65,48 @@ func _player_weapon() -> Node:
 	return (player as Node).get("weapon")
 
 
+# Los intentos se cuentan donde se dispara (inmediato + extras), no en
+# acciones sin tiro (ads apunta, recargas e inspect no disparan): antes ads
+# decia "intentados=3 ocurridos=2" con solo 2 tiros reales.
 func _trigger() -> void:
 	_t0 = Time.get_ticks_msec()
-	_shots_tried += 1
 	var weapon := _player_weapon()
 	if weapon == null:
 		return
 	match action:
 		"fire":
+			_shots_tried += 1
 			weapon.force_fire_once()
 		"burst":
+			_shots_tried += 1
 			weapon.force_fire_once()
 			_burst_left = 3
 		"pen":
 			# El teletransporte va 2 frames ANTES del disparo: el global_transform
 			# tiene que asentarse o la bala nace de la posicion anterior.
+			_shots_tried += 1
 			weapon.force_fire_once()
 			_burst_left = 1
 			_burst_gap = 14
 		"ads":
-			# Apunta, deja asentar el blend y dispara dos veces con la mira.
+			# Apunta y dispara dos veces con la mira ya asentada: el blend
+			# (tau ~111 ms) pasa el 97% a ~400 ms de juego; el primer tiro cae
+			# a +12 frames y el segundo a +24 (a 35-50 ms de juego por frame
+			# van sobrados). Antes a +8 el primero caia al 91% todavia
+			# moviendose.
 			weapon.set_aim(true)
 			_burst_left = 2
-			_burst_gap = 8
+			_burst_gap = 12
 		"crate":
-			# Delante de las cajas: dos tiros para ver empuje, vuelco y
-			# agujeros viajando con la caja.
+			# Delante de las cajas: dos tiros para ver empuje y agujeros
+			# viajando con la caja.
+			_shots_tried += 1
 			weapon.force_fire_once()
 			_burst_left = 1
 			_burst_gap = 14
 		"steel":
 			# Delante del acero: chispa + luz + clang + oscilacion del plato.
+			_shots_tried += 1
 			weapon.force_fire_once()
 			_burst_left = 1
 			_burst_gap = 14
