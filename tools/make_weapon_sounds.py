@@ -6,7 +6,8 @@ grabacion: cada uno cubre un evento que estaba mudo.
 
 Escribe en assets/audio/ (16 bits, mono, 44,1 kHz, que es lo que importa Godot):
 
-  mag_drop.wav       el cargador vacio rebotando en el suelo de hormigon
+  trigger_reset.wav  click del reset del disparador (40 ms)
+  mag_drop.wav       UN golpe del cargador contra hormigon
   mag_slap.wav       la palma dando en la culata del cargador al asentarlo
   slide_release.wav  el reten de la corredera al soltarse
   reload_rustle.wav  roce de correaje y ropa mientras se recarga
@@ -167,9 +168,20 @@ def chamber_check():
     return normalize(out + zip_ * 0.35, 0.42)
 
 
+def trigger_reset():
+    """Click del reset del disparador: acero diminuto, 40 ms, sin cola.
+    El reset sigue al movimiento real del gatillo (ver Glock.gd); esto es solo
+    su transitorio, no una corredera."""
+    n = int(0.05 * SR)
+    tick = click(n, 0.0022, 91, 3200.0, 11000.0)
+    ring = partials(n, [3350.0, 5400.0, 8200.0], [0.006, 0.004, 0.0025], 92) * 0.5
+    return normalize(tick + ring, 0.30)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     print("generando sonidos del arma en", OUT)
+    write("trigger_reset.wav", trigger_reset())
     write("mag_drop.wav", mag_drop())
     write("mag_slap.wav", mag_slap())
     write("slide_release.wav", slide_release())

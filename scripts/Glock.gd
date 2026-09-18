@@ -276,11 +276,11 @@ func _update_trigger(delta: float) -> void:
 	if not trigger_held:
 		if trigger_latched:
 			# Reset fisico: disparador vuelto a su umbral y corredera en bateria.
-			# PENDIENTE: click dedicado de reset; slide_hand a -14 dB es placeholder.
+			# Click dedicado, disparado por el umbral fisico del gatillo.
 			if trigger_visual < 0.35 and absf(slide_pos) < 0.0025:
 				trigger_ready = true
 				trigger_latched = false
-				GameAudio.play_2d("slide_hand", -14.0, randf_range(1.25, 1.35))
+				GameAudio.play_2d("trigger_reset", 0.0, randf_range(0.97, 1.05))
 		else:
 			trigger_ready = true
 

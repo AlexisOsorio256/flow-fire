@@ -415,13 +415,14 @@ process_mag magin 0.210 0.400 -1.5 0.05
 echo "== Disparos (cortados de la grabacion original en su ataque real) =="
 for cut in "${SHOT_CUTS[@]}"; do process_shot $cut; done
 
-echo "== Montaje del disparo (crack real + cuerpo grave + cola de sala) =="
+echo "== Montaje del disparo DRY (crack real + cuerpo grave, sin sala) =="
 # El crack es la Glock 18c; el cuerpo, el tiro limpio de una Beretta 93R 9 mm a
 # 1 m (mismo bundle, mismo tipo de micro), en PASO BAJO para que aporte solo el
 # empuje del fogonazo y no un segundo estampido. Se alinea por ATAQUE para que
 # los dos golpes caigan en el mismo milisegundo y el oido los funda en uno
-# (Haas). El montaje y la cola de sala los hace `tools/build_shot.py`, que
-# imprime las medidas de cada variante.
+# (Haas). La sala la pone el bus World (Reverb); hornearla en el WAV impedia
+# cambiar el recinto sin reconstruir los cinco. `tools/build_shot.py --dry`,
+# que imprime las medidas de cada variante.
 #
 # CALIBRADO a -4 dB sobre los cinco. La referencia NO es un numero inventado: es
 # el propio maestro (Glock 18c a 1 m) medido con la misma transformada por
@@ -437,7 +438,7 @@ SHOT_BODY_DB=-4.0
 ffmpeg -v error -y -ss 0.008 -t 0.360 -i "$BODY_SRC" -af "lowpass=f=900:poles=2" \
     -ac 1 -ar 44100 -c:a pcm_s16le "$BODY_WIN"
 for n in 1 2 3 4 5; do
-    python3 "$(dirname "$0")/build_shot.py" "$AUDIO_DIR/shot_$n.wav" "$BODY_WIN" "$SHOT_BODY_DB" "$BACKUP_DIR/shot_$n.mix.wav"
+    python3 "$(dirname "$0")/build_shot.py" "$AUDIO_DIR/shot_$n.wav" "$BODY_WIN" "$SHOT_BODY_DB" "$BACKUP_DIR/shot_$n.mix.wav" --dry
     mv "$BACKUP_DIR/shot_$n.mix.wav" "$AUDIO_DIR/shot_$n.wav"
 done
 
@@ -459,7 +460,7 @@ echo "== Mecánica del arma =="
 # de familia porque su reparto DENTRO del disparo lo fija GameAudio
 # (slide_rear 2 dB por encima de slide_battery: ver su comentario medido).
 for s in slide_rear slide_battery; do process "$s" "$MECH_ATTACK_TARGET" 0.12 0.05 transient; done
-for s in empty_b; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 transient; done
+for s in empty_b trigger_reset; do process "$s" "$MECH_ATTACK_TARGET" 0.45 0.08 transient; done
 
 echo "== Otros =="
 for s in footstep shell_drop; do process "$s" "$SOFT_ATTACK_TARGET" 0.30 0.05 transient; done

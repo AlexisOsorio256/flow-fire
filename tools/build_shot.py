@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MONTA EL DISPARO: crack real + cuerpo grave + cola de sala.
+"""MONTA EL DISPARO (DRY): crack real + cuerpo grave. Sin sala horneada.
 
 El corte del maestro (Glock 18c a 1 m, MKH416) trae el estampido y el
 mecanismo, pero medido es un disparo FLACO y CORTO: 160 ms de chasquido con la
@@ -15,9 +15,9 @@ Este montaje las pone con material real, sin inventar ninguna capa:
   CUERPO otra toma real 9 mm a 1 m del mismo bundle (Beretta 93R), en paso bajo
          para que aporte el empuje del fogonazo y no un segundo estampido. Se
          alinea por ATAQUE, no por pico: el golpe grave empieza con el crack.
-  SALA   el conjunto se convoluciona con una cola exponencial de 300 ms, que es
-         lo que hace que el tiro suene en un sitio y no en un vacio. Un disparo
-         sin reflexiones se oye como un petardo aunque su espectro sea correcto.
+  SALA   ninguna horneada: la sala la pone el bus World (Reverb). Hornear la
+         misma IR en cada tiro impedia cambiar el recinto sin reconstruir los
+         cinco WAV. El WAV es DRY; el sitio lo pone el bus.
 
 Se comprueba con medidas, no a oido: duracion, fraccion de energia <150 Hz y
 factor de cresta (pico menos RMS). El maestro real mide cresta ~20 y el corte
@@ -32,7 +32,7 @@ import numpy as np
 
 SR = 44100
 CEILING_DB = -1.2
-# Cola de sala: ruido con decaimiento exponencial, 300 ms a -60 dB.
+# Cola de sala LEGADA (solo comparacion --sin --dry): ruido exponencial.
 ROOM_TAU_S = 0.055
 ROOM_DB = -14.0
 ROOM_LEN_S = 0.45
@@ -94,8 +94,10 @@ def room(tau_s=ROOM_TAU_S, length_s=ROOM_LEN_S):
 
 
 def main():
-    crack_path, body_path, rel_db, out_path = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
-    fade = float(sys.argv[5]) if len(sys.argv) > 5 else FADE_S
+    args = [a for a in sys.argv[1:] if a != "--dry"]
+    dry_only = "--dry" in sys.argv
+    crack_path, body_path, rel_db, out_path = args[0], args[1], float(args[2]), args[3]
+    fade = float(args[4]) if len(args) > 4 else FADE_S
     crack = load(crack_path)
     body = load(body_path)
     # El cuerpo cae justo detras del ataque del crack (menos de 1 ms de
@@ -109,11 +111,13 @@ def main():
         dry[shift:shift + len(body)] += body * g
     else:
         dry[:len(body) + shift] += (body[-shift:]) * g
-    # Sala: el crack suena en un sitio, no en un vacio.
-    mix = np.convolve(dry, room()) * 10.0 ** (ROOM_DB / 20.0)
-    # El ataque no se toca: la cola entra por debajo del directo.
-    mix[:len(dry)] += dry
-    mix = mix[:int(ROOM_LEN_S * SR)]
+    if dry_only:
+        mix = dry
+    else:
+        # Sala legada (solo para comparar): el crack suena en un sitio.
+        mix = np.convolve(dry, room()) * 10.0 ** (ROOM_DB / 20.0)
+        mix[:len(dry)] += dry
+        mix = mix[:int(ROOM_LEN_S * SR)]
     n_fade = min(int(fade * SR), len(mix))
     if n_fade > 1:
         mix[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)

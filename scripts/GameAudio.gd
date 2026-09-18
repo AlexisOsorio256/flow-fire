@@ -2,7 +2,7 @@ extends Node
 
 ## Audio mixto con mix por buses: CC0, Sonniss (EULA sin atribucion) y sintesis propia.
 ## El disparo actual es placeholder compuesto de alta calidad (G18C+Beretta93R+Sintesis),
-## no una G19 pura; la sala es IR sintetica pendiente de bus RangeReverb.
+## no una G19 pura; la sala la pone el bus World (Reverb), no el WAV.
 ##
 ## Los WAV de `assets/audio/` están normalizados por familia con
 ## `tools/process_audio.sh` (mismo ataque, cola corta, pico < -1.2 dBFS). Si se
@@ -39,9 +39,10 @@ const BUS_WORLD := "World"
 #   slide_battery  Sig P229 real. Pico -9,82 dBFS y 75% de su energia por debajo
 #                  de 800 Hz (centroide 774 Hz): golpe sordo y pesado.
 #
-# Antes los dos usaban el mismo `slide.wav` con distinto volumen y pitch, y eso
-# es lo que se percibia como "BANG + otro golpe": el mismo transitorio dos veces
-# separado 42 ms. El trasero va 2 dB por encima del de bateria: su energia vive
+# El master del blast ya trae mecanismo enterrado a 1 m, pero estos dos son los
+# transitorios cercanos cronometrados a la fisica (tope trasero y bateria, ver
+# Glock.gd): sin ellos la corredera se mueve muda. Niveles bajos a proposito
+# para no duplicar el blast. Antes los dos usaban el mismo `slide.wav`: su energia vive
 # en agudos, donde el estampido ya no compite (medido: a -14 dB el trasero caia
 # a solo -6,9 dB del blast en >2,5 kHz y se leia como segundo golpe; a -17 dB
 # queda ~10 dB por debajo, presente sin competir). La bateria sube 3 dB porque
@@ -54,6 +55,7 @@ const SOUNDS := {
     # seco y corto (SoundHolder, Metal Contact). Antes no existia y el gesto de
     # agarrar la corredera era mudo hasta que volvia a bateria.
     "slide_hand": {"stream": preload("res://assets/audio/slide_hand.wav"), "db": -16.0, "bus": BUS_WEAPONS},
+    "trigger_reset": {"stream": preload("res://assets/audio/trigger_reset.wav"), "db": -18.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     # Mecanica de recarga: reten, insercion, asiento y reten de corredera.
@@ -101,7 +103,7 @@ const SHOT_STREAMS: Array[AudioStream] = [
 const SHOT_DB := -6.0        # disparo (los 5 WAV comparten loudness de ataque)
 
 # Voces simultáneas del arma: cada disparo son 3 voces (blast + tope + bateria).
-# El blast dura ahora 450 ms (cuerpo y cola de sala: ver `tools/build_shot.py`),
+# El blast DRY dura 360 ms (crack+cuerpo, ver `tools/build_shot.py --dry`),
 # así que a la cadencia máxima de la pistola (~13 tiros/s con el gatillo
 # mantenido) viven a la vez ~6 blasts y ~3 golpes de mecánica. Con 8 voces se
 # cortaban las colas más viejas justo a esa cadencia; 16 las deja enteras y
@@ -127,7 +129,7 @@ func _setup_buses() -> void:
     AudioServer.set_bus_volume_db(world, -3.0)
     # Sala del rango como BUS con Reverb (no IR horneada por tiro): al agrandar
     # el recinto cambia una configuracion, no cinco WAV. Los disparos actuales
-    # aun traen cola horneada (placeholder); la reverb aqui es corta y baja.
+    # Los WAV son DRY; la sala la pone esta Reverb (corta y baja).
     var verb := AudioEffectReverb.new()
     verb.room_size = 0.55
     verb.damping = 0.45
