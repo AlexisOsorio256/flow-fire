@@ -31,6 +31,13 @@
   medida manual en Blender; Muzzle ya cuelga de Barrel en runtime.
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
   `Barrel`— sin esqueleto y sin animaciones.
+- GLB canonicalizado (2026-09-18, Blender headless desde el propio GLB):
+  arma recentrada (fuera la herencia -19,8 mm en X), `Muzzle` en la boca del
+  cañón a 0,0 mm colgando de `Barrel`, miras sobre la corredera (146,3 mm),
+  `Grip` en el centroide de la empuñadura y `Magwell` en la boca del cargador.
+  El arma compensa el recentrado moviendo el pivote (`GRIP_POS.x`); el ADS se
+  resuelve solo desde las miras. `tools/build_g19_parts.py` cumplió y se retiró
+  al historial de Git (el GLB es la fuente canónica).
 
 ## Fuera del repo
 

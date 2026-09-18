@@ -49,7 +49,7 @@ var give_vel := Vector3.ZERO
 var give_rot := Vector3.ZERO
 var give_rot_vel := Vector3.ZERO
 ## Punto de giro del cabeceo, en espacio del WeaponSocket. Lo coloca el
-## viewmodel sobre la empuñadura (CALIBRADO aprox, pendiente medida Blender).
+## viewmodel sobre la empuñadura (Grip MEDIDO del GLB via grip_pivot()).
 var pivot := Vector3(0.0, -0.055, 0.025)
 
 

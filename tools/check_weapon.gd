@@ -39,6 +39,9 @@ func _ready() -> void:
 	if weapon.muzzle != null and weapon.barrel != null and weapon.muzzle.get_parent() != weapon.barrel:
 		failures += 1
 		print("FALLO: Muzzle debe colgar de Barrel, no de Slide")
+	if weapon.get("grip") == null or weapon.get("magwell") == null:
+		failures += 1
+		print("FALLO: faltan sockets canonicalizados Grip/Magwell")
 
 	# El largo se mide DENTRO del arma (unidades del modelo) y se lleva al mundo
 	# con la escala que el arma tiene de verdad: asi se caza cualquier escala
@@ -57,7 +60,7 @@ func _ready() -> void:
 			or weapon.frame == null or weapon.slide == null or weapon.magazine == null:
 		failures += 1
 		print("FALLO: falta una pieza o un punto que el juego usa")
-	# Trigger y Barrel existen en el asset actual; si faltan, el arma sigue pero avisa.
+	# Trigger/Barrel/Grip/Magwell existen en el GLB canonicalizado; si faltan avisa.
 	print("trigger ", "si" if weapon.trigger != null else "NO (opcional)",
 		"  barrel ", "si" if weapon.barrel != null else "NO (opcional)")
 

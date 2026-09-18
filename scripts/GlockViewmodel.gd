@@ -35,9 +35,11 @@ extends Node3D
 ## declara aproximacion visual). Nadie la escala para encuadrar; el encuadre se
 ## calibra alrededor.
 
-## El arma dentro del pivote. CALIBRADO mirando en :0: pone la pistola en el
-## encuadre bodycam y la deja apuntando como la apuntaba el autor. Radianes.
-const GRIP_POS := Vector3(0.029968, -0.114451, 0.095923)
+## El arma dentro del pivote. CALIBRADO mirando en :0 (origen 2026-09-17),
+## menos 19,8 mm en X por el recentrado del GLB canonicalizado (el arma vieja
+## venia desplazada -19,8 mm en X; el encuadre se conserva moviendo el pivote
+## lo mismo en sentido contrario). Radianes.
+const GRIP_POS := Vector3(0.010168, -0.114451, 0.095923)
 const GRIP_ROT := Vector3(0.086880, 0.039442, -0.020152)
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
@@ -130,7 +132,7 @@ func mount() -> void:
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
 	if recoil != null:
-		recoil.set_pivot(Vector3(0.0, -0.055, 0.025))
+		recoil.set_pivot(weapon.grip_pivot())
 
 
 ## Cargador fuera del brocal, en metros (0 asentado). Lo decide Glock.gd.

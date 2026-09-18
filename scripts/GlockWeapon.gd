@@ -17,12 +17,14 @@ extends Node3D
 ##   Magazine   cargador             <- set_magazine_offset   (Glock.gd)
 ##   Trigger    gatillo              <- set_trigger(0..1)     (Glock.gd)
 ##   Barrel     cañon + Muzzle       <- cae con la corredera (set_slide)
-##   EjectionPort / SightRear / SightFront
-##              puntos APROXIMADOS por AABB de corredera, pendientes de
-##              canonicalizacion en Blender (sockets reales dentro del GLB).
+##   EjectionPort / SightRear / SightFront / Grip / Magwell
+##              sockets REALES dentro del GLB (canonicalizado en Blender:
+##              Muzzle en la boca del canon a 0,0 mm, miras sobre la corredera,
+##              Grip en el centroide de la empunadura, Magwell en la boca del
+##              cargador). Sin heuristicas AABB en runtime.
 ##
-## Muzzle cuelga de Barrel en runtime (reparent en build): el fogonazo no viaja
-## con la corredera. Si el GLB futuro ya lo trae bajo Barrel, no se toca.
+## Muzzle cuelga de Barrel en el GLB: el fogonazo no viaja con la corredera.
+## El reparent en build queda como red por si un GLB futuro lo trae mal.
 ##
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
@@ -81,6 +83,8 @@ var muzzle: Node3D
 var ejection_port: Node3D
 var sight_rear: Node3D
 var sight_front: Node3D
+var grip: Node3D
+var magwell: Node3D
 
 var _slide_rest := Vector3.ZERO
 var _barrel_rest := Vector3.ZERO
@@ -114,6 +118,8 @@ func build() -> void:
 	ejection_port = _find_child(root, "EjectionPort")
 	sight_rear = _find_child(root, "SightRear")
 	sight_front = _find_child(root, "SightFront")
+	grip = _find_child(root, "Grip")
+	magwell = _find_child(root, "Magwell")
 	if frame == null or slide == null or magazine == null:
 		push_warning("El arma no trae Frame/Slide/Magazine")
 		return
@@ -149,7 +155,7 @@ func build() -> void:
 		muzzle.global_transform = g
 
 	var missing: Array = []
-	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
+	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port], ["Grip", grip], ["Magwell", magwell]]:
 		if pair[1] == null:
 			missing.append(pair[0])
 	print("ARMA Glock 19 escala=", snappedf(model_scale, 0.0001),
@@ -157,6 +163,15 @@ func build() -> void:
 		" corredera=", snappedf(SLIDE_TRAVEL * 1000.0, 0.1), "mm",
 		" gatillo=", snappedf(TRIGGER_TRAVEL / _trigger_lever * 57.2958, 0.1), "grados",
 		" sin_pieza=", missing if not missing.is_empty() else "nada")
+
+
+## Pivote del cabeceo en unidades del WeaponSocket: el Grip MEDIDO en el GLB.
+## Sin el nodo, aproximacion calibrada (pendiente de nada: el GLB lo trae).
+func grip_pivot() -> Vector3:
+	if grip != null:
+		var p_model: Vector3 = global_transform.affine_inverse() * grip.global_position
+		return p_model * model_scale
+	return Vector3(0.0, -0.055, 0.025)
 
 
 func _find_child(root: Node, node_name: String) -> Node3D:
@@ -213,11 +228,11 @@ func set_slide(t: float) -> void:
 		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * unlock)) * _barrel_rest_basis
 
 
-## Brazo de palanca del gatillo EN METROS DE MUNDO: el pasador es el origen de
-## la pieza, asi que la distancia al vertice mas lejano es la que convierte
-## "5 mm de recorrido" en radianes. Se mide en mundo (no en unidades del
-## modelo) porque TRIGGER_TRAVEL esta en metros: mezclar las dos escalas dejaba
-## el gatillo girando 0,6 grados en vez de 4,5.
+## Brazo de palanca del gatillo EN METROS DE MUNDO: distancia PERPENDICULAR al
+## eje del pasador (plano YZ), del vertice mas lejano al eje. Perpendicular y no
+## 3D: un origen desplazado en X (herencia del asset vieja) inflaba el radio y
+## dejaba el recorrido un 22% corto. Se mide en mundo porque TRIGGER_TRAVEL esta
+## en metros.
 func _lever(part: Node3D) -> float:
 	var radius := 0.0
 	var pivot: Vector3 = part.global_transform.origin
@@ -230,7 +245,9 @@ func _lever(part: Node3D) -> float:
 			for s in range(mesh.get_surface_count()):
 				var vertices: PackedVector3Array = mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
 				for v: Vector3 in vertices:
-					radius = maxf(radius, (mesh_instance.global_transform * v).distance_to(pivot))
+					var rel: Vector3 = (mesh_instance.global_transform * v) - pivot
+					var perp := Vector2(rel.y, rel.z).length()
+					radius = maxf(radius, perp)
 		for c in n.get_children():
 			stack.append(c)
 	return radius
