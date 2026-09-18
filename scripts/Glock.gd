@@ -37,22 +37,23 @@ const SLIDE_RESTITUTION := 0.25
 const SLIDE_EJECT_AT := 0.030
 
 ## Red de seguridad de la recarga, en segundos, para clips inesperados.
-## Calibrada al clip `Reload` del rig (`fps_rig.glb`, 2.042 s): el agarre cae al
-## inicio del gesto y la entrega cuando la mano vuelve al brocal (~1.6-1.9 s).
-## La logica total cubre el clip, no al reves: si el clip termina antes, las
-## manos vuelven a idle mientras el arma sigue "recargando".
-const RELOAD_TOTAL := 2.10
-const RELOAD_EMPTY_TOTAL := 2.45
-const RELOAD_SLIDE_T := 1.95
-const RELOAD_MAG_OUT_T := 0.55
-const RELOAD_MAG_IN_T := 1.60
-const RELOAD_EMPTY_MAG_IN_T := 1.90
-## Instantes del clip Inspect.
-const INSPECT_TOTAL := 5.30
-const INSPECT_GRAB_T := 0.90
-const INSPECT_SHIFT_T := 2.25
-const INSPECT_SLIDE_GRAB_T := 3.15
-const INSPECT_SLIDE_HOME_T := 4.12
+## Clavada a los clips del pack Desert Eagle de 1Matzh (`Reload` 3.33 s,
+## `Reload_Empty` 2.93 s): el agarre cae al inicio del gesto y la entrega
+## cuando la mano vuelve al brocal. La logica total cubre el clip, no al
+## reves: si el clip termina antes, las manos vuelven a idle mientras el
+## arma sigue "recargando".
+const RELOAD_TOTAL := 3.45
+const RELOAD_EMPTY_TOTAL := 3.05
+const RELOAD_SLIDE_T := 2.15
+const RELOAD_MAG_OUT_T := 0.75
+const RELOAD_MAG_IN_T := 2.40
+const RELOAD_EMPTY_MAG_IN_T := 2.51
+## Instantes del clip Inspect (3.73 s en este pack).
+const INSPECT_TOTAL := 3.85
+const INSPECT_GRAB_T := 0.64
+const INSPECT_SHIFT_T := 1.61
+const INSPECT_SLIDE_GRAB_T := 2.26
+const INSPECT_SLIDE_HOME_T := 2.95
 
 # --- Estado mecanico -------------------------------------------------------
 var camera: Camera3D

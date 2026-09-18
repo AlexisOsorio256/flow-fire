@@ -1,18 +1,27 @@
 # Créditos de modelos 3D
 
-## Fps Rig — J-Toastie  (BRAZOS)
+## Desert Eagle | First Person Animations — 1Matzh  (BRAZOS)
 
-- Archivo: `assets/models/fps_rig.glb` (706 KB).
-- Fuente: Poly Pizza — pack FPS de J-Toastie (brazos riggeados + Glock riggeada).
-- Autor: **J-Toastie**.
-- Licencia: **CC-BY 3.0**, declarada en la ficha del modelo
-  (campo Licence de la pagina); compatible, sin cláusula NonCommercial.
-  Atribución: *"Fps Rig" by J-Toastie, licensed under CC-BY 3.0*.
-- Del asset se usan los **brazos (41 huesos, 4 animaciones: Grip, Idle, Reload,
-  Shoot)** y el hueso `Root` como referencia del armazón. La malla de su
-  pistola se vacía en runtime (`mesh = null`, nunca `visible = false`); el arma
-  visible es la de Urpo.
-- 9 593 triángulos visibles (2 432 de brazos + arma de piezas).
+- Archivo: `assets/models/deagle_arms.glb` (102 MB tras `trim_glb.py` y
+  `downscale_glb_textures.py` a 1024 para el perfil Mobile; original de 221 MB
+  descargado por el usuario desde Sketchfab).
+- Fuente: Sketchfab — https://sketchfab.com/3d-models/desert-eagle-first-person-animations-09a213d8510a42d1b747135e85712eff
+- Autor: **1Matzh** — https://sketchfab.com/1Matzh
+- Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
+  Atribución: *"Desert Eagle | First Person Animations" by 1Matzh,
+  licensed under CC-BY 4.0, via Sketchfab*.
+- Del asset se usan **solo los brazos**: su pistola, skybox y ayudantes de
+  apuntado se borran en runtime; el arma visible es la de Urpo o la DE.
+- **1068 huesos** (1015 apagados en runtime) y **9 animaciones**: Equip, Idle,
+  Walk, Run, Fire, Reload (3.33 s), Reload_Empty (2.93 s), Inspect, Unequip.
+  La pistola del pack viene a otra escala que los brazos: el anclaje se mide
+  en sus huesos (`Magazine`/`Weapon`/`Trigger`), nunca en su malla.
+
+## Fps Rig — J-Toastie  (REEMPLAZADO)
+
+- Archivo eliminado del repo (`assets/models/fps_rig.glb`, 706 KB): sus
+  hombros se veian feos al apuntar. Lo sustituyen los brazos de 1Matzh (arriba).
+  Se conserva la atribucion: *"Fps Rig" by J-Toastie, licensed under CC-BY 3.0*.
 
 ## 9mm Pistol — Urpo  (ARMA VISIBLE)
 
@@ -48,10 +57,9 @@ usa como base), así que la sustitución no cambia el aspecto del arma.
 
 ## 9mm Pistol | First Person Animations — 1Matzh  (REEMPLAZADO)
 
-- Archivo eliminado del repo (`assets/models/full9mm_2k.glb`, 38,26 MB):
-  sus hombros y mangas no encuadraban en cadera y el esqueleto de 928 huesos
-  era un lastre. Lo sustituye Fps Rig (arriba). Se conserva la atribucion
-  por su pistola, que es la de Urpo (ver arma visible).
+- Archivo fuera del repo (`assets/models/full9mm_2k.glb`, 38,26 MB): sirvió de
+  puente y lo sustituye el pack Desert Eagle del mismo autor (arriba), con las
+  mismas manos y animaciones por arma.
 - Fuente: Sketchfab — https://sketchfab.com/3d-models/9mm-pistol-first-person-animations-c26d7f5aa72f4b01a6da4578caa8f07f
 - Autor: **1Matzh** — https://sketchfab.com/1Matzh
 - Licencia: **Creative Commons Attribution 4.0 (CC-BY 4.0)**, declarada en
