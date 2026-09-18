@@ -23,3 +23,5 @@ captures/*
 # Texturas extraídas de un .glb por el importador (derivadas del propio .glb).
 assets/models/*_Image_*.jpg
 assets/models/*_Image_*.png
+assets/models/*_Image_*.png.import
+assets/models/*_Image_*.jpg.import

@@ -3,8 +3,7 @@ extends RigidBody3D
 
 ## Caja de madera HUECA (6 paneles de 12 mm): se deja empujar y voltear.
 ##
-## La bala la atraviesa igual (ver Ballistics: `take_bullet_hit` y despues la
-## penetracion con sus agujeros reales). Los agujeros viajan con la caja
+## La bala la atraviesa igual (ver Ballistics: penetracion con agujeros reales). Los agujeros viajan con la caja
 ## (`dynamic_decal`): una caja volteada sigue ensenando sus tiros.
 
 

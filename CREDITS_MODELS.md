@@ -42,7 +42,7 @@
 - Importador en extraccion (`embedded_image_handling=1`): el modo embebido
   BasisU lee el ORM como sRGB y la corredera sale cromada bajo los focos; en
   extraccion el metal sale satinado como el autor. Los `*_Image_*.png` son
-  derivados ignorados que el importador regenera, no otra representacion.
+  derivados ignorados que el importador regenera, no otra representacion. Ajustes de importacion de esas texturas (disco, los regenera el importador): VRAM + mipmaps en las cuatro; `Image_6` (normal) marcada como normal map.
 
 ## Fuera del repo
 
