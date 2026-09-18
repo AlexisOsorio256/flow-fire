@@ -267,11 +267,14 @@ func _can_fire() -> bool:
 
 
 func _update_trigger(delta: float) -> void:
-	trigger_visual += ((1.0 if trigger_held else 0.0) - trigger_visual) * (1.0 - exp(-18.0 * delta))
-	# El disparo rompe al fondo del recorrido (~50 ms de take-up), no en el
-	# primer frame del clic. Histeresis con el reset (0.35): romper adelante,
-	# resetear atras, como el disparador real. `force_fire_once` (revision) no
-	# pasa por aqui y las hojas no cambian.
+	# 28/s: el take-up llega al break en ~35 ms y el reset en ~35 ms, asi un
+	# doble-tap a 10 Hz dispara cada vez y la cadencia maxima (~13/s) sigue la
+	# del ciclo de corredera, no la del dedo. Con 18/s un tap rapido no rompia.
+	trigger_visual += ((1.0 if trigger_held else 0.0) - trigger_visual) * (1.0 - exp(-28.0 * delta))
+	# El disparo rompe al fondo del recorrido, no en el primer frame del clic.
+	# Histeresis con el reset (0.35): romper adelante, resetear atras, como el
+	# disparador real. `force_fire_once` (revision) no pasa por aqui y las
+	# hojas no cambian.
 	if trigger_held and trigger_ready and trigger_visual > 0.6 and _can_fire():
 		_fire()
 		return
