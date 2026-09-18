@@ -89,9 +89,10 @@ BodyGive
         └── Glock
 ```
 
-`right_hand.glb` es mano derecha + antebrazo/manga con 20 deform bones y pose
+`right_hand.glb` es mano derecha + antebrazo/manga con 20 deform bones, pose
 de agarre horneada sobre el `Grip` de NUESTRA Glock (falanges rígidas, un hueso
-por segmento). La mano no escribe ningún transform del arma; `WeaponSocket`
+por segmento) y clips Idle+Fire horneados (el Fire es latigazo de muñeca 0,2 s
+que acompaña al kick; ReloadEmpty/Reload/Inspect por retarget). La mano no escribe ningún transform del arma; `WeaponSocket`
 aplica el retroceso rápido y `BodyGive` la cesión lenta (la mano RESISTE: el
 arma cabecea rápido dentro del agarre y el conjunto cede después). No hay mano
 izquierda, IK, retarget ni `AnimationPlayer` todavía: los clips

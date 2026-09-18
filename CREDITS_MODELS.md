@@ -57,8 +57,8 @@
   la coordenada del socket `Grip`. Es `ArmsRig` con 20 deform bones (antebrazo,
   muneca, palma, 4x3 dedos, pulgar x3, 2 helpers), 1 malla de 3.360 triangulos
   (falanges rigidas por hueso, peso 1.0) y 1 material de guante. Agarre horneado
-  sobre NUESTRA G19, 0 clips (Idle->Fire->ReloadEmpty->Reload->Inspect por venir
-  via retarget del donante historico arms.glb). `tools/build_hand_rig.py` es su
+  sobre NUESTRA G19, clips Idle+Fire horneados (ReloadEmpty->Reload->Inspect
+  por venir via retarget del donante historico arms.glb). `tools/build_hand_rig.py` es su
   fuente reproducible; no sustituye la Glock ni escribe su mecanica.
 
 ## Fuera del repo

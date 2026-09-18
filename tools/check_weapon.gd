@@ -87,10 +87,14 @@ func _ready() -> void:
 		var has_animation := _contains_type(vm.get("right_hand"), AnimationPlayer)
 		print("mano derecha: mallas=", hand_meshes.size(), " triangulos=", hand_tris,
 			" huesos=", bone_count, " animaciones=", int(has_animation))
+		var anim_names: Array = []
+		for ap in _nodes_of_type(vm.get("right_hand"), AnimationPlayer):
+			anim_names.append_array((ap as AnimationPlayer).get_animation_list())
 		if hand_meshes.size() != 1 or hand_tris < 2000 or hand_tris > 6000 \
-				or bone_count < 20 or bone_count > 40 or has_animation:
+				or bone_count < 20 or bone_count > 40 \
+				or not anim_names.has("Idle") or not anim_names.has("Fire"):
 			failures += 1
-			print("FALLO: RightHand debe ser 1 malla 2-6k tris, rig 20-40 huesos, 0 animaciones (v1: agarre horneado)")
+			print("FALLO: RightHand debe ser 1 malla 2-6k tris, rig 20-40 huesos, clips Idle+Fire (ReloadEmpty/Reload/Inspect por retarget)")
 
 	var sight_axis: Vector3 = (weapon.sight_front.global_position - weapon.sight_rear.global_position).normalized()
 	var up: Vector3 = weapon.slide.global_transform.basis.y.normalized()

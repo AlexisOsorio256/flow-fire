@@ -71,6 +71,7 @@ var body_give: Node3D
 var weapon_grip: Node3D
 var weapon_socket: Node3D
 var right_hand: Node3D
+var hand_player: AnimationPlayer
 
 # --- arma ------------------------------------------------------------------
 var weapon: GlockWeapon
@@ -142,6 +143,9 @@ func mount() -> bool:
 	_apply_hand_material(right_hand)
 	right_hand.position = GRIP_POS
 	right_hand.rotation = GRIP_ROT
+	hand_player = _find_player(right_hand)
+	if hand_player != null and hand_player.has_animation("Idle"):
+		hand_player.play("Idle")
 	weapon_grip.position = GRIP_POS
 	weapon_grip.rotation = GRIP_ROT
 	muzzle = weapon.muzzle
@@ -151,6 +155,26 @@ func mount() -> bool:
 	if recoil != null:
 		recoil.set_pivot(weapon.grip_pivot())
 	return true
+
+
+func _find_player(root_node: Node) -> AnimationPlayer:
+	var stack: Array = [root_node]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is AnimationPlayer:
+			return node as AnimationPlayer
+		for child in node.get_children():
+			stack.append(child)
+	return null
+
+
+## Gesto Fire horneado (latigazo de muneca 0,2 s sobre el agarre). Lo llama
+## Glock al disparar; si no hay player la mano sigue estatica y no se rompe.
+func play_fire() -> void:
+	if hand_player != null and hand_player.has_animation("Fire"):
+		hand_player.play("Fire", 0.03)
+		if hand_player.has_animation("Idle"):
+			hand_player.queue("Idle")
 
 
 func _apply_hand_material(root_node: Node) -> void:

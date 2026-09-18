@@ -319,6 +319,7 @@ func _fire() -> void:
 	slide_vel += SLIDE_IMPULSE
 	shot_pulse = 1.0
 	recoil.kick_shot()
+	viewmodel.play_fire()
 	GameAudio.play_shot()
 
 	# Bala por el anima: nace en la boca y sale con la dispersion mecanica

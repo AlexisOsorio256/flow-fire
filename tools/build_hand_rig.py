@@ -200,9 +200,58 @@ def build() -> None:
     bpy.context.view_layer.objects.active = hand
     bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
 
-    hand["asset_role"] = "rigged right hand, baked grip, clips next"
+    # --- Clips horneados v1: Idle (agarre, 1 s loop) + Fire (latigazo 0,2 s).
+    #     ReloadEmpty/Reload/Inspect vienen por retarget del donante historico.
+    #     La pose de reposo YA es el agarre, asi los clips solo animan el gesto
+    #     sobre ella (sin IK, sin constraints: todo keyframes a mano).
+    bpy.context.view_layer.objects.active = arm_obj
+    bpy.ops.object.mode_set(mode="POSE")
+    pose_bones = arm_obj.pose.bones
+    for pb in pose_bones:
+        pb.rotation_mode = "XYZ"
+    scene = bpy.context.scene
+    scene.render.fps = 60
+    # Idle: 60 frames estatico (el agarre respira via codigo BodyGive, no aqui).
+    idle = bpy.data.actions.new("Idle")
+    arm_obj.animation_data_create()
+    arm_obj.animation_data.action = idle
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
+        pb.keyframe_insert(data_path="location", frame=0)
+        pb.keyframe_insert(data_path="rotation_euler", frame=60)
+        pb.keyframe_insert(data_path="location", frame=60)
+    idle.use_cyclic = True
+    # Fire: latigazo de muneca a 2 frames (~33 ms, con el kick) y vuelta a 12.
+    fire = bpy.data.actions.new("Fire")
+    arm_obj.animation_data.action = fire
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
+        pb.keyframe_insert(data_path="location", frame=0)
+    pose_bones["Wrist"].rotation_euler = (0.06, 0.0, 0.0)
+    pose_bones["Palm"].rotation_euler = (0.04, 0.0, 0.0)
+    for fname in ("Index", "Middle", "Ring", "Pinky"):
+        pose_bones[f"{fname}Prox"].rotation_euler = (0.05, 0.0, 0.0)
+    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=2)
+    pose_bones["Palm"].keyframe_insert(data_path="rotation_euler", frame=2)
+    for fname in ("Index", "Middle", "Ring", "Pinky"):
+        pose_bones[f"{fname}Prox"].keyframe_insert(data_path="rotation_euler", frame=2)
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=12)
+    for pb in pose_bones:
+        pb.rotation_euler = (0.0, 0.0, 0.0)
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
+    # Stash a NLA para que el exportador glTF los incluya como clips.
+    arm_obj.animation_data.action = None
+    for act in (idle, fire):
+        track = arm_obj.animation_data.nla_tracks.new()
+        track.name = act.name
+        strip = track.strips.new(act.name, 0, act)
+        strip.blend_type = "REPLACE"
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    hand["asset_role"] = "rigged right hand, baked grip, Idle+Fire baked"
     hand["bones"] = len(bones)
-    hand["animations"] = 0
+    hand["animations"] = 2
     hand["material_count"] = 1
     triangles = sum(max(0, len(p.vertices) - 2) for p in hand.data.polygons)
     hand["approx_triangles"] = triangles
