@@ -126,16 +126,15 @@ func _trigger() -> void:
 			_burst_gap = 12
 		"reload":
 			weapon.set("mag", 10)
-			weapon.start_reload()
+			weapon.start_reload(15)
 		"reload_empty":
 			# Precondicion real (vacia y corredera atras), no la accion: la
 			# accion es start_reload() y la hoja muestra su timeline honesto.
 			weapon.set("mag", 0)
 			weapon.set("chamber", 0)
-			weapon.set("reserve", 60)
 			weapon.set("slide_locked", true)
 			weapon.set("slide_pos", 0.039)
-			weapon.start_reload()
+			weapon.start_reload(15)
 		"inspect":
 			# Como pulsar F con el arma cerrada: el gesto real incluye el
 			# tiron a 0,30 s (la corredera salta atras) y la suelta a 1,20 s.

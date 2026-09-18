@@ -4,7 +4,7 @@ var player
 var post: ColorRect
 var post_mat: ShaderMaterial
 var ammo_label: Label
-var reserve_label: Label
+var table_label: Label
 var reload_label: Label
 var clock_label: Label
 var rec_label: Label
@@ -25,7 +25,7 @@ func setup(p) -> void:
     player = p
     if player != null and is_instance_valid(player.weapon):
         player.weapon.ammo_changed.connect(_on_ammo_changed)
-    _on_ammo_changed(player.weapon.mag if player != null else 15, 1, 60, false)
+    _on_ammo_changed(player.weapon.mag if player != null else 15, 1, false)
 
 
 func _build_post() -> void:
@@ -65,9 +65,9 @@ func _build_hud() -> void:
     ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     add_child(ammo_label)
 
-    reserve_label = _make_label("/ 60", 22, Color(0.85, 0.88, 0.94, 0.8))
-    reserve_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    add_child(reserve_label)
+    table_label = _make_label("MESA 4", 22, Color(0.85, 0.88, 0.94, 0.8))
+    table_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    add_child(table_label)
 
     reload_label = _make_label("RECARGAR (R)", 22, Color(1.0, 0.85, 0.3, 1.0))
     reload_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -86,12 +86,37 @@ func _make_label(text: String, size: int, color: Color) -> Label:
     return label
 
 
-func _on_ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool) -> void:
+func _on_ammo_changed(mag: int, chamber: int, reloading: bool) -> void:
     var display := mag + chamber
     ammo_label.text = str(display)
-    reserve_label.text = "/ " + str(reserve)
     reload_label.visible = reloading or (display <= 0)
     reload_label.text = "RECARGANDO" if reloading else "RECARGAR (R)"
+    _refresh_table_label()
+
+
+## La municion vive en la mesa, no en el HUD: aqui solo se lee su contador.
+func _refresh_table_label() -> void:
+    var n := 4
+    if player != null and player.get("world") != null and player.get("world").get("table_mags") != null:
+        n = int(player.get("world").get("table_mags"))
+    table_label.text = "MESA %d" % n
+
+
+## Si el arma esta vacia y sin recargar, el HUD dice donde esta la municion:
+## en la mesa. Sin cargador fisico no hay recarga.
+func _refresh_reload_hint() -> void:
+    if player == null or player.get("weapon") == null:
+        return
+    var w = player.get("weapon")
+    if bool(w.get("reloading")):
+        return
+    var display: int = int(w.get("mag")) + int(w.get("chamber"))
+    if display > 0:
+        return
+    if player.get("world") != null and not bool(player.get("world").call("table_near", player.global_position)):
+        reload_label.text = "VE A LA MESA (R)"
+    else:
+        reload_label.text = "RECARGAR (R)" 
 
 
 func _process(delta: float) -> void:
@@ -109,10 +134,12 @@ func _process(delta: float) -> void:
 
     ammo_label.position = Vector2(viewport_size.x - 210, viewport_size.y - 116)
     ammo_label.size = Vector2(180, 70)
-    reserve_label.position = Vector2(viewport_size.x - 210, viewport_size.y - 52)
-    reserve_label.size = Vector2(180, 30)
+    table_label.position = Vector2(viewport_size.x - 210, viewport_size.y - 52)
+    table_label.size = Vector2(180, 30)
     reload_label.position = Vector2(center.x - 120, viewport_size.y - 92)
     reload_label.size = Vector2(240, 30)
+    _refresh_table_label()
+    _refresh_reload_hint()
     # Sin mira en pantalla: se apunta con las miras reales del arma (es lo que
     # hace creíble una bodycam).
     var aim_amount = player.weapon.aim_blend if player != null else 0.0

@@ -11,6 +11,7 @@ const WEAPON_RIG_POS := Vector3(0.0, -0.185, -0.345)
 
 var camera: Camera3D
 var weapon
+var world: Node3D
 var mouse_captured := false
 
 var yaw := 0.0
@@ -101,7 +102,8 @@ func _input(event: InputEvent) -> void:
             KEY_ESCAPE:
                 _release_mouse()
             KEY_R:
-                weapon.start_reload()
+                if mouse_captured:
+                    try_reload_from_table()
             KEY_F:
                 # Inspeccionar el arma: la corredera se bloquea, se ensena la
                 # recamara y se suelta. La mecanica es de la pistola.
@@ -130,6 +132,17 @@ func _input(event: InputEvent) -> void:
             clampf(event.relative.x, -12.0, 12.0),
             clampf(event.relative.y, -12.0, 12.0)
         )
+
+
+## Recarga desde la mesa: la UNICA fuente de cargadores. Sin cargador fisico
+## (lejos o mesa vacia) no hay recarga; el HUD ya dice MESA n.
+func try_reload_from_table() -> void:
+    if weapon == null or world == null:
+        return
+    var rounds: int = world.try_take_mag(global_position)
+    if rounds <= 0:
+        return
+    weapon.start_reload(rounds)
 
 
 func _capture_mouse() -> void:

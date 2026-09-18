@@ -1,7 +1,7 @@
 extends Node3D
 
 signal shot_fired
-signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
+signal ammo_changed(mag: int, chamber: int, reloading: bool)
 
 ## AUTORIDAD MECANICA del arma: el estado fisico de la pistola.
 ##
@@ -99,7 +99,10 @@ var fx: WeaponFX
 
 var mag := 15
 var chamber := 1
-var reserve := 60
+## Sin reserva magica: la municion vive en la mesa (World.table_mags). La
+## recarga trae sus cartuchos puestos (`pending_mag_rounds`); lo eyectado se
+## pierde.
+var pending_mag_rounds := 0
 var trigger_held := false
 var trigger_ready := true
 var trigger_latched := false
@@ -168,7 +171,6 @@ func _ready() -> void:
 		_travel = viewmodel.weapon.slide_offset
 		_mag_free = viewmodel.weapon.magazine_travel
 		mag = MAG_SIZE
-		reserve = MAG_SIZE * 4
 	if viewmodel.muzzle != null:
 		fx = WeaponFX.new()
 		fx.name = "WeaponFX"
@@ -243,11 +245,12 @@ func force_fire_once() -> void:
 		_fire()
 
 
-func start_reload() -> bool:
-	if reloading or reserve <= 0:
+func start_reload(incoming_rounds: int = 0) -> bool:
+	if reloading or incoming_rounds <= 0:
 		return false
 	if chamber > 0 and mag >= MAG_SIZE:
 		return false
+	pending_mag_rounds = incoming_rounds
 	reloading = true
 	inspecting = false
 	reload_elapsed = 0.0
@@ -555,10 +558,9 @@ func _seat_reload_mag() -> void:
 	if reload_mag_seated:
 		return
 	reload_mag_seated = true
-	# Lo eyectado se pierde: el cargador nuevo se llena solo desde reserve.
-	var loaded := mini(MAG_SIZE, reserve)
-	reserve -= loaded
-	mag = loaded
+	# Lo eyectado se pierde: el cargador nuevo trae sus cartuchos de la mesa.
+	mag = mini(MAG_SIZE, pending_mag_rounds)
+	pending_mag_rounds = 0
 	_emit_ammo()
 
 
@@ -585,7 +587,7 @@ func _spawn_shell() -> void:
 
 
 func _emit_ammo() -> void:
-	ammo_changed.emit(mag, chamber, reserve, reloading)
+	ammo_changed.emit(mag, chamber, reloading)
 
 
 func _smooth(t: float) -> float:

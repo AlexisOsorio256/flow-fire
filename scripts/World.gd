@@ -12,12 +12,23 @@ var drum_mat: StandardMaterial3D
 var stand_mat: StandardMaterial3D
 var drywall_mat: StandardMaterial3D
 var can_mat: StandardMaterial3D
+var table_mat: StandardMaterial3D
+var mag_prop_mat: StandardMaterial3D
+## Municion fisica: 4 cargadores de 15 sobre la mesa, nada de reserva magica.
+## El arma no tiene `reserve`; la recarga consume uno de aqui al acercarse.
+const TABLE_MAGS_MAX := 4
+const TABLE_MAG_ROUNDS := 15
+const TABLE_POS := Vector3(1.2, 0.0, -1.0)
+const TABLE_REACH := 1.6
+var table_mags := TABLE_MAGS_MAX
+var _mag_props: Array[Node3D] = []
 
 
 func build() -> void:
     _materials()
     _build_props()
     _build_targets()
+    _build_mag_table()
 
 
 func _materials() -> void:
@@ -60,6 +71,15 @@ func _materials() -> void:
     drywall_mat.albedo_color = Color(0.80, 0.78, 0.73)
     drywall_mat.roughness = 0.92
     drywall_mat.uv1_scale = Vector3(2, 2, 2)
+
+    table_mat = StandardMaterial3D.new()
+    table_mat.albedo_color = Color(0.32, 0.30, 0.27)
+    table_mat.roughness = 0.8
+
+    mag_prop_mat = StandardMaterial3D.new()
+    mag_prop_mat.albedo_color = Color(0.12, 0.12, 0.14)
+    mag_prop_mat.metallic = 0.6
+    mag_prop_mat.roughness = 0.45
 
 func _build_props() -> void:
     _make_barrier(-5.8, -8.0, deg_to_rad(-8.0))
@@ -332,6 +352,69 @@ func _make_steel_target(x: float, z: float) -> void:
     target.global_position = Vector3(x, 1.35, z)
 
     _make_joint(frame, target, Vector3(x, 1.66, z))
+
+
+## Mesa de cargadores: la fuente fisica de municion. Sin inventario ni manager:
+## 4 cuerpos sobre la mesa, cada uno 15. Acercarse + R consume uno.
+func _build_mag_table() -> void:
+    var table := StaticBody3D.new()
+    table.name = "MagTable"
+    table.position = TABLE_POS
+    add_child(table)
+    table.set_meta("surface", "pine")
+    var top := MeshInstance3D.new()
+    var top_mesh := BoxMesh.new()
+    top_mesh.size = Vector3(0.7, 0.05, 0.5)
+    top_mesh.material = table_mat
+    top.mesh = top_mesh
+    top.position = Vector3(0, 0.75, 0)
+    table.add_child(top)
+    var top_col := CollisionShape3D.new()
+    var top_shape := BoxShape3D.new()
+    top_shape.size = Vector3(0.7, 0.05, 0.5)
+    top_col.shape = top_shape
+    top_col.position = Vector3(0, 0.75, 0)
+    table.add_child(top_col)
+    for leg_x in [-0.3, 0.3]:
+        for leg_z in [-0.2, 0.2]:
+            var leg := MeshInstance3D.new()
+            var leg_mesh := BoxMesh.new()
+            leg_mesh.size = Vector3(0.05, 0.75, 0.05)
+            leg_mesh.material = table_mat
+            leg.mesh = leg_mesh
+            leg.position = Vector3(leg_x, 0.375, leg_z)
+            table.add_child(leg)
+    _mag_props.clear()
+    for i in range(TABLE_MAGS_MAX):
+        var prop := MeshInstance3D.new()
+        prop.name = "TableMag%d" % (i + 1)
+        var bm := BoxMesh.new()
+        bm.size = Vector3(0.028, 0.11, 0.05)
+        bm.material = mag_prop_mat
+        prop.mesh = bm
+        prop.position = Vector3(-0.21 + i * 0.14, 0.83, 0.0)
+        table.add_child(prop)
+        _mag_props.append(prop)
+
+
+## Toma un cargador de la mesa si el jugador esta a su alcance. Devuelve sus
+## cartuchos (15) o 0 si no hay (lejos o mesa vacia). Es la UNICA forma de
+## recargar: sin cargador fisico no hay recarga.
+func try_take_mag(player_pos: Vector3) -> int:
+    if table_mags <= 0:
+        return 0
+    if player_pos.distance_to(TABLE_POS) > TABLE_REACH:
+        return 0
+    table_mags -= 1
+    if _mag_props.size() > table_mags:
+        var prop: Node3D = _mag_props[table_mags]
+        if is_instance_valid(prop):
+            prop.visible = false
+    return TABLE_MAG_ROUNDS
+
+
+func table_near(player_pos: Vector3) -> bool:
+    return player_pos.distance_to(TABLE_POS) <= TABLE_REACH
 
 
 func _make_joint(frame: StaticBody3D, target: RigidBody3D, pivot: Vector3) -> void:

@@ -90,6 +90,7 @@ func _build_player() -> void:
     player.name = "Player"
     add_child(player)
     player.global_position = Vector3(0, 0.05, 0)
+    player.world = world
 
 
 func _build_hud() -> void:

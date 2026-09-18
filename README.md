@@ -106,6 +106,7 @@ luminarias viven en `scenes/RangeShell.tscn`.
 
 `World.gd` conserva únicamente las estaciones funcionales:
 
+- mesa al puesto: 4 cargadores físicos de 15 (única fuente de recarga);
 - cerca de 5 m: latas y objetos ligeros;
 - 10–15 m: madera, cajas, bidones y drywall penetrable;
 - 18 m: papel;
