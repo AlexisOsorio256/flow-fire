@@ -106,10 +106,8 @@ func _trigger() -> void:
 			weapon.set("slide_pos", 0.039)
 			weapon.start_reload()
 		"inspect":
-			# Preset manual (no es pulsar F con arma cerrada): verifica retencion,
-			# durante el gesto y la suelta al final.
-			weapon.set("slide_locked", true)
-			weapon.set("slide_pos", 0.039)
+			# Como pulsar F con el arma cerrada: el gesto real incluye el
+			# tiron a 0,30 s (la corredera salta atras) y la suelta a 1,20 s.
 			weapon.inspect_weapon()
 		"idle":
 			pass

@@ -44,7 +44,7 @@ PRESETS = {
     # a bateria), no solo la mitad.
     "reload": (66, 0.25, lambda fs: fs[::4], 7),
     "reload_empty": (76, 0.25, lambda fs: fs[::4], 7),
-    "inspect": (46, 0.30, lambda fs: fs[::3], 6),
+    "inspect": (54, 0.30, lambda fs: fs[::3], 6),
     "idle": (10, 1.0, lambda fs: fs[::2], 5),
 }
 
