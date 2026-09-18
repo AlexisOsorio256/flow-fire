@@ -418,7 +418,7 @@ echo "== Montaje del disparo DRY (crack real + cuerpo grave, sin sala) =="
 # 1 m (mismo bundle, mismo tipo de micro), en PASO BAJO para que aporte solo el
 # empuje del fogonazo y no un segundo estampido. Se alinea por ATAQUE para que
 # los dos golpes caigan en el mismo milisegundo y el oido los funda en uno
-# (Haas). La sala la pone el bus World (Reverb); hornearla en el WAV impedia
+# (Haas). La sala la pone el bus Range (Reverb); hornearla en el WAV impedia
 # cambiar el recinto sin reconstruir los cinco. `tools/build_shot.py --dry`,
 # que imprime las medidas de cada variante.
 #

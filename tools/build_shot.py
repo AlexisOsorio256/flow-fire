@@ -15,7 +15,7 @@ Este montaje las pone con material real, sin inventar ninguna capa:
   CUERPO otra toma real 9 mm a 1 m del mismo bundle (Beretta 93R), en paso bajo
          para que aporte el empuje del fogonazo y no un segundo estampido. Se
          alinea por ATAQUE, no por pico: el golpe grave empieza con el crack.
-  SALA   ninguna horneada: la sala la pone el bus World (Reverb). Hornear la
+  SALA   ninguna horneada: la sala la pone el bus Range (Reverb). Hornear la
          misma IR en cada tiro impedia cambiar el recinto sin reconstruir los
          cinco WAV. El WAV es DRY; el sitio lo pone el bus.
 

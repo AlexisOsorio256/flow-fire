@@ -2,28 +2,24 @@ extends Node
 
 ## Audio mixto con mix por buses: CC0, Sonniss (EULA sin atribucion) y sintesis propia.
 ## El disparo actual es placeholder compuesto de alta calidad (G18C+Beretta93R+Sintesis),
-## no una G19 pura; la sala la pone el bus World (Reverb), no el WAV.
+## no una G19 pura. Los WAV son secos; una sola sala la pone el bus Range.
 ##
 ## Los WAV de `assets/audio/` están normalizados por familia con
 ## `tools/process_audio.sh` (mismo ataque, cola corta, pico < -1.2 dBFS). Si se
 ## reemplaza un sonido hay que volver a pasar ese script: este mix da por hecha
 ## esa normalización y los niveles de abajo están medidos sobre ella.
 ##
-## Reparto: el arma suena en el bus `Weapons` y el mundo (impactos, rebotes,
-## casquillos, pasos) en `World`. Los one-shots ya vienen normalizados por
-## familia desde el script, así que cada bus sólo lleva su nivel y Master queda
-## con un techo de seguridad.
+## Ruta verdadera: Weapons y World envian a Range; Range envia a Master y es el
+## unico lugar con reverberacion. El layout vive en `default_bus_layout.tres`, no
+## se reconstruye ni se corrige en runtime.
 ##
-## SIN compresor de bus. Lo hubo (`Weapons` a -14 dB, 3:1) y se midió que no
-## servía: con los WAV ya normalizados el detector apenas cruzaba el umbral
-## (2,2 dB de reducción en el ataque del disparo, 0 en las colas), así que no
-## protegía nada; y su release de 120 ms devolvía ganancia justo durante la cola
-## del disparo, que es la clase de bombeo que hace que un solo disparo se
-## perciba como dos eventos. La suma de capas tampoco satura sin él: medido, el
-## pico del mix con disparo + mecánica + pasos se queda muy por debajo del techo.
+## No hay +6 dB de buses ni HardLimiter usado como diseño de mezcla. Los niveles
+## de cada familia se miden y se dejan en el master PCM; el bus sólo representa
+## la sala.
 
 const BUS_WEAPONS := "Weapons"
 const BUS_WORLD := "World"
+const BUS_RANGE := "Range"
 
 # Tabla única de sonidos: archivo + nivel base en dB. `play_2d` sirve tanto para
 # arma como para sonidos locales del jugador (pasos); el BUS de cada entrada es
@@ -74,6 +70,7 @@ const SOUNDS := {
     "impact_concrete": {"stream": preload("res://assets/audio/impact_concrete.wav"), "db": -6.0, "bus": BUS_WORLD},
     "impact_drywall": {"stream": preload("res://assets/audio/impact_drywall.wav"), "db": -7.0, "bus": BUS_WORLD},
     "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -6.0, "bus": BUS_WORLD},
+    "impact_aluminum": {"stream": preload("res://assets/audio/impact_aluminum.wav"), "db": -8.0, "bus": BUS_WORLD},
     "impact_wood": {"stream": preload("res://assets/audio/impact_wood.wav"), "db": -6.0, "bus": BUS_WORLD},
     "ricochet": {"stream": preload("res://assets/audio/ricochet.wav"), "db": -8.0, "bus": BUS_WORLD},
     # Silbido de paso de bala: solo cuando el proyectil cruza cerca del oido
@@ -105,52 +102,24 @@ var _weapon_voices: Array[AudioStreamPlayer] = []
 
 
 func _ready() -> void:
-    _setup_buses()
+    _validate_buses()
 
 
-## Crea los buses. Se hace por código para que el proyecto no dependa de un
-## layout binario que nadie revisa. Sin efectos: los one-shots ya llegan
-## normalizados de `tools/process_audio.sh`.
-func _setup_buses() -> void:
-    # Todo suena al DOBLE (+6 dB = doble amplitud) sin saturar: el techo lo
-    # pone el HardLimiter del Master (-1 dB). El balance entre buses no cambia.
-    var weapons := _ensure_bus(BUS_WEAPONS)
-    AudioServer.set_bus_volume_db(weapons, 6.0)
-
-    var world := _ensure_bus(BUS_WORLD)
-    AudioServer.set_bus_volume_db(world, 3.0)
-    # Sala del rango como BUS con Reverb (no IR horneada por tiro): al agrandar
-    # el recinto cambia una configuracion, no cinco WAV. Los disparos actuales
-    # Los WAV son DRY; la sala la pone esta Reverb (corta y baja).
-    var verb := AudioEffectReverb.new()
-    verb.room_size = 0.55
-    verb.damping = 0.45
-    verb.spread = 1.0
-    verb.hipass = 250.0
-    verb.dry = 1.0
-    verb.wet = 0.18
-    verb.predelay_msec = 18.0
-    AudioServer.add_bus_effect(world, verb)
-
-    # Master: sólo techo de seguridad, sin pre-ganancia (no debe bombear).
-    var master := AudioServer.get_bus_index("Master")
-    if master >= 0:
-        var limiter := AudioEffectHardLimiter.new()
-        limiter.ceiling_db = -1.0
-        limiter.pre_gain_db = 0.0
-        limiter.release = 0.08
-        AudioServer.add_bus_effect(master, limiter)
-
-
-func _ensure_bus(bus_name: String) -> int:
-    var index := AudioServer.get_bus_index(bus_name)
-    if index >= 0:
-        return index
-    AudioServer.add_bus()
-    index = AudioServer.bus_count - 1
-    AudioServer.set_bus_name(index, bus_name)
-    AudioServer.set_bus_send(index, "Master")
-    return index
+## El layout es una dependencia de produccion. Si falta o alguien rompe un
+## envio, se grita: no se crea una sala de repuesto ni se hornea reverb en WAV.
+func _validate_buses() -> void:
+    for bus_name in [BUS_RANGE, BUS_WEAPONS, BUS_WORLD]:
+        if AudioServer.get_bus_index(bus_name) < 0:
+            push_error("Falta el bus de audio obligatorio: " + bus_name)
+    var range_index := AudioServer.get_bus_index(BUS_RANGE)
+    var weapons_index := AudioServer.get_bus_index(BUS_WEAPONS)
+    var world_index := AudioServer.get_bus_index(BUS_WORLD)
+    if weapons_index >= 0 and AudioServer.get_bus_send(weapons_index) != BUS_RANGE:
+        push_error("Weapons debe enviar a Range")
+    if world_index >= 0 and AudioServer.get_bus_send(world_index) != BUS_RANGE:
+        push_error("World debe enviar a Range")
+    if range_index >= 0 and AudioServer.get_bus_send(range_index) != "Master":
+        push_error("Range debe enviar a Master")
 
 
 ## Sólo el estampido. El golpe mecánico lo emite Glock.gd cuando la corredera
