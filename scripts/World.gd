@@ -219,8 +219,10 @@ func _make_lamp(x: float, z: float) -> void:
     var light := OmniLight3D.new()
     light.position = Vector3(x, 3.55, z)
     light.light_color = Color(1.0, 0.96, 0.88)
-    light.light_energy = 5.0
-    light.omni_range = 9.0
+    # 4.2/8: con 5.0/9 el primer par freia la corredera en ADS (foco cenital a
+    # ~6 m del ojo). El ambiente plano compensa el interior, no el punto.
+    light.light_energy = 4.2
+    light.omni_range = 8.0
     light.shadow_enabled = false
     add_child(light)
 
