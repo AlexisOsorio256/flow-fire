@@ -128,6 +128,8 @@ func _trigger() -> void:
 			weapon.set("mag", 10)
 			weapon.start_reload()
 		"reload_empty":
+			# Precondicion real (vacia y corredera atras), no la accion: la
+			# accion es start_reload() y la hoja muestra su timeline honesto.
 			weapon.set("mag", 0)
 			weapon.set("chamber", 0)
 			weapon.set("reserve", 60)
