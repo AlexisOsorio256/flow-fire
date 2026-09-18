@@ -156,6 +156,8 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             return
         # Grosor BALISTICO con angulo: macizo = cuerda; cascara fina = 2 paredes
         # corregidas por incidencia (1/cos). Sin angulo se subestima el oblicuo.
+        # Medido en :0 con lata de 14 g a 2 m: de frente 4,68 m/s (predice 4,7),
+        # rozando el filo (incidencia ~0,7) 6,52 m/s (predice 6,5).
         var incidence_in: float = absf(dir.dot(normal))
         var thickness := geometric_thickness
         if thin_shell:
