@@ -172,7 +172,7 @@ func _build_viewmodel_light() -> void:
 	var key := OmniLight3D.new()
 	key.name = "ViewmodelKey"
 	key.light_color = Color(0.94, 0.96, 1.0)
-	key.light_energy = 2.9
+	key.light_energy = 2.0
 	key.omni_range = 1.5
 	key.omni_attenuation = 1.35
 	key.shadow_enabled = false
@@ -183,7 +183,7 @@ func _build_viewmodel_light() -> void:
 	var fill := OmniLight3D.new()
 	fill.name = "ViewmodelFill"
 	fill.light_color = Color(0.95, 0.97, 1.0)
-	fill.light_energy = 0.95
+	fill.light_energy = 1.4
 	fill.omni_range = 1.3
 	fill.omni_attenuation = 1.2
 	fill.shadow_enabled = false
