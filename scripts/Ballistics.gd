@@ -179,6 +179,13 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             if not already_charged:
                 ImpactFX.spawn_impact(point, normal, collider, surface, false)
                 _push_body(collider, point, dir, p_in)
+            # Chapa fina sin salida: la 9 mm no se queda dentro de 1,2 mm
+            # de chapa. O la rompe (arriba) o resbala: SEGURO, sin dado y sin
+            # pedir roce extremo (a >47 grados de oblicuidad ya no hay salida
+            # posible y clavarse seria la mentira). En macizo el dado sigue:
+            # ahi quedarse dentro si es real.
+            if _try_ricochet(b, point, normal, surface, speed, true):
+                return
             b.active = false
             return
         ImpactFX.spawn_impact(point, normal, collider, surface, false)
@@ -205,18 +212,32 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
 
     ImpactFX.spawn_impact(point, normal, collider, surface, false)
     _push_body(collider, point, dir, p_in)
-    var incidence: float = abs(dir.dot(normal))
-    if incidence < 0.31 and speed > 110.0 and b.ricochets < 2 and (surface == "metal" or surface == "concrete"):
-        if randf() < 0.55:
-            var reflected: Vector3 = b.vel - 2.0 * b.vel.dot(normal) * normal
+    if _try_ricochet(b, point, normal, surface, speed):
+        return
+
+    b.active = false
+
+
+## UNICA puerta de rebote: rapido (>110 m/s) sobre superficie dura.
+## En macizo pide roce (<0,31 de incidencia, ~72 grados+) y dado 55%: ahi
+## clavarse es real. En chapa fina sin salida (`force`) resbala siempre: una
+## 9 mm no se queda dentro de 1,2 mm de chapa. Maximo 2 por bala.
+func _try_ricochet(b: Dictionary, point: Vector3, normal: Vector3, surface: String, speed: float, force := false) -> bool:
+    # `force` solo llega de chapa fina sin salida: ahi el roce ya es oblicuo
+    # por construccion (>47 grados) y la puerta de incidencia sobra.
+    var n := normal.normalized()
+    var dir: Vector3 = (b.vel as Vector3).normalized()
+    if (force or absf(dir.dot(n)) < 0.31) and speed > 110.0 and int(b.ricochets) < 2 \
+            and (surface == "metal" or surface == "concrete" or surface == "aluminum"):
+        if force or randf() < 0.55:
+            var reflected: Vector3 = b.vel - 2.0 * (b.vel as Vector3).dot(n) * n
             reflected = reflected.normalized()
             b.vel = reflected * speed * randf_range(0.42, 0.62)
             b.pos = point + reflected * 0.012
-            b.ricochets += 1
+            b.ricochets = int(b.ricochets) + 1
             GameAudio.play_3d("ricochet", point, 0.0, randf_range(0.9, 1.1))
-            return
-
-    b.active = false
+            return true
+    return false
 
 
 ## UNICA autoridad de momento balistico: delta-p (p_in - p_out) a Jolt.
