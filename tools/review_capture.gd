@@ -173,13 +173,14 @@ func _process(_delta: float) -> void:
 				player.set("yaw", 0.025)
 				player.set("yaw_target", 0.025)
 			else:
-				# Ligeramente a un lado de las cajas: se ven junto al arma y
-				# el tiro les da de lleno (centradas quedarian tras el arma).
-				(player as Node3D).global_position = Vector3(4.7, 0.05, -7.0)
-				# Pica la vista: a 2.5 m el tiro de pie pasa por encima de
-				# las cajas si no se apunta hacia abajo, como haria un tirador.
-				player.set("pitch", -0.12)
-				player.set("pitch_target", -0.12)
+				# Pegado a las cajas (1,2 m): se ven junto al arma, el tiro
+				# les da de lleno (centradas quedarian tras el arma) y el
+				# agujero de 9 mm se lee en la hoja (a 2,5 m era invisible).
+				(player as Node3D).global_position = Vector3(4.7, 0.05, -8.3)
+				# Pica la vista: el tiro de pie pasa por encima de las cajas
+				# si no se apunta hacia abajo, como haria un tirador.
+				player.set("pitch", -0.10)
+				player.set("pitch_target", -0.10)
 	if _frame == warmup:
 		_trigger()
 	if _frame >= warmup and (_frame - warmup) < total:
