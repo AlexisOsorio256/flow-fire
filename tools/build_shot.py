@@ -13,8 +13,14 @@ Este montaje las pone con material real, sin inventar ninguna capa:
 
   CRACK  el corte del maestro, intacto. Es el ataque.
   CUERPO otra toma real 9 mm a 1 m del mismo bundle (Beretta 93R), en paso bajo
-         para que aporte el empuje del fogonazo y no un segundo estampido. Se
-         alinea por ATAQUE, no por pico: el golpe grave empieza con el crack.
+         y con decaimiento exponencial desde su ataque (tau 28 ms): aporta el
+         empuje del fogonazo los primeros ~50 ms y luego muere. Sin ese
+         decaimiento el cuerpo traia sus propios picos a 80/120 ms tan fuertes
+         como su ataque y el propio crack trae cola horneada a 60/120 ms a solo
+         3-5 dB del ataque (medido en los trims): sin domar ambas
+         como su ataque y un clic sonaba a dos-tres golpes compitiendo. Se
+         alinea por ATAQUE, no por pico: el golpe grave empieza con el crack y
+         el oido los funde en UNO (Haas).
   SALA   ninguna horneada: la sala la pone el bus Range (Reverb). Hornear la
          misma IR en cada tiro impedia cambiar el recinto sin reconstruir los
          cinco WAV. El WAV es DRY; el sitio lo pone el bus.
@@ -38,6 +44,16 @@ ROOM_DB = -14.0
 ROOM_LEN_S = 0.45
 # Cierre de la muestra para que dos disparos seguidos no se apilen.
 FADE_S = 0.06
+# El cuerpo solo empuja al principio: decaimiento desde su ataque. A 80 ms ya
+# cae -24 dB y a 120 ms -36 dB (medido): mata los picos tardios del extracto
+# sin tocar su golpe inicial (-1,3 dB).
+BODY_TAU_S = 0.028
+# La cola del crack trae reflexiones horneadas del master (a 60/120 ms solo
+# 3-5 dB bajo el ataque, medido): sin domarlas un clic suena a dos golpes.
+# Se conserva intacto el ataque + 30 ms y luego decae (tau 40 ms). La sala la
+# pone el bus Range, no el WAV.
+CRACK_KEEP_S = 0.030
+CRACK_TAU_S = 0.040
 
 
 def load(path):
@@ -100,6 +116,15 @@ def main():
     fade = float(args[4]) if len(args) > 4 else FADE_S
     crack = load(crack_path)
     body = load(body_path)
+    # El cuerpo es solo empuje inicial: se le aplica su propio decaimiento
+    # anclado a SU ataque antes de mezclar. Lo que llegue tarde no es cuerpo,
+    # es otro golpe compitiendo.
+    ob = onset(body)
+    _t = (np.arange(len(body)) - ob) / SR
+    body = body * np.where(_t < 0, 0.0, np.exp(-_t / BODY_TAU_S))
+    oc = onset(crack)
+    _tc = (np.arange(len(crack)) - oc) / SR
+    crack = crack * np.where(_tc < CRACK_KEEP_S, 1.0, np.exp(-(_tc - CRACK_KEEP_S) / CRACK_TAU_S))
     # El cuerpo cae justo detras del ataque del crack (menos de 1 ms de
     # separacion: el oido los funde en UN golpe, efecto Haas).
     shift = onset(crack) - onset(body)
