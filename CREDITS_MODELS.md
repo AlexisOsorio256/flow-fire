@@ -32,12 +32,17 @@
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
   `Barrel`— sin esqueleto y sin animaciones.
 - GLB canonicalizado (2026-09-18, Blender headless desde el propio GLB):
-  arma recentrada (fuera la herencia -19,8 mm en X), `Muzzle` en la boca del
-  cañón a 0,0 mm colgando de `Barrel`, miras sobre la corredera (146,3 mm),
-  `Grip` en el centroide de la empuñadura y `Magwell` en la boca del cargador.
-  El arma compensa el recentrado moviendo el pivote (`GRIP_POS.x`); el ADS se
-  resuelve solo desde las miras. `tools/build_g19_parts.py` cumplió y se retiró
-  al historial de Git (el GLB es la fuente canónica).
+  arma recentrada (fuera la herencia -19,8 mm en X), `Muzzle` en el centroide
+  de la corona del cañón (1,3 mm, lo mide `tools/check_weapon.gd`) colgando de
+  `Barrel`, miras sobre la corredera (146,3 mm), `Grip` en el centroide de la
+  empuñadura y `Magwell` en la boca del cargador. El arma compensa el
+  recentrado moviendo el pivote (`GRIP_POS.x`); el ADS se resuelve solo desde
+  las miras. `tools/build_g19_parts.py` cumplió y se retiró al historial de
+  Git (el GLB es la fuente canónica).
+- Importador en extraccion (`embedded_image_handling=1`): el modo embebido
+  BasisU lee el ORM como sRGB y la corredera sale cromada bajo los focos; en
+  extraccion el metal sale satinado como el autor. Los `*_Image_*.png` son
+  derivados ignorados que el importador regenera, no otra representacion.
 
 ## Fuera del repo
 
