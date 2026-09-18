@@ -27,8 +27,9 @@
   largo (malla), 127,0 mm de alto, 31,0 mm de ancho y 146,3 mm entre miras.
   REFERENCIA: G19 Gen5 stock (185 x 128 x 30, ~152 mm entre miras, 15 tiros,
   ~12,5 mm de disparador). La malla es aproximacion visual, 11 mm corta; se
-  dibuja a su medida en metros y no se estira. Sockets por AABB pendientes de
-  medida manual en Blender; Muzzle ya cuelga de Barrel en runtime.
+  dibuja a su medida en metros y no se estira. Los sockets se leian por AABB
+  hasta la canonicalizacion del parrafo siguiente; desde entonces vienen
+  dentro del GLB y el runtime solo los lee (Muzzle bajo Barrel).
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
   `Barrel`— sin esqueleto y sin animaciones.
 - GLB canonicalizado (2026-09-18, Blender headless desde el propio GLB):
