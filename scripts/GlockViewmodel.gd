@@ -35,10 +35,8 @@ extends Node3D
 ## declara aproximacion visual). Nadie la escala para encuadrar; el encuadre se
 ## calibra alrededor.
 
-## El arma dentro del pivote. CALIBRADO mirando en :0 (origen 2026-09-17),
-## menos 19,8 mm en X por el recentrado del GLB canonicalizado (el arma vieja
-## venia desplazada -19,8 mm en X; el encuadre se conserva moviendo el pivote
-## lo mismo en sentido contrario). Radianes.
+## El arma dentro del pivote. CALIBRADO mirando en :0: el GLB canonicalizado
+## viene recentrado y el encuadre se calibra moviendo el pivote. Radianes.
 const GRIP_POS := Vector3(0.010168, -0.114451, 0.095923)
 const GRIP_ROT := Vector3(0.086880, 0.039442, -0.020152)
 ## Pose de cadera (verificada en :0).
