@@ -79,7 +79,7 @@ func _build_weapon() -> void:
     var rig := Node3D.new()
     rig.name = "WeaponRig"
     # El arma va CENTRADA en la pantalla (como en una bodycam real: la pistola
-    # y el brazo bajan por el centro del encuadre), no desplazada a la derecha.
+    # baja por el centro del encuadre), no desplazada a la derecha.
     rig.position = Vector3(0.0, -0.185, -0.345)
     rig.rotation_degrees = Vector3(0, 0.0, 0)
     camera.add_child(rig)
@@ -99,8 +99,8 @@ func _input(event: InputEvent) -> void:
             KEY_R:
                 weapon.start_reload()
             KEY_F:
-                # Inspeccionar el arma: la animacion viene en el propio rig de
-                # brazos (Inspect), asi que la tecla solo la pide.
+                # Inspeccionar el arma: la corredera se bloquea, se ensena la
+                # recamara y se suelta. La mecanica es de la pistola.
                 if mouse_captured:
                     weapon.inspect_weapon()
 

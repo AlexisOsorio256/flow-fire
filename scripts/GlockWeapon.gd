@@ -8,11 +8,15 @@ extends Node3D
 ##
 ##   Frame      armazon. Es el origen del arma y no lo mueve nadie.
 ##   Slide      corredera            <- set_slide(0..1)       (Glock.gd)
+##   Magazine   cargador             <- set_magazine_offset   (Glock.gd)
 ##   Trigger    gatillo              <- set_trigger(0..1)     (Glock.gd)
-##   Magazine   cargador             <- set_magazine_attached (Glock.gd)
-##   Barrel     cañon. Opcional: se queda quieto con el armazon.
+##   Barrel     cañon                <- quieto con el armazon
 ##   Muzzle / EjectionPort / SightRear / SightFront
 ##              puntos medidos sobre la malla, colgados de la corredera.
+##
+## Trigger y Barrel son OPCIONALES y el asset actual no los trae (solo garantiza
+## Frame/Slide/Magazine): el arma funciona igual, solo no se ve moverse el
+## gatillo. `build()` lo dice por consola al montar.
 ##
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
@@ -31,6 +35,10 @@ const CORREDERA := 0.039
 const CARGADOR := 17
 ## La boca del arma en la malla. La corredera retrocede al reves.
 const ADELANTE := Vector3(0.0, 0.0, -1.0)
+## Recorrido real del cargador fuera del brocal, de asentado a libre.
+const MAG_FUERA := 0.07
+## Eje de salida del cargador en espacio del arma (abajo del armazon).
+const MAGAZINE_OUT_AXIS := Vector3(0.0, -1.0, 0.0)
 
 var corredera := CORREDERA
 var capacidad := CARGADOR
@@ -51,6 +59,8 @@ var _slide_rest := Vector3.ZERO
 var _trigger_rest := Vector3.ZERO
 ## Recorrido de la corredera en unidades del modelo (metros reales / escala).
 var _slide_travel := 0.0
+## Recorrido del cargador en unidades del modelo (metros reales / escala).
+var _mag_travel := 0.0
 ## Sitio exacto del cargador dentro del arma. Lo usa el viewmodel para
 ## devolverlo al brocal cuando la mano lo suelta.
 var magazine_rest := Vector3.ZERO
@@ -88,13 +98,14 @@ func build() -> void:
 	scale = Vector3(escala, escala, escala)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
 	_slide_travel = CORREDERA / escala
+	_mag_travel = MAG_FUERA / escala
 
 	var faltan: Array = []
 	for par in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
 		if par[1] == null:
 			faltan.append(par[0])
 	print("ARMA Glock 19 escala=", snappedf(escala, 0.0001),
-		" largo_modelo=", snappedf(largo_medido, 3),
+		" largo_modelo_m=", snappedf(largo_medido, 0.001),
 		" corredera=", snappedf(CORREDERA * 1000.0, 0.1), "mm",
 		" sin_pieza=", faltan if not faltan.is_empty() else "nada")
 
@@ -146,11 +157,24 @@ func set_trigger(t: float) -> void:
 	trigger.position = _trigger_rest + adelante * (0.005 * clampf(t, 0.0, 1.0))
 
 
+## Cargador: 0 = asentado en el brocal, 1 = fuera del todo. UNICA autoridad:
+## Glock.gd, que le pasa su avance en la recarga. El eje de salida es el del
+## propio modelo (el cargador cuelga por debajo del arma) y el recorrido es el
+## real: MAG_FUERA.
+func set_magazine_offset(t: float) -> void:
+	if magazine == null:
+		return
+	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * (_mag_travel * clampf(t, 0.0, 1.0))
+
+
 ## Cargador: dentro del arma o fuera. UNICA autoridad: Glock.gd.
 func set_magazine_attached(attached: bool) -> void:
 	if magazine != null:
 		magazine.visible = attached
 
 
-func magazine_position() -> Vector3:
-	return magazine.global_position if magazine != null else global_position
+## Eje por el que el cargador sale del arma, en espacio del arma. CALIBRADO
+## sobre la malla: el cargador cuelga por debajo del armazon y su padre no
+## aporta rotacion (verificado con tools/check_weapon.gd).
+func magazine_out_axis() -> Vector3:
+	return (global_transform.basis * MAGAZINE_OUT_AXIS).normalized()

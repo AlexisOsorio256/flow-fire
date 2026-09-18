@@ -7,9 +7,9 @@ extends Node3D
 ## recarga. La autoridad es `Glock.gd`, que avisa cuando se dispara (`fire()`) y
 ## este módulo anima el evento visual. El humo lo sigue haciendo `ImpactFX`.
 ##
-## Cuelga de la BOCA REAL de la corredera (`Muzzle`, BoneAttachment sobre
-## `Slidder_919`), no del marco: hereda posición y orientación del arma durante
-## todo el ciclo, incluido su retroceso.
+## Cuelga de la BOCA REAL de la pistola (el nodo `Muzzle` de `GlockWeapon`, que
+## vive en la corredera), no del armazon: hereda posicion y orientacion del arma
+## durante todo el ciclo, incluido su retroceso.
 ##
 ## Dos volúmenes, dos trabajos:
 ##   FlashCore  ~10 mm emisivos sobre el eje del cañón. Es el fogonazo: cae a

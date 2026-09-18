@@ -3,14 +3,15 @@ extends RefCounted
 
 ## Resortes amortiguados con integración estable.
 ##
-## El arma (retroceso, corredera, cargador) y la cámara usan resortes integrados
-## con Euler explícito. Con un frame normal eso va bien, pero con un frame largo
-## —cargar una textura, guardar una captura, un hitch en Android— ese esquema se
-## vuelve inestable y los valores se disparan: el arma y la cámara acababan
-## girando sin control (medido: roll de la cámara a 122888°).
+## El retroceso del arma (GlockRecoil) y el de la cámara (Player) usan resortes
+## integrados con Euler explícito. Con un frame normal eso va bien, pero con un
+## frame largo —cargar una textura, guardar una captura, un hitch en Android— ese
+## esquema se vuelve inestable y los valores se disparan: el arma y la cámara
+## acababan girando sin control (medido: roll de la cámara a 122888°).
 ##
-## Aquí el paso se parte en subpasos de como mucho MAX_STEP segundos, que es
-## estable de sobra para los k que usa el juego (hasta 8800 en la corredera).
+## Aquí el paso se parte en subpasos de como mucho MAX_STEP segundos. La
+## corredera NO usa este integrador: tiene su propio subpaso fijo en Glock.gd
+## porque es un resorte mucho mas rapido.
 
 const MAX_STEP := 0.02  # techo absoluto del subpaso
 const MAX_STEPS := 96   # techo de subpasos por frame (con 2.7 ms son ~0.26 s)
@@ -18,9 +19,9 @@ const MAX_STEPS := 96   # techo de subpasos por frame (con 2.7 ms son ~0.26 s)
 
 ## Paso máximo estable para un resorte (k, c).
 ## Hay que resolver las dos escalas: la oscilación (√k) y el amortiguamiento (c).
-## Con la corredera (k=8800, c=92) un paso de 8 ms quitaba el 63% de la velocidad
-## en cada subpaso: la corredera abría 1 cm en vez de 4.5 y el arma se quedaba
-## sin recamarar.
+## Con el arma (k=520, c=18) un paso de 8 ms bastaba para desestabilizar el
+## resorte; con el de la corredera (k=4000) el paso tiene que ser mucho mas fino,
+## y por eso vive en su propio integrador.
 static func _max_step(k: float, c: float) -> float:
     var by_spring := 0.25 / sqrt(maxf(k, 0.0001))
     var by_damping := 0.25 / maxf(c, 0.0001)

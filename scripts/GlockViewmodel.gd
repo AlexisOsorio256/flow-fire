@@ -1,7 +1,7 @@
 class_name GlockViewmodel
 extends Node3D
 
-## VIEWMODEL: los brazos animados, el arma montada y la pose de camara.
+## VIEWMODEL: la pistola montada y la pose de camara. Sin brazos.
 ##
 ## NO decide gameplay. Recibe el estado ya decidido por `Glock.gd` y lo
 ## representa.
@@ -9,47 +9,40 @@ extends Node3D
 ## CADENA DE NODOS
 ##
 ##   Viewmodel
-##   └── PoseRoot            cadera / ADS / sprint / bob / sway / respiracion
-##       └── WristPivot      cesion lenta de brazos y manos (GlockRecoil.arm_*)
-##           ├── ArmsMount   anclaje de los brazos; dentro, Skeleton3D + clips
-##           ├── HandGrip    el arma dentro del pivote
-##           │   └── WeaponSocket   retroceso: UNICA transformacion del arma
-##           │       └── Grip -> Frame/Slide/Trigger/Magazine/Muzzle/...
-##           └── HandSocket  cuelga del hueso de la mano izquierda (el cargador)
+##   └── PoseRoot          cadera / ADS / sprint / bob / sway / respiracion
+##       └── BodyGive      cesion lenta del conjunto (GlockRecoil.give_*)
+##           └── WeaponGrip    el arma dentro del pivote (GRIP_POS / GRIP_ROT)
+##               └── WeaponSocket   retroceso: UNICA transformacion del arma
+##                   └── Weapon -> Frame / Slide / Magazine / Muzzle / ...
 ##
 ## AUTORIDAD (una sola por cosa; nada de dos capas sobre el mismo transform)
 ##
-##   Brazos, manos, dedos, gestos ... AnimationPlayer (los clips del asset)
 ##   El arma entera (recoil) ........ WeaponSocket, escrito por GlockRecoil
-##   Corredera y gatillo ............ Glock.gd -> GlockWeapon
-##   Cargador ....................... Glock.gd -> HandSocket / arma
+##   Corredera, gatillo y cargador .. Glock.gd -> GlockWeapon
 ##   Camara ......................... Player.gd (aqui no se toca)
 ##
-## EL ARMA NO ESTA EN EL ESQUELETO, ni se busca dentro de el: `GlockWeapon` es un
-## arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS, no una
-## medicion en runtime. Los brazos son `assets/models/arms.glb`, ya podado por
-## `tools/prune_arms.py`: trae solo las mallas del personaje, los 78 huesos que
-## las deforman y los cinco clips que el juego reproduce.
+## LOS BRAZOS NO ESTAN EN PRODUCCION. El asset de brazos (13,4 MB, 78 huesos y
+## cinco clips que habia que remedir cada vez) esta congelado fuera del arbol:
+## la pistola flota montada en el pivote y sigue siendo el hero asset. Cuando el
+## arma este cerrada entraran unos brazos limpios como capa de presentacion, no
+## como columna de la mecanica. Git conserva el asset y su podado.
 ##
-## Los clips mueven las MANOS; la pistola del autor estaba anclada en el espacio
-## (solo giraba, no seguia a la muneca), asi que el arma va anclada igual: fija
-## al pivote, con las manos del clip trabajando alrededor. Eso es lo que se ve.
+## EL ARMA NO ESTA EN NINGUN ESQUELETO, ni se busca dentro de uno: `GlockWeapon`
+## es un arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS
+## (GRIP_POS / GRIP_ROT), no una medicion en runtime.
+##
+## ESCALA: el arma va en metros reales (187 mm). Nadie la escala para que quepa
+## en un encuadre; el encuadre se calibra alrededor de ella.
 
-## Brazos en uso. El .glb lo prepara tools/prune_arms.py sobre el rig de 1Matzh.
-const ARMS_PATH := "res://assets/models/arms.glb"
-## Anclaje de los brazos. CALIBRADO una vez sobre el encuadre validado en :0:
-## giro 180 en Y (el modelo mira a +Z), escala para que la mano mida lo que la
-## pistola, y la posicion que deja la muneca donde se ve bien.
-const ARMS_SCALE := 1.362
-const ARMS_MOUNT_POS := Vector3(-0.035304, -2.155700, 0.580815)
-## El arma dentro del pivote. CALIBRADO igual, sobre el rig original: pone la
-## boca del cargador de nuestra Glock en la union del agarre del autor y la deja
-## apuntando como el apuntaba. Radianes.
+## El arma dentro del pivote. CALIBRADO mirando en :0: pone la pistola en el
+## encuadre bodycam y la deja apuntando como la apuntaba el autor. Radianes.
 const GRIP_POS := Vector3(0.029968, -0.114451, 0.095923)
 const GRIP_ROT := Vector3(0.086880, 0.039442, -0.020152)
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
-const HIP_POS := Vector3(0.15, -0.015, -0.42)
+## CALIBRADO con la pistola en metros reales: la distancia al ojo es la de un
+## encuadre validado (0,31 m), no la que exigia la escala inflada de los brazos.
+const HIP_POS := Vector3(0.110, -0.011, -0.308)
 ## Ojo -> mira trasera en ADS.
 const ADS_SIGHT_DISTANCE := 0.44
 ## Pose de recarga: el arma sube al centro-bajo y se inclina para ensenar el
@@ -67,24 +60,12 @@ var camera: Camera3D
 
 # --- nodos del rig ---------------------------------------------------------
 var pose_root: Node3D
-var wrist_pivot: Node3D
-var hand_grip: Node3D
+var body_give: Node3D
+var weapon_grip: Node3D
 var weapon_socket: Node3D
-var viewmodel_light: OmniLight3D
 
-# --- arma y brazos ---------------------------------------------------------
+# --- arma ------------------------------------------------------------------
 var weapon: GlockWeapon
-var arms_mount: Node3D
-var arms_root: Node3D
-var arms_skeleton: Skeleton3D
-var arms_player: AnimationPlayer
-var arms_ok := false
-
-# --- cargador: socket en la mano izquierda ---------------------------------
-var hand_socket: BoneAttachment3D
-var _hand_bone := -1
-var _mag_home: Node = null
-var _mag_in_hand := false
 
 # --- puntos del arma -------------------------------------------------------
 var muzzle: Node3D:
@@ -116,28 +97,20 @@ func _ready() -> void:
 	pose_root = Node3D.new()
 	pose_root.name = "PoseRoot"
 	add_child(pose_root)
-	wrist_pivot = Node3D.new()
-	wrist_pivot.name = "WristPivot"
-	pose_root.add_child(wrist_pivot)
-	hand_grip = Node3D.new()
-	hand_grip.name = "HandGrip"
-	wrist_pivot.add_child(hand_grip)
+	body_give = Node3D.new()
+	body_give.name = "BodyGive"
+	pose_root.add_child(body_give)
+	weapon_grip = Node3D.new()
+	weapon_grip.name = "WeaponGrip"
+	body_give.add_child(weapon_grip)
 	weapon_socket = Node3D.new()
 	weapon_socket.name = "WeaponSocket"
-	hand_grip.add_child(weapon_socket)
+	weapon_grip.add_child(weapon_socket)
 	_build_viewmodel_light()
 
 
-## Monta el rig completo: arma de piezas + brazos animados.
+## Monta el arma en el pivote. Sin brazos: la pistola es todo el viewmodel.
 func mount() -> void:
-	_install_weapon()
-	_install_arms()
-
-
-# ---------------------------------------------------------------------------
-# ARMA
-# ---------------------------------------------------------------------------
-func _install_weapon() -> void:
 	weapon = GlockWeapon.new()
 	weapon.name = "Weapon"
 	weapon_socket.add_child(weapon)
@@ -145,8 +118,8 @@ func _install_weapon() -> void:
 	if weapon.frame == null:
 		weapon = null
 		return
-	# La pistola nace donde el arma tenga su origen (la boca del cargador) y el
-	# sitio exacto lo pone el anclaje de abajo, que es comun para las dos.
+	weapon_grip.position = GRIP_POS
+	weapon_grip.rotation = GRIP_ROT
 	muzzle = weapon.muzzle
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
@@ -154,134 +127,20 @@ func _install_weapon() -> void:
 		recoil.set_pivot(Vector3.ZERO)
 
 
-# ---------------------------------------------------------------------------
-# BRAZOS
-# ---------------------------------------------------------------------------
-## Monta los brazos. El asset trae SOLO las mallas del personaje (mangas,
-## guantes, reloj), los huesos que las deforman y los clips: nada que
-## clasificar, nada que apagar y ningun hueso de pistola que interpretar.
-func _install_arms() -> void:
-	var packed := load(ARMS_PATH) as PackedScene
-	if packed == null:
-		push_warning("No se pudieron cargar los brazos: " + ARMS_PATH)
-		return
-	arms_root = packed.instantiate()
-	arms_root.name = "Arms"
-	arms_skeleton = arms_root.find_child("Skeleton3D", true, false) as Skeleton3D
-	arms_player = arms_root.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if arms_skeleton == null or arms_player == null:
-		push_warning("Los brazos no traen esqueleto utilizable")
-		arms_root.queue_free()
-		arms_root = null
-		return
-	arms_mount = Node3D.new()
-	arms_mount.name = "ArmsMount"
-	wrist_pivot.add_child(arms_mount)
-	arms_mount.add_child(arms_root)
-	_apply_viewmodel_layer(arms_root)
-	arms_mount.position = ARMS_MOUNT_POS
-	arms_mount.rotation_degrees = Vector3(0.0, 180.0, 0.0)
-	arms_mount.scale = Vector3.ONE * ARMS_SCALE
-	# El arma, en su sitio del pivote (no del hueso): las manos del clip giran a
-	# su alrededor, que es como se animo el asset original.
-	hand_grip.position = GRIP_POS
-	hand_grip.rotation = GRIP_ROT
-	hand_grip.scale = Vector3.ONE * ARMS_SCALE
-
-	_mount_hand_socket()
-	_darken_arms()
-	arms_ok = true
-	play_anim("Idle", true)
-	if camera != null and not ads_solved:
-		solve_ads()
+## Avance del cargador en la recarga (0 asentado, 1 fuera). Lo decide Glock.gd.
+func set_magazine_offset(t: float) -> void:
+	if weapon != null:
+		weapon.set_magazine_offset(t)
 
 
-func _mount_hand_socket() -> void:
-	_hand_bone = arms_skeleton.find_bone("Hand_L")
-	if _hand_bone < 0:
-		push_warning("El rig de brazos no trae el hueso Hand_L")
-		return
-	hand_socket = BoneAttachment3D.new()
-	hand_socket.name = "HandSocket"
-	hand_socket.bone_idx = _hand_bone
-	arms_skeleton.add_child(hand_socket)
-	_apply_viewmodel_layer(hand_socket)
-
-
-func hand_bone_index() -> int:
-	return _hand_bone
-
-
-## El cargador pasa a la mano. El offset se mide AHORA, con la pose real del
-## frame: el cargador queda donde la mano lo agarra, sin numeros de ajuste.
-func magazine_to_hand() -> void:
-	if weapon == null or weapon.magazine == null or hand_socket == null:
-		return
-	if _mag_in_hand:
-		return
-	arms_skeleton.force_update_all_bone_transforms()
-	hand_socket.force_update_transform()
-	var mano := hand_socket.global_transform
-	var mag := weapon.magazine.global_transform
-	hand_socket.transform = mano.affine_inverse() * mag
-	_mag_home = weapon.magazine.get_parent()
-	# Conservar el global: el socket cuelga del esqueleto (otra escala) y con
-	# keep=false el cargador heredaria su tamano multiplicado.
-	weapon.magazine.reparent(hand_socket, true)
-	_mag_in_hand = true
-
-
-## El cargador vuelve al arma (al brocal), en su sitio exacto de reposo.
-func magazine_to_weapon() -> void:
-	if not _mag_in_hand or weapon == null or weapon.magazine == null:
-		return
-	if _mag_home != null:
-		weapon.magazine.reparent(_mag_home, false)
-		weapon.magazine.position = weapon.magazine_rest
-		weapon.magazine.rotation = Vector3.ZERO
-		weapon.magazine.scale = Vector3.ONE
-	_mag_in_hand = false
-
-
-func magazine_in_hand() -> bool:
-	return _mag_in_hand
+func set_magazine_visible(v: bool) -> void:
+	if weapon != null:
+		weapon.set_magazine_attached(v)
 
 
 # ---------------------------------------------------------------------------
 # Materiales y capas
 # ---------------------------------------------------------------------------
-const FABRIC_SPECULAR := 0.22
-const GLOVE_TINT := Color(0.52, 0.52, 0.55, 1.0)
-const SLEEVE_TINT := Color(0.40, 0.40, 0.43, 1.0)
-const GLOVE_ROUGHNESS := 0.95
-const SLEEVE_ROUGHNESS := 1.0
-
-
-## Tinte de tela del bodycam: los guantes y las mangas van apagados y mates.
-func _darken_arms() -> void:
-	if arms_root == null:
-		return
-	_darken_mesh(arms_root.find_child("Gloves", true, false) as MeshInstance3D,
-		GLOVE_TINT, GLOVE_ROUGHNESS)
-	_darken_mesh(arms_root.find_child("Sleeves", true, false) as MeshInstance3D,
-		SLEEVE_TINT, SLEEVE_ROUGHNESS)
-
-
-func _darken_mesh(mi: MeshInstance3D, tint: Color, roughness: float) -> void:
-	if mi == null or mi.mesh == null:
-		return
-	for si in range(mi.mesh.get_surface_count()):
-		var m: Material = mi.mesh.surface_get_material(si)
-		if m is StandardMaterial3D:
-			var fabric := (m as StandardMaterial3D).duplicate() as StandardMaterial3D
-			fabric.albedo_color = tint
-			fabric.metallic = 0.0
-			fabric.metallic_specular = FABRIC_SPECULAR
-			fabric.roughness = roughness
-			fabric.emission_enabled = false
-			mi.set_surface_override_material(si, fabric)
-
-
 ## Todo el viewmodel va a su propia capa: el post del bodycam y las luces del
 ## mundo no lo tocan.
 func _apply_viewmodel_layer(root_node: Node) -> void:
@@ -295,16 +154,16 @@ func _apply_viewmodel_layer(root_node: Node) -> void:
 
 
 func _build_viewmodel_light() -> void:
-	viewmodel_light = OmniLight3D.new()
-	viewmodel_light.name = "ViewmodelKey"
-	viewmodel_light.light_color = Color(0.94, 0.96, 1.0)
-	viewmodel_light.light_energy = 2.9
-	viewmodel_light.omni_range = 1.5
-	viewmodel_light.omni_attenuation = 1.35
-	viewmodel_light.shadow_enabled = false
-	viewmodel_light.light_cull_mask = VIEWMODEL_LAYER_BIT
-	viewmodel_light.position = Vector3(-0.30, 0.26, 0.42)
-	pose_root.add_child(viewmodel_light)
+	var key := OmniLight3D.new()
+	key.name = "ViewmodelKey"
+	key.light_color = Color(0.94, 0.96, 1.0)
+	key.light_energy = 2.9
+	key.omni_range = 1.5
+	key.omni_attenuation = 1.35
+	key.shadow_enabled = false
+	key.light_cull_mask = VIEWMODEL_LAYER_BIT
+	key.position = Vector3(-0.30, 0.26, 0.42)
+	pose_root.add_child(key)
 
 	var fill := OmniLight3D.new()
 	fill.name = "ViewmodelFill"
@@ -319,35 +178,7 @@ func _build_viewmodel_light() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Animacion
-# ---------------------------------------------------------------------------
-## Los clips del rig llevan el nombre a secas: Idle, Fire, Reload, Reload_Empty,
-## Inspect. Los pide Glock.gd por su nombre.
-func play_anim(nombre: String, loop := false) -> bool:
-	if not arms_ok or arms_player == null or not arms_player.has_animation(nombre):
-		push_warning("El rig de brazos no trae el clip " + nombre)
-		return false
-	arms_player.play(nombre, -1.0, 1.0)
-	if not loop and arms_player.has_animation("Idle"):
-		arms_player.queue("Idle")
-	return true
-
-
-func play_fire() -> void:
-	play_anim("Fire")
-
-
-func play_reload(empty: bool) -> void:
-	play_anim("Reload_Empty" if empty else "Reload")
-
-
-func blend_to_idle(blend: float) -> void:
-	if arms_player != null and arms_player.has_animation("Idle"):
-		arms_player.play("Idle", blend)
-
-
-# ---------------------------------------------------------------------------
-# Pose y estado por frame
+# Pose
 # ---------------------------------------------------------------------------
 func set_pose_inputs(aim: float, sprint: float, speed: float, look: Vector2, move: Vector2, reload_pose: float) -> void:
 	_in_aim = aim
@@ -415,7 +246,7 @@ func _apply_pose(delta: float) -> void:
 func update(delta: float) -> void:
 	_apply_pose(delta)
 	if recoil != null:
-		recoil.apply(wrist_pivot, weapon_socket)
+		recoil.apply(body_give, weapon_socket)
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +254,7 @@ func update(delta: float) -> void:
 # ---------------------------------------------------------------------------
 func setup(cam: Camera3D) -> void:
 	camera = cam
-	if arms_ok and not ads_solved:
+	if weapon != null and not ads_solved:
 		solve_ads()
 
 
@@ -462,15 +293,3 @@ func solve_ads() -> void:
 	ads_solved = true
 	print("ADS offset=", ads_offset.snapped(Vector3(0.001, 0.001, 0.001)),
 		" rot_deg=", (ads_rot * 180.0 / PI).snapped(Vector3(0.1, 0.1, 0.1)))
-
-
-func get_sight_world_position() -> Vector3:
-	if weapon != null and weapon.sight_rear != null:
-		return weapon.sight_rear.global_position
-	return global_position
-
-
-func get_front_sight_world_position() -> Vector3:
-	if weapon != null and weapon.sight_front != null:
-		return weapon.sight_front.global_position
-	return get_sight_world_position()
