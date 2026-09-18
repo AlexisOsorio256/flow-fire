@@ -34,6 +34,11 @@ func _ready() -> void:
     process_mode = Node.PROCESS_MODE_PAUSABLE
 
 
+## CERO EXPLICITO: el anima sale paralela a la linea de miras, sin angulo de
+## convergencia. La mira va 8,5 mm sobre el anima (medido en el GLB) y la
+## gravedad hace el resto: a 18 m el tiro cae ~20 mm bajo el punto apuntado, a
+## 50 m ~10 cm. Como una mira fija sin regular: se apunta al centro y se sabe
+## donde pega, no se inventa convergencia.
 func fire(origin: Vector3, direction: Vector3, speed: float = 372.0) -> void:
     var dir := direction.normalized()
     var b := {
