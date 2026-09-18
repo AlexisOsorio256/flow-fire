@@ -55,7 +55,7 @@ func _materials() -> void:
     wall_mat.uv1_scale = Vector3(4, 2, 4)
 
     ceiling_mat = StandardMaterial3D.new()
-    ceiling_mat.albedo_color = Color(0.15, 0.16, 0.17)
+    ceiling_mat.albedo_color = Color(0.42, 0.43, 0.45)
     ceiling_mat.roughness = 0.95
 
     wood_mat = StandardMaterial3D.new()
@@ -218,7 +218,9 @@ func _distance_lines() -> void:
 
 func _build_lights() -> void:
     # Interior honesto: solo luminarias + ambient. Sin sol atravesando el techo.
-    for z in [-4.0, -12.0, -20.0, -28.0, -38.0, -50.0, -60.0]:
+    # La linea de tiro (z=2) tambien tiene su fila: sin ella el suelo alrededor
+    # del tirador quedaba en un pozo negro y el arma en silueta.
+    for z in [2.0, -4.0, -12.0, -20.0, -28.0, -38.0, -50.0, -60.0]:
         for x in [-5.0, 5.0]:
             _make_lamp(x, z)
     # Estacion bidon/latas (6.6, -11): el bidon quedaba en silueta pura y los
@@ -239,10 +241,10 @@ func _make_lamp(x: float, z: float) -> void:
     var light := OmniLight3D.new()
     light.position = Vector3(x, 3.55, z)
     light.light_color = Color(1.0, 0.96, 0.88)
-    # 5.5/9.5: el rango es interior iluminado, no de noche. Si el arma se
-    # quema en ADS se baja el punto y se sube ambiente (ver Main.gd).
-    light.light_energy = 5.5
-    light.omni_range = 9.5
+    # 8/12: luz normal de interior, el techo y el fondo se leen. Si el arma
+    # se quema en ADS se baja el punto y se sube ambiente (ver Main.gd).
+    light.light_energy = 8.0
+    light.omni_range = 12.0
     light.shadow_enabled = false
     add_child(light)
 

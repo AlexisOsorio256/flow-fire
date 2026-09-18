@@ -27,21 +27,20 @@ func _setup_environment() -> void:
     env.background_mode = Environment.BG_SKY
     var sky := Sky.new()
     var sky_mat := ProceduralSkyMaterial.new()
-    sky_mat.sky_top_color = Color(0.16, 0.21, 0.30)
+    sky_mat.sky_top_color = Color(0.25, 0.32, 0.44)
     sky_mat.sky_horizon_color = Color(0.42, 0.38, 0.34)
     sky_mat.ground_bottom_color = Color(0.025, 0.027, 0.032)
-    sky_mat.ground_horizon_color = Color(0.18, 0.17, 0.16)
+    sky_mat.ground_horizon_color = Color(0.28, 0.27, 0.26)
     sky.sky_material = sky_mat
     env.sky = sky
 
     env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-    # 0.85 con lamparas a 4.2: el interior se lee (el rango no es de noche).
-    # El punto se queda en 4.2 para no quemar el arma en ADS; el ambiente plano
-    # levanta sin focos ni sol tramposo.
-    env.ambient_light_energy = 0.85
+    # 1.30 con lamparas a 8: interior normal, sombras sin negro. Si el arma
+    # se quema en ADS se baja el punto y se retoca ambiente (ver World.gd).
+    env.ambient_light_energy = 1.30
     env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
     env.tonemap_mode = Environment.TONE_MAPPER_ACES
-    env.tonemap_exposure = 1.05
+    env.tonemap_exposure = 1.15
     env.adjustment_enabled = true
     env.adjustment_contrast = 1.08
     env.adjustment_saturation = 0.94
@@ -60,7 +59,7 @@ func _setup_environment() -> void:
     env.set("glow_levels/3", 0.0)
     env.set("glow_levels/4", 0.0)
     env.fog_enabled = true
-    env.fog_light_color = Color(0.13, 0.14, 0.16)
+    env.fog_light_color = Color(0.20, 0.21, 0.23)
     env.fog_density = 0.008
     env.fog_sky_affect = 0.25
     env.volumetric_fog_enabled = false

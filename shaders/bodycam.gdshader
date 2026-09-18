@@ -18,7 +18,8 @@ uniform float distortion = 0.030;    // barril suave de lente ancha
 uniform float chroma = 0.00020;      // aberración cromática hacia los bordes
                                      // (0.00045 emplastaba los bordes a 1px+ y
                                      // se leía como pixelado; identidad intacta)
-uniform float vignette = 0.30;       // viñeta óptica, suave
+uniform float vignette = 0.18;       // viñeta óptica, suave (0.30 hundia en
+                                     // negro el encuadre alrededor del arma)
 uniform float grain_amount = 0.006;  // ruido de sensor (sólo sombras; 0.012
                                      // parpadeaba por pixel y se leia como
                                      // pixelado: la textura barata sigue)
