@@ -96,6 +96,11 @@ func bullet_flash() -> void:
 func _flash() -> void:
     if base_material == null:
         return
+    # El acero no se pone al rojo con una 9 mm: su aviso son la chispa, el
+    # clang y la oscilacion, no un resplandor (el papel si parpadea para
+    # leerse a distancia).
+    if kind != 'paper':
+        return
     base_material.emission_enabled = true
     base_material.emission = Color(1.0, 0.12, 0.05)
     base_material.emission_energy_multiplier = 3.6

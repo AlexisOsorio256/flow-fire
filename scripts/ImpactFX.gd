@@ -317,7 +317,7 @@ const IMPACT_MATERIALS := {
         "crater": 0.0050,
     },
     "metal": {
-        "debris": {"amount": 18, "color": Color(1.0, 0.72, 0.26, 1.0), "vel": [3.0, 8.0], "gravity": -11.0, "scale": [0.30, 1.10], "life": 0.34, "size": 0.018, "spread": 58.0, "spark": true},
+        "debris": {"amount": 18, "color": Color(1.0, 0.78, 0.34, 1.0), "vel": [3.0, 8.0], "gravity": -11.0, "scale": [0.30, 1.10], "life": 0.45, "size": 0.026, "spread": 58.0, "spark": true, "stretch": 5.0},
         "dust": {"amount": 5, "color": Color(0.50, 0.50, 0.52, 0.35), "vel": [0.4, 1.4], "gravity": -2.0, "scale": [0.40, 1.20], "life": 0.40, "size": 0.030, "spread": 50.0},
         "exit_scale": 1.15,
         "crater": 0.0,
