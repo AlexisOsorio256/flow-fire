@@ -13,7 +13,7 @@ extends Node3D
 ## Dos volúmenes, dos trabajos:
 ##   FlashCore  ~10 mm emisivos sobre el eje del cañón. Es el fogonazo: cae a
 ##              plomo en pocos milisegundos y es lo único que brilla (glow).
-##   FlashGas   nube irregular de ~18 mm alrededor de la boca con blend aditivo.
+##   FlashGas   nube irregular de ~26 mm alrededor de la boca con blend aditivo.
 ##              Sus colores por vértice SON su opacidad: la cola casi negra no
 ##              aporta nada, así que la silueta se apaga sola y no hay borde de
 ##              polígono.
