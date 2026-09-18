@@ -10,13 +10,16 @@ extends Node3D
 ##   Slide      corredera            <- set_slide(0..1)       (Glock.gd)
 ##   Magazine   cargador             <- set_magazine_offset   (Glock.gd)
 ##   Trigger    gatillo              <- set_trigger(0..1)     (Glock.gd)
-##   Barrel     cañon                <- quieto con el armazon
+##   Barrel     cañon                <- cae con la corredera (set_slide)
+##   RecoilSpring  muelle recuperador, cuelga de la corredera (viaja con ella)
+##   FrameDetail   herrajes del armazon (caja del gatillo, fiador, reten)
 ##   Muzzle / EjectionPort / SightRear / SightFront
 ##              puntos medidos sobre la malla, colgados de la corredera.
 ##
-## Trigger y Barrel son OPCIONALES y el asset actual no los trae (solo garantiza
-## Frame/Slide/Magazine): el arma funciona igual, solo no se ve moverse el
-## gatillo. `build()` lo dice por consola al montar.
+## El asset los trae desde `tools/split_glock_parts.py`, que partio el nodo
+## "Magazine" del autor (dentro iban el gatillo, el muelle recuperador y los
+## herrajes) y modelo el cañon. Siguen siendo opcionales: si faltan, el arma
+## funciona igual y `build()` lo dice por consola.
 ##
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
@@ -39,6 +42,16 @@ const ADELANTE := Vector3(0.0, 0.0, -1.0)
 const MAG_FUERA := 0.07
 ## Eje de salida del cargador en espacio del arma (abajo del armazon).
 const MAGAZINE_OUT_AXIS := Vector3(0.0, -1.0, 0.0)
+## Recorrido real del gatillo, medido en la punta del diente. Son los ~5 mm que
+## anda el disparador de una Glock de suelto a fondo.
+const TRIGGER_TRAVEL := 0.005
+## Cuanto baja el cañon cuando la corredera esta atras del todo. El bloqueo lo
+## suelta el armazon y la recamara cae; son ~1,5 grados sobre la cara de culata.
+const BARREL_DROP := 0.026
+## Eje lateral del arma en el espacio de su padre. El gatillo gira sobre el
+## pasador y el cañon cae sobre este eje, NO sobre los ejes locales de cada
+## pieza: las dos traen su propio origen y su propio giro.
+const SIDE_AXIS := Vector3(1.0, 0.0, 0.0)
 
 var corredera := CORREDERA
 var capacidad := CARGADOR
@@ -56,7 +69,11 @@ var sight_rear: Node3D
 var sight_front: Node3D
 
 var _slide_rest := Vector3.ZERO
-var _trigger_rest := Vector3.ZERO
+## Base local de cada pieza que gira: se multiplica por el giro del frame del
+## padre, asi no importa como venga orientada la pieza en el archivo.
+var _trigger_rest_basis := Basis.IDENTITY
+var _trigger_lever := 0.0
+var _barrel_rest_basis := Basis.IDENTITY
 ## Recorrido de la corredera en unidades del modelo (metros reales / escala).
 var _slide_travel := 0.0
 ## Recorrido del cargador en unidades del modelo (metros reales / escala).
@@ -90,12 +107,20 @@ func build() -> void:
 	_slide_rest = slide.position
 	magazine_rest = magazine.position
 	if trigger != null:
-		_trigger_rest = trigger.position
+		_trigger_rest_basis = trigger.transform.basis
+	if barrel != null:
+		_barrel_rest_basis = barrel.transform.basis
 
 	# La escala sale de medir el largo de la malla contra el largo REAL del arma.
 	var largo_medido := _largo(raiz)
 	escala = LARGO / maxf(largo_medido, 0.0001)
 	scale = Vector3(escala, escala, escala)
+	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
+	## TRIGGER_TRAVEL esta en metros, asi que los dos tienen que hablar de lo
+	## mismo. Medido antes de escalar salia 8 veces largo y el gatillo andaba
+	## 0,6 mm en vez de 5.
+	if trigger != null:
+		_trigger_lever = maxf(_lever(trigger), 0.001)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
 	_slide_travel = CORREDERA / escala
 	_mag_travel = MAG_FUERA / escala
@@ -107,6 +132,7 @@ func build() -> void:
 	print("ARMA Glock 19 escala=", snappedf(escala, 0.0001),
 		" largo_modelo_m=", snappedf(largo_medido, 0.001),
 		" corredera=", snappedf(CORREDERA * 1000.0, 0.1), "mm",
+		" gatillo=", snappedf(TRIGGER_TRAVEL / _trigger_lever * 57.2958, 0.1), "grados",
 		" sin_pieza=", faltan if not faltan.is_empty() else "nada")
 
 
@@ -125,15 +151,22 @@ func _largo(raiz: Node) -> float:
 	return maxf(caja.size.x, maxf(caja.size.y, caja.size.z))
 
 
+## Caja de todas las mallas del arma, medida en el espacio del ARMA.
+##
+## Ojo: la AABB de cada malla hay que llevarla con su transform de MUNDO, no con
+## el local. Las piezas que traen su propio origen (Trigger, Barrel) tienen
+## transform local, y con el local la caja salia un 5% mas larga y el arma se
+## escalaba de menos (176,9 mm en vez de 187).
 func _caja_malla(raiz: Node) -> AABB:
 	var caja := AABB()
 	var primero := true
+	var inversa := (raiz as Node3D).global_transform.affine_inverse()
 	var pila: Array = [raiz]
 	while not pila.is_empty():
 		var n = pila.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-			var mundo: AABB = (n as Node3D).transform * (n as MeshInstance3D).mesh.get_aabb()
-			caja = mundo if primero else caja.merge(mundo)
+			var local: AABB = (inversa * (n as Node3D).global_transform) * (n as MeshInstance3D).mesh.get_aabb()
+			caja = local if primero else caja.merge(local)
 			primero = false
 		for c in n.get_children():
 			pila.append(c)
@@ -145,16 +178,47 @@ func _caja_malla(raiz: Node) -> AABB:
 func set_slide(t: float) -> void:
 	if slide == null:
 		return
-	slide.position = _slide_rest - adelante * (_slide_travel * clampf(t, 0.0, 1.0))
+	var avance := clampf(t, 0.0, 1.0)
+	slide.position = _slide_rest - adelante * (_slide_travel * avance)
+	## El cañon no viaja con la corredera: cae. Con la corredera atras del todo
+	## la recamara asoma por el puerto de eyeccion y el arma queda "abierta".
+	if barrel != null:
+		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * avance)) * _barrel_rest_basis
+
+
+## Brazo de palanca del gatillo EN METROS DE MUNDO: el pasador es el origen de
+## la pieza, asi que la distancia al vertice mas lejano es la que convierte
+## "5 mm de recorrido" en radianes. Se mide en mundo (no en unidades del
+## modelo) porque TRIGGER_TRAVEL esta en metros: mezclar las dos escalas dejaba
+## el gatillo girando 0,6 grados en vez de 4,5.
+func _lever(pieza: Node3D) -> float:
+	var radio := 0.0
+	var origen: Vector3 = pieza.global_transform.origin
+	var pila: Array = [pieza]
+	while not pila.is_empty():
+		var n = pila.pop_back()
+		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+			var malla: MeshInstance3D = n as MeshInstance3D
+			var mesh: Mesh = malla.mesh
+			for s in range(mesh.get_surface_count()):
+				var vertices: PackedVector3Array = mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+				for v: Vector3 in vertices:
+					radio = maxf(radio, (malla.global_transform * v).distance_to(origen))
+		for c in n.get_children():
+			pila.append(c)
+	return radio
 
 
 ## Gatillo: 0 = suelto, 1 = a fondo. UNICA autoridad: Glock.gd.
+## Gira sobre el pasador, que es el ORIGEN de la pieza: por eso el giro se
+## aplica sobre la base del padre y no sobre la de la pieza.
 ## Si el modelo no trae el gatillo como pieza suelta no hay nada que mover, y el
 ## arma sigue funcionando igual.
 func set_trigger(t: float) -> void:
 	if trigger == null:
 		return
-	trigger.position = _trigger_rest + adelante * (0.005 * clampf(t, 0.0, 1.0))
+	var angulo := -(TRIGGER_TRAVEL / _trigger_lever) * clampf(t, 0.0, 1.0)
+	trigger.transform.basis = Basis(Quaternion(SIDE_AXIS, angulo)) * _trigger_rest_basis
 
 
 ## Cargador: 0 = asentado en el brocal, 1 = fuera del todo. UNICA autoridad:

@@ -77,9 +77,11 @@ para que quepa en un encuadre: el encuadre se calibra alrededor. Lo comprueba
 `tools/check_weapon.gd`.
 
 **El arma no está en ningún esqueleto.** Es un árbol de piezas rígidas: `Frame`,
-`Slide`, `Magazine` y los puntos de boca, miras y puerto. Mover la corredera o el
-cargador es escribir un `transform`. `Trigger` y `Barrel` son opcionales: el
-asset actual no los trae y el juego funciona sin ellos.
+`Slide`, `Magazine`, `Trigger`, `Barrel`, los herrajes y los puntos de boca,
+miras y puerto. Mover la corredera, el cargador o el gatillo es escribir un
+`transform`. El gatillo gira sobre su pasador y el cañón cae cuando el arma se
+abre; las dos cosas se miden sobre la malla, no se suponen. `Trigger` y `Barrel`
+siguen siendo opcionales: si faltan, el arma funciona sin ellos.
 
 **Los brazos no están en producción.** El asset anterior (13,4 MB, 78 huesos y
 cinco clips cuyos instantes había que remedir en cada cambio) está congelado
@@ -111,9 +113,12 @@ nunca como columna de la mecánica.
 | "una lata no reacciona como debería" | `penetration_resistance` / `wall_thickness` en `World.gd` |
 
 Invariantes objetivas: `tools/check_weapon.gd` (escala real, piezas, recorrido de
-corredera, eje del cargador). Sonda visual: `tools/check_viewmodel.gd` (renderiza
-las poses a PNG); rendimiento: `tools/check_fps.gd`. La preparación del asset es
-`tools/make_weapon_parts.py`.
+corredera, eje del cargador, giro del gatillo sobre su pasador, caída del cañón).
+Sonda visual: `tools/check_viewmodel.gd` (renderiza las poses a PNG);
+rendimiento: `tools/check_fps.gd`. La preparación del asset son dos pasos:
+`tools/make_weapon_parts.py` (agrupa las piezas del autor) y
+`tools/split_glock_parts.py` (separa gatillo, muelle y herrajes del nodo donde
+venían mezclados, y modela el cañón).
 Prohibido verificar en headless para lo visual: para mirar se abre Godot en la
 pantalla del usuario (`:0`).
 

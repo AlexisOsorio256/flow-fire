@@ -9,12 +9,17 @@
 - Autor: **Urpo** — https://sketchfab.com/Urpo
 - Licencia: **CC-BY 4.0**, declarada en `asset.extras` del propio GLB.
   Atribución: *"9mm Pistol" by Urpo, licensed under CC-BY 4.0, via Sketchfab*.
-- Transformación: `tools/make_weapon_parts.py` da a cada pieza su propio origen y
-  añade los puntos medidos sobre la malla (`Muzzle`, `EjectionPort`, `SightRear`,
-  `SightFront`). El resultado son tres mallas rígidas — `Frame`, `Slide`,
-  `Magazine` — sin esqueleto y sin animaciones. El asset **no trae `Trigger` ni
-  `Barrel`**: `GlockWeapon.gd` los trata como opcionales y el juego funciona sin
-  ellos. Añadirlos es trabajo de Blender sobre esta malla, no de código.
+- Transformación, en dos pasos de Blender:
+  1. `tools/make_weapon_parts.py` da a cada pieza su propio origen y añade los
+     puntos medidos sobre la malla (`Muzzle`, `EjectionPort`, `SightRear`,
+     `SightFront`).
+  2. `tools/split_glock_parts.py` parte el nodo `Magazine` del autor, que traía
+     mezclados el cargador, el gatillo, el muelle recuperador y los herrajes del
+     armazón, y **modela el cañón** (102 mm, eje en la línea de la boca, origen
+     en la cara de culata) que el original no traía. El cañón es geometría nueva
+     de este proyecto; el resto sigue siendo la malla de Urpo.
+- El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
+  `Barrel`, `RecoilSpring`, `FrameDetail`— sin esqueleto y sin animaciones.
 
 ## Fuera del repo
 
