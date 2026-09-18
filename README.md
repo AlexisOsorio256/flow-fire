@@ -1,8 +1,16 @@
 # FlowFire
 
-FPS **bodycam** compacto y deliberadamente limitado. PC + Android. Hoy es un
-**vertical slice de combate y entrenamiento**: una pistola, un viewmodel, un
-mapa.
+**Un laboratorio FPS de una sola pistola: la Glock 19.** El proyecto existe para
+profundizar una cadena, y sólo esa cadena:
+
+```
+Glock -> disparo -> ciclo mecanico -> proyectil -> material
+      -> penetracion/rebote -> reaccion fisica -> sonido -> feedback visual
+```
+
+Todo lo que no haga esa cadena más convincente o más barata de mantener no
+pertenece a `main` todavía. No hay multijugador, ni lobby, ni mapa: hay un rango
+donde experimentarla.
 
 El proyecto se mantiene **100% con IA**, así que la eficiencia incluye **menos
 búsqueda mental para la siguiente IA**: cada responsabilidad importante tiene un
@@ -14,25 +22,29 @@ necesidad real.
 ## Contrato
 
 1. **Una sola autoridad por comportamiento y por transformación mecánica.** Una
-   pieza no puede recibir el mismo hueso o transform de la animación, del
-   procedural y de otro sistema a la vez. Si dos capas pueden escribir lo mismo,
-   el ownership queda escrito junto al código correspondiente, no aquí.
+   pieza no puede recibir el mismo transform de la animación, del procedural y de
+   otro sistema a la vez. Si dos capas pueden escribir lo mismo, el ownership
+   queda escrito junto al código correspondiente, no aquí.
 2. **Una sola ruta de producción.** Sin fallbacks, flags ni legacy activo. Git es
    el rollback.
 3. **Nada de arquitectura especulativa:** ni managers, ni event buses, ni
-   interfaces genéricas, ni capas "por si luego sirven".
+   interfaces genéricas, ni capas "por si luego sirven". Tampoco un sistema de
+   armas genérico mientras haya una sola arma.
 4. **Cambios locales antes que rediseños.** La causa se arregla donde está.
 5. **No dividir archivos por tamaño**, sino cuando una IA necesita buscar menos.
 6. **Los detalles técnicos viven junto al código que los usa.** README = reglas
-   estables; código = verdad técnica actual; Git = historia.
-7. **No inventes alcance.** Ni multijugador, ni mapa, ni UI, ni features nuevas
-   por iniciativa propia.
+   estables; código = verdad técnica actual; Git = historia y también el museo de
+   los assets y herramientas que ya no se usan.
+7. **No inventes alcance.** El alcance lo fija la sección de abajo; nada de
+   features nuevas por iniciativa propia.
 8. **Assets:** licencia compatible (nunca NonCommercial) y crédito en
-   `CREDITS_*.md` en el mismo cambio.
-9. **Android manda junto con PC.** Que funcione en escritorio no prueba nada.
-10. **Elimina lo que tu cambio vuelva obsoleto:** código, flags, comentarios,
-    docs y herramientas que ya no se usan.
-11. **Mantén este README corto y verdadero.**
+   `CREDITS_*.md` en el mismo cambio. Un asset = una representación: el `.glb`
+   lleva sus texturas dentro y el importador no deja copias sueltas en el repo.
+9. **Elimina lo que tu cambio vuelva obsoleto:** código, flags, comentarios,
+   docs y herramientas que ya no se usan. Una herramienta rota es peor que no
+   tener herramienta.
+10. **Mantén este README corto y verdadero.** Si algo aquí ya no es cierto, se
+    corrige en el mismo cambio.
 
 **Prioridad:** correctitud → profundidad física / sensación → estabilidad →
 rendimiento → calidad audiovisual → features.
@@ -42,44 +54,50 @@ rendimiento → calidad audiovisual → features.
 | Responsabilidad | Autoridad |
 |---|---|
 | Arranque y escena | `scripts/Main.gd` |
-| Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga | `scripts/Glock.gd` |
-| Piezas del arma (Glock 19: Frame, Slide, Trigger, Magazine, puntos) | `scripts/GlockWeapon.gd` |
-| Viewmodel: brazos, anclaje del arma, ADS, pose, clips | `scripts/GlockViewmodel.gd` |
-| Retroceso y peso: el arma en el agarre + cesión de las manos | `scripts/GlockRecoil.gd` |
+| Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga, inspección | `scripts/Glock.gd` |
+| Piezas del arma (Frame, Slide, Magazine, puntos) y su escala real | `scripts/GlockWeapon.gd` |
+| Viewmodel: montaje del arma, pose, ADS, encuadre | `scripts/GlockViewmodel.gd` |
+| Retroceso y peso: el arma en el agarre + cesión del conjunto | `scripts/GlockRecoil.gd` |
 | Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
 | Audio | `scripts/GameAudio.gd` |
-| Balística | `scripts/Ballistics.gd` |
+| Balística, penetración, rebote | `scripts/Ballistics.gd` |
 | Impactos | `scripts/ImpactFX.gd` |
 | Vaina expulsada | `scripts/Shell.gd` |
 | Jugador y cámara | `scripts/Player.gd` |
 | HUD y post bodycam | `scripts/HUD.gd` + `shaders/bodycam.gdshader` |
-| Mundo y rango | `scripts/World.gd` |
-| Blancos | `scripts/Target.gd` |
-| Cajas de madera reactivas | `scripts/Crate.gd` |
+| Mundo y rango (incluidas las latas de cascara fina) | `scripts/World.gd` |
+| Blancos y cajas reactivas | `scripts/Target.gd`, `scripts/Crate.gd` |
 
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
 
-**El arma no está en el esqueleto.** Es un árbol de piezas rígidas: `Frame`,
-`Slide`, `Trigger`, `Magazine` y los puntos de boca, miras y puerto. Su sitio lo
-fijan **dos constantes calibradas** de `GlockViewmodel.gd` (`ARMS_MOUNT_POS` y
-`GRIP_POS`/`GRIP_ROT`), no una medición en runtime: no hay nada que buscar en el
-rig de brazos ni nada que se rompa si el rig cambia.
+**La pistola va en metros reales: 187 mm medidos en el mundo.** La escala sale de
+medir la malla, no de un número escrito a mano, y nadie la multiplica después
+para que quepa en un encuadre: el encuadre se calibra alrededor. Lo comprueba
+`tools/check_weapon.gd`.
+
+**El arma no está en ningún esqueleto.** Es un árbol de piezas rígidas: `Frame`,
+`Slide`, `Magazine` y los puntos de boca, miras y puerto. Mover la corredera o el
+cargador es escribir un `transform`. `Trigger` y `Barrel` son opcionales: el
+asset actual no los trae y el juego funciona sin ellos.
+
+**Los brazos no están en producción.** El asset anterior (13,4 MB, 78 huesos y
+cinco clips cuyos instantes había que remedir en cada cambio) está congelado
+fuera del árbol; Git lo conserva. La pistola flota montada en el pivote. Cuando
+el arma esté cerrada entrarán unos brazos limpios como **capa de presentación**,
+nunca como columna de la mecánica.
 
 **Una pistola.** Glock 19. No hay tabla de armas ni código por arma a propósito.
 
-**Los brazos son `assets/models/arms.glb`**, podado por
-`tools/prune_arms.py`: solo las mallas del personaje (mangas, guantes, reloj),
-los 78 huesos que las deforman y los cinco clips que el juego reproduce (`Idle`,
-`Fire`, `Reload`, `Reload_Empty`, `Inspect`). La pistola que traía el asset
-original estaba anclada en el espacio, no en la mano, así que el arma va anclada
-igual: fija al pivote, con las manos del clip trabajando alrededor. **Están en
-evaluación de reemplazo**; el porqué está medido en `CREDITS_MODELS.md`.
+### Cómo se comporta la bala
 
-Los eventos que dependen de un gesto del clip —los dos tiempos del cargador y
-los de la inspección— son **instantes del propio clip**: se miden con
-`tools/check_reload.gd` (que imprime las constantes listas para pegar) y viven
-junto a su clip en `Glock.gd`. Si un clip cambia, se vuelven a medir.
+- La forma de colisión manda: la salida se resuelve analíticamente en cajas,
+  cilindros y esferas, y el espesor que atraviesa la bala es geometría real, no
+  metadata.
+- Un cuerpo **fino** (una lata) declara `thin_shell` + `wall_thickness`: pierde
+  energía en dos paredes delgadas y no en 66 mm de metal macizo. Jolt se encarga
+  de que ruede y se voltee.
+- Sin trazadoras: una Glock normal no las dispara. El proyectil no deja estela.
 
 ### Dónde se pide cada ajuste
 
@@ -87,37 +105,31 @@ junto a su clip en `Glock.gd`. Si un clip cambia, se vuelven a medir.
 |---|---|
 | "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, 3 constantes juntas |
 | "el arma está mal encuadrada" | `GRIP_POS` / `GRIP_ROT` en `GlockViewmodel.gd` |
-| "los brazos salen mal encuadrados" | `ARMS_MOUNT_POS` / `ARMS_SCALE` en `GlockViewmodel.gd` |
 | "la corredera no llega / recorre de más" | `CORREDERA` en `GlockWeapon.gd` |
-| "un evento de la recarga cae fuera del gesto" | los `RELOAD_*_T` de `Glock.gd`, re-midiendo con `tools/check_reload.gd` |
+| "el cargador sale por donde no debe" | `MAGAZINE_OUT_AXIS` / `MAG_FUERA` en `GlockWeapon.gd` |
+| "la recarga va a destiempo" | los `RELOAD_*_T` de `Glock.gd` (segundos reales de la mecánica) |
+| "una lata no reacciona como debería" | `penetration_resistance` / `wall_thickness` en `World.gd` |
 
-Invariantes objetivas: `tools/check_weapon.gd` (orientación y montaje) y
-`tools/prune_arms.py` (que el rig de brazos sea solo lo que se usa). En Blender,
-`tools/make_weapon_parts.py` (piezas del arma, tamaño real y puntos mecánicos).
-Lo visual se comprueba abriendo Godot en la pantalla del usuario (`:0`, X11) y
-tomando capturas ahí. Prohibido headless, display virtual y GPU virtual: no
-concuerdan con lo que ve el usuario.
+Invariantes objetivas: `tools/check_weapon.gd` (escala real, piezas, recorrido de
+corredera, eje del cargador). Sonda visual: `tools/check_viewmodel.gd` (renderiza
+las poses a PNG); rendimiento: `tools/check_fps.gd`. La preparación del asset es
+`tools/make_weapon_parts.py`.
+Prohibido verificar en headless para lo visual: para mirar se abre Godot en la
+pantalla del usuario (`:0`).
 
 ## Workflow IA + usuario
 
-- **La IA abre el juego en tu pantalla, toma capturas y juzga.** Si algo
-  se ve mal, la IA ejecuta Godot en `:0`, saca sus propias capturas de esa
-  pantalla y juzga sobre ellas. Nunca pide al usuario imágenes de lo que
-  puede ver sola. Prohibido verificar en headless o en GPU/display virtual.
+- **La IA abre el juego en tu pantalla, toma capturas y juzga.** Si algo se ve
+  mal, la IA ejecuta Godot en `:0`, saca sus propias capturas de esa pantalla y
+  juzga sobre ellas. Nunca pide al usuario imágenes de lo que puede ver sola.
+- **Las capturas no se versionan.** `captures/` está ignorado por Git: se generan
+  para mirar, se miran y se borran. Una hoja de revisión es evidencia de trabajo,
+  no un asset.
 - **Ciclo:** cambio pequeño → la IA lo verifica en el juego con capturas →
   commit/push → el usuario valida en su Godot → feedback → corregir.
 - **Honestidad antes que avance.** Si algo atrasa el proyecto, la IA lo dice y
   propone una forma mejor de reemplazarlo. Prohibido decir "ya quedó" sin
-  haberlo verificado en el juego. Nada a medias ni mal hecho.
-- **Assets:** si un asset frena o se ve mal, se descarga uno mejor (licencia
-  compatible + crédito en `CREDITS_*.md`). Sin animaciones exorbitantes si
-  atrasan: brazos y gestos, lo justo para que se vea bien y barato de
-  mantener. La PISTOLA es lo que vende: calidad excelente de primer nivel en
-  modelo, físicas y sensación, sin sacrificar velocidad de desarrollo.
-- **Pendiente de assets:** los brazos actuales pesan 13,42 MB, de los que 11 MB
-  son diez texturas PNG. El rig ligero de 706 KB se probó y no sirve (sin
-  texturas y sin `Reload_Empty` ni `Inspect`): el diagnóstico medido, lo
-  descartado y lo que debe traer el sustituto están en `CREDITS_MODELS.md`.
+  haberlo verificado en el juego.
 - **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
   justifica si el usuario la pide explícitamente o autoriza una invariante
   concreta (pregunta objetiva que el usuario no responde mejor mirando o
@@ -128,12 +140,10 @@ concuerdan con lo que ve el usuario.
 
 ## Alcance
 
-PC + Android, **4 vs 4**, un mapa pequeño y muy trabajado, mini entrenamiento
-derivado del rango y lobby muy simple. **Multijugador, lobby, mapa y controles
-Android finales solo cuando el usuario lo ordene.**
-
-Fuera de alcance: mundo abierto, campaña, vehículos, loot, crafting, economía,
-tienda, clanes, ranking, espectador, replays, decenas de armas o de mapas.
+El renderer es **Mobile** (también para Android), pero hoy lo que manda es lo que
+se ve y se siente en el rango. **Fuera de alcance ahora mismo:** multijugador,
+lobby, mapa, controles Android finales, vida de blancos, puntuación y más de una
+arma. Cuando el usuario lo ordene, Git tiene la historia y el README cambia.
 
 ---
 
