@@ -20,7 +20,7 @@ func _ready() -> void:
     set_meta("thin_shell", true)
     set_meta("wall_thickness", 0.012)
     # Pino en paneles de 12 mm: la 9 mm pasa dos paredes sin frenarse.
-    set_meta("penetration_resistance", 7.0)
+    set_meta("penetration_resistance", Ballistics.MATERIALS["pine"])
 
 
 ## Fisica centralizada en Ballistics (delta-p). Aqui solo material/geometria.

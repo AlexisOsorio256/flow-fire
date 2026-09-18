@@ -315,7 +315,8 @@ func _make_barrier(x: float, z: float, rot_y: float) -> void:
     board.set_meta("penetrable", true)
     # Resistencia por metro; la distancia real sale de la segunda cara de la
     # colisión, no de una salida calculada desde metadata.
-    board.set_meta("penetration_resistance", 7.0)
+    # AUTORIDAD: el numero vive en Ballistics.MATERIALS; aqui solo se declara material+geometria.
+    board.set_meta("penetration_resistance", Ballistics.MATERIALS["pine"])
 
     for leg_x in [-1.0, 1.0]:
         var leg := _static_box(root, "BarrierLeg", Vector3(0.08, 1.05, 0.08), Vector3(leg_x, 0.52, 0), wood_mat)
@@ -334,12 +335,12 @@ func _make_plank_wall(x: float, z: float, rot_y: float) -> void:
         var plank := _static_box(root, "Plank", Vector3(0.22, 1.9, 0.045), Vector3((i - 2) * 0.25, 0.95, 0), wood_mat)
         plank.set_meta("surface", "wood")
         plank.set_meta("penetrable", true)
-        plank.set_meta("penetration_resistance", 7.0)
+        plank.set_meta("penetration_resistance", Ballistics.MATERIALS["pine"])
     for rail_y in [0.5, 1.5]:
         var rail := _static_box(root, "PlankRail", Vector3(1.3, 0.09, 0.03), Vector3(0, rail_y, -0.05), wood_mat)
         rail.set_meta("surface", "wood")
         rail.set_meta("penetrable", true)
-        rail.set_meta("penetration_resistance", 7.0)
+        rail.set_meta("penetration_resistance", Ballistics.MATERIALS["pine"])
 
 
 ## Caja de madera (35 cm): la 9 mm la pasa saliendo lenta (~110 m/s, al limite
@@ -391,7 +392,7 @@ func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> vo
     body.set_meta("surface", "drywall")
     body.set_meta("penetrable", true)
     # Hoja honesta de 1/2" (12,7 mm): la 9 mm la pasa; doble hoja la frena.
-    body.set_meta("penetration_resistance", 27.0)
+    body.set_meta("penetration_resistance", Ballistics.MATERIALS["gypsum"])
 
 
 func _make_drum(x: float, z: float) -> void:
@@ -420,7 +421,7 @@ func _make_drum(x: float, z: float) -> void:
     body.set_meta("penetrable", true)
     body.set_meta("thin_shell", true)
     body.set_meta("wall_thickness", 0.0012)
-    body.set_meta("penetration_resistance", 900.0)
+    body.set_meta("penetration_resistance", Ballistics.MATERIALS["steel"])
 
 
 ## Lata de aluminio vacia. Jolt la mueve (rueda, rebota, se voltea) con una
@@ -468,7 +469,7 @@ func _make_can(base: Vector3) -> void:
     body.set_meta("thin_shell", true)
     body.set_meta("wall_thickness", 0.00012)
     # Aluminio: casi no roba energia a la bala (exp(-200 * 0,00024) ~ 0,95).
-    body.set_meta("penetration_resistance", 200.0)
+    body.set_meta("penetration_resistance", Ballistics.MATERIALS["aluminum"])
 
 
 func _make_paper_target(x: float, z: float) -> void:

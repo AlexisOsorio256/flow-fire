@@ -36,7 +36,7 @@ func _ready() -> void:
         plate_width = 0.66
         set_meta("surface", "paper")
         set_meta("penetrable", true)
-        set_meta("penetration_resistance", 1.70)
+        set_meta("penetration_resistance", Ballistics.MATERIALS["paper"])
     else:
         plate_height = 0.62
         plate_width = 0.62

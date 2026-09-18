@@ -137,16 +137,15 @@ func build() -> void:
 	if barrel != null:
 		_barrel_rest_basis = barrel.transform.basis
 
-	# El GLB canonico llega en metros: se VALIDA. Dentro del 3% la escala es 1.0
-	# exacta (cero correccion silenciosa); fuera, se corrige y se avisa alto.
+	# El GLB canonico llega en metros: Godot solo VALIDA, nunca corrige.
+	# Dentro del 3% la escala es 1.0 exacta; fuera es bug visible y se queda en
+	# 1.0 para no gobernar el encuadre con un numero heredado.
 	var measured_length := _model_length(root)
 	var raw_scale := REAL_LENGTH / maxf(measured_length, 0.0001)
+	model_scale = 1.0
+	scale = Vector3.ONE
 	if absf(raw_scale - 1.0) > 0.03:
-		push_warning("GLB no canonico: escala %.4f (malla %.1f mm)" % [raw_scale, measured_length * 1000.0])
-		model_scale = raw_scale
-	else:
-		model_scale = 1.0
-	scale = Vector3(model_scale, model_scale, model_scale)
+		push_error("GLB no canonico: escala %.4f (malla %.1f mm), se dibuja a 1.0" % [raw_scale, measured_length * 1000.0])
 	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
 	## TRIGGER_TRAVEL esta en metros. Con escala canonica 1.0 es identidad.
 	if trigger != null:
