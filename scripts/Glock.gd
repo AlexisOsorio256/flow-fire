@@ -268,7 +268,11 @@ func _can_fire() -> bool:
 
 func _update_trigger(delta: float) -> void:
 	trigger_visual += ((1.0 if trigger_held else 0.0) - trigger_visual) * (1.0 - exp(-18.0 * delta))
-	if trigger_held and trigger_ready and _can_fire():
+	# El disparo rompe al fondo del recorrido (~50 ms de take-up), no en el
+	# primer frame del clic. Histeresis con el reset (0.35): romper adelante,
+	# resetear atras, como el disparador real. `force_fire_once` (revision) no
+	# pasa por aqui y las hojas no cambian.
+	if trigger_held and trigger_ready and trigger_visual > 0.6 and _can_fire():
 		_fire()
 		return
 	if trigger_held and trigger_ready and not reloading and chamber <= 0 and not slide_locked:
