@@ -268,6 +268,7 @@ func start_reload(incoming_rounds: int = 0) -> bool:
 	_slide_release_sounded = false
 	aim = false
 	trigger_held = false
+	viewmodel.play_reload(reload_empty)
 	# Sin Foley de manos inexistentes: solo mecanica visible.
 	viewmodel.set_magazine_visible(true)
 	viewmodel.set_magazine_tumble(0.0)
@@ -528,6 +529,7 @@ func inspect_weapon() -> void:
 	inspect_elapsed = 0.0
 	inspect_locked = false
 	inspect_released = false
+	viewmodel.play_inspect()
 	# Sin manos que suenen: la inspeccion es solo corredera.
 
 

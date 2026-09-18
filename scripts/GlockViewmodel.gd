@@ -177,6 +177,25 @@ func play_fire() -> void:
 			hand_player.queue("Idle")
 
 
+## Coreografia de recarga/inspeccion sobre el agarre (tiempos = mecanica).
+## La pose GRUESA la pone el codigo; los huesos solo aprietan/rotan.
+func play_reload(empty: bool) -> void:
+	if hand_player == null:
+		return
+	var clip := "ReloadEmpty" if empty else "Reload"
+	if hand_player.has_animation(clip):
+		hand_player.play(clip, 0.08)
+		if hand_player.has_animation("Idle"):
+			hand_player.queue("Idle")
+
+
+func play_inspect() -> void:
+	if hand_player != null and hand_player.has_animation("Inspect"):
+		hand_player.play("Inspect", 0.08)
+		if hand_player.has_animation("Idle"):
+			hand_player.queue("Idle")
+
+
 func _apply_hand_material(root_node: Node) -> void:
 	# El GLB conserva un único material; este override fija su respuesta mate
 	# bajo los Omni del rango para que la mano siga siendo secundaria y no se

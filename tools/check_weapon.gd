@@ -92,9 +92,11 @@ func _ready() -> void:
 			anim_names.append_array((ap as AnimationPlayer).get_animation_list())
 		if hand_meshes.size() != 1 or hand_tris < 2000 or hand_tris > 6000 \
 				or bone_count < 20 or bone_count > 40 \
-				or not anim_names.has("Idle") or not anim_names.has("Fire"):
+				or not anim_names.has("Idle") or not anim_names.has("Fire") \
+				or not anim_names.has("Reload") or not anim_names.has("ReloadEmpty") \
+				or not anim_names.has("Inspect"):
 			failures += 1
-			print("FALLO: RightHand debe ser 1 malla 2-6k tris, rig 20-40 huesos, clips Idle+Fire (ReloadEmpty/Reload/Inspect por retarget)")
+			print("FALLO: RightHand debe ser 1 malla 2-6k tris, rig 20-40 huesos, clips Idle/Fire/Reload/ReloadEmpty/Inspect")
 
 	var sight_axis: Vector3 = (weapon.sight_front.global_position - weapon.sight_rear.global_position).normalized()
 	var up: Vector3 = weapon.slide.global_transform.basis.y.normalized()

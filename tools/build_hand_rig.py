@@ -2,8 +2,8 @@
 
 Reemplaza el blob procedural de 0 huesos por un rig de produccion minimo:
 ~20 deform bones, 1 mesh, 1 material, pose de agarre horneada sobre el Grip
-de NUESTRA G19. Sin IK runtime, sin controllers, sin constraints: Godot recibe
-ArmsRig limpio con clips por venir (Idle->Fire->ReloadEmpty->Reload->Inspect).
+de NUESTRA G19 y 5 clips horneados (Idle/Fire/Reload/ReloadEmpty/Inspect).
+Sin IK runtime, sin controllers, sin constraints: Godot recibe ArmsRig limpio.
 
 Uso:
     blender --background --python tools/build_hand_rig.py
@@ -200,10 +200,13 @@ def build() -> None:
     bpy.context.view_layer.objects.active = hand
     bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
 
-    # --- Clips horneados v1: Idle (agarre, 1 s loop) + Fire (latigazo 0,2 s).
-    #     ReloadEmpty/Reload/Inspect vienen por retarget del donante historico.
-    #     La pose de reposo YA es el agarre, asi los clips solo animan el gesto
-    #     sobre ella (sin IK, sin constraints: todo keyframes a mano).
+    # --- Clips horneados: Idle (1 s) + Fire (0,2 s) + Reload (2,10 s) +
+    #     ReloadEmpty (2,35 s) + Inspect (2,0 s). Tiempos IDENTICOS a la linea
+    #     de tiempo mecanica de Glock.gd (el donante historico arms.glb sirvio
+    #     de referencia de coreografia). La pose de reposo YA es el agarre, asi
+    #     los clips solo animan microgesto sobre ella (sin IK, sin constraints:
+    #     todo keyframes). La coreografia GRUESA (arma al centro, brocal fuera)
+    #     la sigue poniendo el codigo de pose; los huesos solo aprietan.
     bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.object.mode_set(mode="POSE")
     pose_bones = arm_obj.pose.bones
@@ -240,18 +243,57 @@ def build() -> None:
     for pb in pose_bones:
         pb.rotation_euler = (0.0, 0.0, 0.0)
         pb.keyframe_insert(data_path="rotation_euler", frame=0)
+    # Reload tactica 2,10 s (126 frames): la mano aprieta al asentar (1,40 s).
+    reload = bpy.data.actions.new("Reload")
+    arm_obj.animation_data.action = reload
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
+        pb.keyframe_insert(data_path="location", frame=0)
+    for fname in ("Index", "Middle", "Ring", "Pinky"):
+        pose_bones[f"{fname}Prox"].rotation_euler = (0.04, 0.0, 0.0)
+        pose_bones[f"{fname}Prox"].keyframe_insert(data_path="rotation_euler", frame=84)
+    pose_bones["Wrist"].rotation_euler = (0.03, 0.0, 0.0)
+    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=84)
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=126)
+    # Reload en seco 2,35 s (141 frames): mismo apriete + tiron de corredera.
+    reload_empty = bpy.data.actions.new("ReloadEmpty")
+    arm_obj.animation_data.action = reload_empty
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
+        pb.keyframe_insert(data_path="location", frame=0)
+    for fname in ("Index", "Middle", "Ring", "Pinky"):
+        pose_bones[f"{fname}Prox"].rotation_euler = (0.04, 0.0, 0.0)
+        pose_bones[f"{fname}Prox"].keyframe_insert(data_path="rotation_euler", frame=84)
+    pose_bones["Wrist"].rotation_euler = (0.05, 0.0, 0.0)
+    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=103)
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=141)
+    # Inspect 2,0 s (120 frames): giro leve para ensenar recamara y vuelta.
+    inspect = bpy.data.actions.new("Inspect")
+    arm_obj.animation_data.action = inspect
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
+        pb.keyframe_insert(data_path="location", frame=0)
+    pose_bones["Wrist"].rotation_euler = (0.0, 0.0, 0.05)
+    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=36)
+    for pb in pose_bones:
+        pb.keyframe_insert(data_path="rotation_euler", frame=120)
+    for pb in pose_bones:
+        pb.rotation_euler = (0.0, 0.0, 0.0)
+        pb.keyframe_insert(data_path="rotation_euler", frame=0)
     # Stash a NLA para que el exportador glTF los incluya como clips.
     arm_obj.animation_data.action = None
-    for act in (idle, fire):
+    for act in (idle, fire, reload, reload_empty, inspect):
         track = arm_obj.animation_data.nla_tracks.new()
         track.name = act.name
         strip = track.strips.new(act.name, 0, act)
         strip.blend_type = "REPLACE"
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    hand["asset_role"] = "rigged right hand, baked grip, Idle+Fire baked"
+    hand["asset_role"] = "rigged right hand, baked grip, 5 clips baked"
     hand["bones"] = len(bones)
-    hand["animations"] = 2
+    hand["animations"] = 5
     hand["material_count"] = 1
     triangles = sum(max(0, len(p.vertices) - 2) for p in hand.data.polygons)
     hand["approx_triangles"] = triangles

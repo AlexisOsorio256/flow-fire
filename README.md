@@ -91,13 +91,13 @@ BodyGive
 
 `right_hand.glb` es mano derecha + antebrazo/manga con 20 deform bones, pose
 de agarre horneada sobre el `Grip` de NUESTRA Glock (falanges rígidas, un hueso
-por segmento) y clips Idle+Fire horneados (el Fire es latigazo de muñeca 0,2 s
-que acompaña al kick; ReloadEmpty/Reload/Inspect por retarget). La mano no escribe ningún transform del arma; `WeaponSocket`
+por segmento) y 5 clips horneados Idle/Fire/Reload/ReloadEmpty/Inspect (tiempos =
+linea mecanica; la pose gruesa la pone el codigo, los huesos el microgesto). La mano no escribe ningún transform del arma; `WeaponSocket`
 aplica el retroceso rápido y `BodyGive` la cesión lenta (la mano RESISTE: el
 arma cabecea rápido dentro del agarre y el conjunto cede después). No hay mano
-izquierda, IK, retarget ni `AnimationPlayer` todavía: los clips
-Idle->Fire->ReloadEmpty->Reload->Inspect vendrán por retarget del donante
-histórico en Blender y bake. Durante la recarga el cargador puede moverse solo:
+izquierda, IK ni retarget en runtime: los 5 clips van horneados en el GLB y
+`GlockViewmodel` los dispara (Fire al tiro, Reload/Empty al recargar, Inspect
+a F). Durante la recarga el cargador puede moverse solo:
 la mecánica visible sigue siendo coherente y no se inventan Foley de manos
 inexistentes.
 
