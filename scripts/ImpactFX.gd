@@ -10,6 +10,17 @@ extends Node3D
 ##
 ## Entrada y salida no son el mismo agujero escalado. La salida abre mas el
 ## material, tiene borde mas irregular y expulsa masa hacia fuera.
+##
+## EL AGUJERO ES UN `Decal` NATIVO, no una malla. Godot lo proyecta sobre lo que
+## tenga debajo (funciona en el renderer Mobile), asi que el agujero se adapta a
+## una pared, a un bidon curvado o a una lata sin fabricar geometria por impacto:
+## antes eran ~90 lineas de malla procedural por agujero y el borde tenia que
+## inventarse el relieve. Lo unico que se genera aqui son las DOS siluetas
+## (disco y anillo) UNA vez al arrancar; el color lo pone el material del impacto
+## con `modulate`, y el desgaste de la superficie se lee del propio mundo porque
+## `albedo_mix` deja pasar la textura de debajo.
+##
+## Las particulas (polvo, astillas, chispas) siguen siendo `GPUParticles3D`.
 
 const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png")
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
@@ -23,11 +34,37 @@ const HOLE_SIZE := {
     "paper": 0.040,
 }
 
+## Color de la cavidad y del labio, por material. Antes eran dos funciones de
+## materiales; ahora es el tinte que se le pasa al `Decal` por `modulate`.
+const CAVITY_TINT := {
+    "concrete": Color(0.024, 0.024, 0.022),
+    "drywall": Color(0.085, 0.080, 0.072),
+    "wood": Color(0.050, 0.031, 0.015),
+    "metal": Color(0.055, 0.058, 0.064),
+    "paper": Color(0.075, 0.066, 0.055),
+}
+const LIP_TINT := {
+    "concrete": Color(0.38, 0.37, 0.34),
+    "drywall": Color(0.74, 0.71, 0.65),
+    "wood": Color(0.46, 0.30, 0.14),
+    "metal": Color(0.32, 0.33, 0.36),
+    "paper": Color(0.70, 0.66, 0.56),
+}
+## Lado de la textura de silueta. 96 px sobra para un agujero de 5 cm.
+const MASK_SIZE := 96
+## Caja de proyeccion del decal: fondo suficiente para atravesar la chapa de una
+## lata (0,12 mm) y quedarse corto para no manchar lo de mas atras.
+const DECAL_DEPTH := 0.03
+
 var _holes: Array[Node] = []
+var _mask_cavity: ImageTexture
+var _mask_lip: ImageTexture
 
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
+    _mask_cavity = _make_mask(true)
+    _mask_lip = _make_mask(false)
 
 
 func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool = false) -> void:
@@ -87,171 +124,136 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     get_tree().create_timer(1.5).timeout.connect(particles.queue_free)
 
 
-## Agujero de dos superficies. Antes TODO el embudo usaba un unico material
-## casi negro y el radio interior era enorme: desde camara se leia como una
-## moneda negra pegada a la pared. Ahora solo la cavidad central es oscura; el
-## anillo roto conserva el color del material y recibe iluminacion.
+## Agujero de bala: DOS `Decal` anclados a la superficie —cavidad hundida y
+## labio de material roto—. El que proyecta es Godot; aqui solo se eligen
+## tamano, tinte y cuanto se mezclan con la textura de debajo.
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
-    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
-    var size := float(HOLE_SIZE.get(surface, 0.026))
+    var perfil: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
+    var size := float(HOLE_SIZE.get(surface, 0.030))
     if is_exit:
-        size *= float(profile.get("exit_scale", 1.35))
+        size *= float(perfil.get("exit_scale", 1.35))
 
     var n := normal.normalized()
     if n.length_squared() < 0.01:
         n = Vector3.UP
-    var basis := _surface_basis(n).rotated(n, randf_range(0.0, TAU))
 
-    var hole := MeshInstance3D.new()
-    hole.name = "BulletExit" if is_exit else "BulletEntry"
-    hole.mesh = _hole_mesh(size, surface, is_exit)
-    hole.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    add_child(hole)
-    hole.global_transform = Transform3D(basis, point)
+    var holder := Node3D.new()
+    holder.name = "BulletExit" if is_exit else "BulletEntry"
+    add_child(holder)
+    ## La caja de proyeccion empieza EN la superficie y entra hacia dentro: si
+    ## se centrara en el punto, la mitad del decal quedaria en el aire.
+    var basis := _decal_basis(n).rotated(n, randf_range(0.0, TAU))
+    holder.global_transform = Transform3D(basis, point - n * (DECAL_DEPTH * 0.5))
+
+    ## En metal la mezcla se deja mas baja: el agujero tiene que seguir leyendose
+    ## como metal pulido, no como un disco pintado encima.
+    var mezcla_cavidad := 0.85 if surface == "metal" else 1.0
+    _add_decal(holder, _mask_cavity, size * 0.5, CAVITY_TINT.get(surface, CAVITY_TINT["concrete"]),
+        mezcla_cavidad, is_exit)
+    _add_decal(holder, _mask_lip, size, LIP_TINT.get(surface, LIP_TINT["concrete"]), 0.55, is_exit)
 
     if collider is Node3D and collider.get_meta("dynamic_decal", false):
-        hole.reparent(collider, true)
+        holder.reparent(collider, true)
 
-    _holes.append(hole)
+    _holes.append(holder)
     if _holes.size() > MAX_HOLES:
         var old: Node = _holes.pop_front()
         if is_instance_valid(old):
             old.queue_free()
 
 
-## Construye una cavidad pequena + un labio de fractura ancho. La entrada es
-## mas profunda y contenida; la salida es mas plana, abierta e irregular.
-func _hole_mesh(size: float, surface: String, is_exit: bool) -> ArrayMesh:
-    const SEGMENTS := 10
-    var outer_radius := size * 0.5
-    var inner_radius := size * (0.22 if is_exit else 0.17)
-    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
-    var depth := 0.0010 if is_exit else float(profile.get("crater", 0.0035))
-    var bulge := 0.0011 if is_exit else 0.00055
-
-    var verts := PackedVector3Array()
-    var cavity_idx := PackedInt32Array()
-    var lip_idx := PackedInt32Array()
-
-    # Centro real del hueco.
-    verts.append(Vector3(0.0, 0.0, bulge - depth))
-
-    # Anillo interior. La salida rompe mas desigual que la entrada.
-    for i in range(SEGMENTS):
-        var a := TAU * float(i) / float(SEGMENTS)
-        var jitter := randf_range(0.72, 1.32) if is_exit else randf_range(0.82, 1.20)
-        var r := inner_radius * jitter
-        var z := bulge - depth * randf_range(0.34, 0.58)
-        verts.append(Vector3(cos(a) * r, sin(a) * r, z))
-
-    # Labio exterior roto. No es circular: cada sector conserva una longitud
-    # diferente y la salida tiene mas desgarro radial.
-    for i in range(SEGMENTS):
-        var a := TAU * float(i) / float(SEGMENTS)
-        var jitter := randf_range(0.72, 1.30) if is_exit else randf_range(0.84, 1.18)
-        var r := outer_radius * jitter
-        var z := bulge + (randf_range(-0.00020, 0.00038) if is_exit else randf_range(-0.00010, 0.00018))
-        verts.append(Vector3(cos(a) * r, sin(a) * r, z))
-
-    var inner_start := 1
-    var outer_start := 1 + SEGMENTS
-    for i in range(SEGMENTS):
-        var j := (i + 1) % SEGMENTS
-        # Cavidad: solo centro -> anillo interior.
-        cavity_idx.append(0)
-        cavity_idx.append(inner_start + j)
-        cavity_idx.append(inner_start + i)
-        # Fractura: anillo interior -> borde exterior.
-        lip_idx.append(inner_start + i)
-        lip_idx.append(inner_start + j)
-        lip_idx.append(outer_start + j)
-        lip_idx.append(inner_start + i)
-        lip_idx.append(outer_start + j)
-        lip_idx.append(outer_start + i)
-
-    var cavity_arrays := []
-    cavity_arrays.resize(Mesh.ARRAY_MAX)
-    cavity_arrays[Mesh.ARRAY_VERTEX] = verts
-    cavity_arrays[Mesh.ARRAY_INDEX] = cavity_idx
-
-    var lip_arrays := []
-    lip_arrays.resize(Mesh.ARRAY_MAX)
-    lip_arrays[Mesh.ARRAY_VERTEX] = verts
-    lip_arrays[Mesh.ARRAY_INDEX] = lip_idx
-
-    var mesh := ArrayMesh.new()
-    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, cavity_arrays)
-    mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, lip_arrays)
-    mesh.surface_set_material(0, _cavity_material(surface))
-    mesh.surface_set_material(1, _fracture_material(surface, is_exit))
-    return mesh
-
-
-func _cavity_material(surface: String) -> StandardMaterial3D:
-    var mat := StandardMaterial3D.new()
-    match surface:
-        "wood":
-            mat.albedo_color = Color(0.050, 0.031, 0.015)
-        "drywall":
-            mat.albedo_color = Color(0.085, 0.080, 0.072)
-        "metal":
-            mat.albedo_color = Color(0.055, 0.058, 0.064)
-            mat.metallic = 0.75
-            mat.roughness = 0.34
-        "paper":
-            mat.albedo_color = Color(0.075, 0.066, 0.055)
-        _:
-            mat.albedo_color = Color(0.024, 0.024, 0.022)
-    mat.roughness = 1.0 if surface != "metal" else mat.roughness
-    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    mat.disable_receive_shadows = true
-    return mat
-
-
-func _fracture_material(surface: String, is_exit: bool) -> StandardMaterial3D:
-    var mat := StandardMaterial3D.new()
-    match surface:
-        "wood":
-            # Fibra fresca: mucho mas clara que el agujero carbonizado anterior.
-            mat.albedo_color = Color(0.46, 0.30, 0.14)
-            mat.roughness = 0.96
-        "drywall":
-            mat.albedo_color = Color(0.74, 0.71, 0.65)
-            mat.roughness = 1.0
-        "metal":
-            mat.albedo_color = Color(0.32, 0.33, 0.36)
-            mat.metallic = 0.82
-            mat.roughness = 0.30
-        "paper":
-            mat.albedo_color = Color(0.70, 0.66, 0.56)
-            mat.roughness = 1.0
-        _:
-            mat.albedo_color = Color(0.38, 0.37, 0.34)
-            mat.roughness = 0.95
+## Un `Decal` con su silueta, su tinte y su tamano. El decal proyecta por su -Y,
+## asi que la base que le llega ya tiene la normal en la Y.
+func _add_decal(padre: Node3D, mascara: ImageTexture, huella: float, tinte: Color,
+        mezcla: float, is_exit: bool) -> void:
+    var decal := Decal.new()
+    decal.texture_albedo = mascara
+    var color := tinte
     if is_exit:
-        # Cara rota expuesta a la luz: un poco mas clara, sin volverla blanca.
-        var c := mat.albedo_color
-        mat.albedo_color = Color(minf(c.r * 1.12, 1.0), minf(c.g * 1.12, 1.0), minf(c.b * 1.12, 1.0), c.a)
-    mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-    return mat
+        ## Cara de salida: material arrancado, un poco mas claro, sin blanquear.
+        color = Color(minf(color.r * 1.12, 1.0), minf(color.g * 1.12, 1.0), minf(color.b * 1.12, 1.0))
+    decal.modulate = color
+    decal.albedo_mix = mezcla
+    decal.size = Vector3(huella, DECAL_DEPTH, huella)
+    decal.upper_fade = 0.0
+    decal.lower_fade = 0.35
+    ## 0,45 de normal_fade: en una pared perpendicular el decal se apaga en vez
+    ## de estirarse por el canto.
+    decal.normal_fade = 0.45
+    decal.distance_fade_enabled = true
+    decal.distance_fade_begin = 9.0
+    decal.distance_fade_length = 5.0
+    padre.add_child(decal)
 
 
-func _surface_basis(n: Vector3) -> Basis:
-    var up_ref := Vector3.UP
-    if absf(n.dot(up_ref)) > 0.94:
-        up_ref = Vector3.RIGHT
-    var x_axis := up_ref.cross(n).normalized()
+## Base para proyectar sobre una superficie plana o curva.
+func _decal_basis(n: Vector3) -> Basis:
+    var arriba := Vector3.UP
+    if absf(n.dot(arriba)) > 0.94:
+        arriba = Vector3.RIGHT
+    var x_axis := arriba.cross(n).normalized()
     if x_axis.length_squared() < 0.01:
         x_axis = Vector3.RIGHT
-    var y_axis := n.cross(x_axis).normalized()
-    if y_axis.length_squared() < 0.01:
-        y_axis = Vector3.FORWARD
-    return Basis(x_axis, y_axis, n)
+    var z_axis := x_axis.cross(n).normalized()
+    return Basis(x_axis, n, z_axis)
 
 
-## Respuesta por material. Polvo y fragmento NO son la misma particula pintada:
-## cambian cantidad, velocidad, gravedad, tamano, duracion y silueta.
+## Silueta del agujero, generada UNA vez al arrancar. `cavidad` = disco hundido
+## de borde irregular y centro mas oscuro; si no, el anillo de material roto.
+func _make_mask(cavidad: bool) -> ImageTexture:
+    var img := Image.create(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8)
+    for y in range(MASK_SIZE):
+        for x in range(MASK_SIZE):
+            var u := (float(x) + 0.5) / float(MASK_SIZE) * 2.0 - 1.0
+            var v := (float(y) + 0.5) / float(MASK_SIZE) * 2.0 - 1.0
+            var r := sqrt(u * u + v * v)
+            var ang := atan2(v, u)
+            ## Ruido atado al ANGULO: el borde se rompe, no se ensucia el centro.
+            var ruido := _fbm(cos(ang) * 3.1 + 5.0, sin(ang) * 3.1 + 5.0)
+            var alfa := 0.0
+            var tono := 1.0
+            if cavidad:
+                var borde := 0.47 * (1.0 + 0.26 * (ruido - 0.5))
+                alfa = smoothstep(borde, borde - 0.30, r)
+                tono = 0.42 + 0.58 * smoothstep(0.0, maxf(borde, 0.01), r)
+            else:
+                var medio := 0.60 * (1.0 + 0.18 * (ruido - 0.5))
+                var ancho := 0.30 * (1.0 + 0.35 * (ruido - 0.5))
+                var dentro := smoothstep(medio - ancho, medio - ancho * 0.4, r)
+                var fuera := 1.0 - smoothstep(medio + ancho * 0.5, medio + ancho, r)
+                alfa = dentro * fuera
+                tono = 0.70 + 0.30 * ruido
+            img.set_pixel(x, y, Color(tono, tono, tono, clampf(alfa, 0.0, 1.0)))
+    return ImageTexture.create_from_image(img)
+
+
+## Ruido de valor barato y DETERMINISTA: la silueta es la misma en cada partida,
+## asi que dos agujeros del mismo material no salen distintos porque si.
+static func _fbm(x: float, y: float) -> float:
+    return _value_noise(x, y) * 0.65 + _value_noise(x * 2.7 + 11.3, y * 2.7 + 7.1) * 0.35
+
+
+static func _value_noise(x: float, y: float) -> float:
+    var xi := floori(x)
+    var yi := floori(y)
+    var xf := x - float(xi)
+    var yf := y - float(yi)
+    var sx := xf * xf * (3.0 - 2.0 * xf)
+    var sy := yf * yf * (3.0 - 2.0 * yf)
+    var a := _hash01(xi, yi)
+    var b := _hash01(xi + 1, yi)
+    var c := _hash01(xi, yi + 1)
+    var d := _hash01(xi + 1, yi + 1)
+    return lerpf(lerpf(a, b, sx), lerpf(c, d, sx), sy)
+
+
+static func _hash01(a: int, b: int) -> float:
+    var h := (a * 374761393 + b * 668265263) ^ 0x5BF03635
+    h = (h ^ (h >> 13)) * 1274126177
+    h = h ^ (h >> 16)
+    return float(h & 0xFFFFFF) / float(0xFFFFFF)
+
+
 const IMPACT_MATERIALS := {
     "concrete": {
         "dust": {"amount": 9, "color": Color(0.56, 0.55, 0.52, 0.60), "vel": [0.4, 1.6], "gravity": -2.0, "scale": [0.6, 2.4], "life": 0.85, "size": 0.050, "spread": 62.0},
