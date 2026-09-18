@@ -1,6 +1,9 @@
 # Caché de Godot 4 (se regenera al abrir el proyecto)
 .godot/
 
+# Basura de Python (las herramientas de tools/ lo generan al importarse)
+__pycache__/
+
 # Sistema
 .DS_Store
 Thumbs.db
@@ -10,8 +13,12 @@ Thumbs.db
 .idea/
 *.swp
 
-# Capturas: se generan para mirar y se borran. Git no las guarda.
-captures/
+# Capturas: se generan para mirar y se borran. Git no las guarda. El unico
+# archivo que si se versiona es el `.gdignore`, que le dice a Godot que no
+# importe la carpeta entera (sin el, cada PNG de revision acaba en el
+# importador y deja un .import suelto al lado).
+captures/*
+!captures/.gdignore
 
 # Texturas extraídas de un .glb por el importador (derivadas del propio .glb).
 assets/models/*_Image_*.jpg
