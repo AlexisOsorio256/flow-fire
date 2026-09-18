@@ -85,24 +85,10 @@ func _build_visuals() -> void:
         add_child(collider)
 
 
-## Flash visual al recibir bala. El momento lo pone Ballistics (delta-p a Jolt);
-## aqui no hay fisica propia ni torques aleatorios.
+## El aviso del impacto lo ponen Ballistics (impulso a Jolt) e ImpactFX
+## (agujero + particulas + sonido): el papel no se enciende al recibir.
+## Aqui no hay fisica propia ni torques aleatorios.
 func take_bullet_hit(_point: Vector3, _normal: Vector3, _speed: float, _energy: float, _direction := Vector3.ZERO) -> void:
-    _flash()
+    pass
 func bullet_flash() -> void:
-    _flash()
-
-
-func _flash() -> void:
-    if base_material == null:
-        return
-    # El acero no se pone al rojo con una 9 mm: su aviso son la chispa, el
-    # clang y la oscilacion, no un resplandor (el papel si parpadea para
-    # leerse a distancia).
-    if kind != 'paper':
-        return
-    base_material.emission_enabled = true
-    base_material.emission = Color(1.0, 0.12, 0.05)
-    base_material.emission_energy_multiplier = 3.6
-    var tween := create_tween()
-    tween.tween_property(base_material, "emission_energy_multiplier", 0.0, 0.09)
+    pass
