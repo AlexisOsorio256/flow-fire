@@ -1,7 +1,7 @@
 class_name Crate
 extends RigidBody3D
 
-## Caja de madera reactiva: se deja empujar y voltear por los impactos.
+## Caja de madera HUECA (6 paneles de 12 mm): se deja empujar y voltear.
 ##
 ## La bala la atraviesa igual (ver Ballistics: `take_bullet_hit` y despues la
 ## penetracion con sus agujeros reales). Los agujeros viajan con la caja
@@ -17,7 +17,7 @@ func _ready() -> void:
     set_meta("dynamic_decal", true)
     set_meta("surface", "wood")
     set_meta("penetrable", true)
-    # Pino: 45 mm lo pasan sobrados, 35 cm salen al limite.
+    # Pino en paneles de 12 mm: la 9 mm pasa dos paredes sin frenarse.
     set_meta("penetration_resistance", 7.0)
 
 

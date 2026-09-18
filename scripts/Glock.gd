@@ -97,7 +97,6 @@ var reserve := 60
 var trigger_held := false
 var trigger_ready := true
 var trigger_latched := false
-var trigger_reset_timer := 0.0
 
 var slide_pos := 0.0
 var slide_vel := 0.0

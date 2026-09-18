@@ -288,25 +288,39 @@ func _make_plank_wall(x: float, z: float, rot_y: float) -> void:
 ## del modelo); dos cajas pegadas ya la detienen. Entrenamiento de libro.
 ## Son cuerpos rigidos (ver Crate.gd): el impacto las empuja y voltea, y los
 ## agujeros viajan con ellas.
+## Caja HUECA honesta: 6 paneles de pino de 12 mm, no bloque macizo.
+## La bala atraviesa dos paredes (24 mm), no 350 mm de madera.
 func _make_crate(base: Vector3, size: float) -> void:
     var box := Crate.new()
     box.name = "WoodCrate"
-    box.mass = 6.0
+    box.mass = 4.2
     box.position = base + Vector3(0, size * 0.5, 0)
     add_child(box)
-
-    var mesh_instance := MeshInstance3D.new()
-    var mesh := BoxMesh.new()
-    mesh.size = Vector3(size, size, size)
-    mesh.material = wood_mat
-    mesh_instance.mesh = mesh
-    box.add_child(mesh_instance)
-
-    var shape := CollisionShape3D.new()
-    var box_shape := BoxShape3D.new()
-    box_shape.size = Vector3(size, size, size)
-    shape.shape = box_shape
-    box.add_child(shape)
+    var t := 0.012
+    var panels := [
+        [Vector3(size, t, size), Vector3(0, -size * 0.5 + t * 0.5, 0)],
+        [Vector3(size, t, size), Vector3(0, size * 0.5 - t * 0.5, 0)],
+        [Vector3(size, size, t), Vector3(0, 0, -size * 0.5 + t * 0.5)],
+        [Vector3(size, size, t), Vector3(0, 0, size * 0.5 - t * 0.5)],
+        [Vector3(t, size, size), Vector3(-size * 0.5 + t * 0.5, 0, 0)],
+        [Vector3(t, size, size), Vector3(size * 0.5 - t * 0.5, 0, 0)],
+    ]
+    for panel in panels:
+        var psize: Vector3 = panel[0] as Vector3
+        var ppos: Vector3 = panel[1] as Vector3
+        var mi := MeshInstance3D.new()
+        var bm := BoxMesh.new()
+        bm.size = psize
+        bm.material = wood_mat
+        mi.mesh = bm
+        mi.position = ppos
+        box.add_child(mi)
+        var cs := CollisionShape3D.new()
+        var bs := BoxShape3D.new()
+        bs.size = psize
+        cs.shape = bs
+        cs.position = ppos
+        box.add_child(cs)
 
 
 func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> void:

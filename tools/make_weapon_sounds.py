@@ -85,21 +85,14 @@ def write(name, x):
 
 
 def mag_drop():
-    """Cargador de acero vacio cayendo de canto en hormigon: cinco rebotes, cada
-    uno mas flojo y mas grave, con el cuerpo metalico sonando por detras."""
-    total = int(0.85 * SR)
-    out = np.zeros(total)
-    bounces = [(0.000, 1.00, 1.00), (0.115, 0.52, 0.94), (0.245, 0.30, 0.88),
-               (0.375, 0.17, 0.83), (0.520, 0.10, 0.79)]
-    for i, (at, amp, pitch) in enumerate(bounces):
-        start = int(at * SR)
-        n = int(0.30 * SR)
-        body = partials(n, [540 * pitch, 1210 * pitch, 1780 * pitch, 2660 * pitch, 3520 * pitch],
-                        [0.055, 0.040, 0.030, 0.020, 0.014], 100 + i)
-        hit = click(n, 0.009, 200 + i, 900.0, 4200.0) * 1.4
-        piece = normalize(body + hit, 1.0) * amp
-        out[start:start + n] += piece[:max(0, min(n, total - start))]
-    return normalize(band(out, 120.0, 9000.0), 0.62)
+    """UN solo golpe de cargador vacio contra hormigon. Cada contacto real
+    dispara un golpe con nivel/pitch por velocidad (ver MagazineDrop); nada de
+    rebotes horneados."""
+    n = int(0.22 * SR)
+    body = partials(n, [540.0, 1210.0, 1780.0, 2660.0, 3520.0],
+                    [0.055, 0.040, 0.030, 0.020, 0.014], 100)
+    hit = click(n, 0.009, 200, 900.0, 4200.0) * 1.4
+    return normalize(band(body + hit, 120.0, 9000.0), 0.62)
 
 
 def mag_slap():

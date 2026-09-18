@@ -58,6 +58,7 @@ const SOUNDS := {
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     # Mecanica de recarga: reten, insercion, asiento y reten de corredera.
     # Sin Foley de manos/ropa/palma mientras no haya mano (ver Glock.gd).
+    # SIN MANO no se usa (placeholder hasta mano rigida): se versiona pero no suena.
     "reload_rustle": {"stream": preload("res://assets/audio/reload_rustle.wav"), "db": -16.0, "bus": BUS_WEAPONS},
     "mag_slap": {"stream": preload("res://assets/audio/mag_slap.wav"), "db": -11.0, "bus": BUS_WEAPONS},
     "slide_release": {"stream": preload("res://assets/audio/slide_release.wav"), "db": -18.0, "bus": BUS_WEAPONS},

@@ -29,7 +29,7 @@ ejecutarlo y reimportar.
 
 | archivo | evento | carácter |
 |---|---|---|
-| `mag_drop.wav` | el cargador golpeando hormigon | PENDIENTE: trae cinco rebotes horneados; el codigo ya pide UN golpe por contacto (ver MagazineDrop) |
+| `mag_drop.wav` | el cargador golpeando hormigon | UN golpe (220 ms); cada contacto dispara uno con nivel/pitch por velocidad |
 | `mag_slap.wav` | la palma en la culata al asentarlo | golpe sordo con resto de metal |
 | `mag_insert.wav` | el cargador rozando el brocal al subir | metal contra metal, costillas y resorte |
 | `slide_release.wav` | el retén de la corredera al soltarse | tic de acero corto y agudo |
