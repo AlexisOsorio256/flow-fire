@@ -4,6 +4,10 @@ const MOUSE_SENS := 0.00175
 const WALK_SPEED := 4.0
 const SPRINT_SPEED := 6.3
 const CROUCH_SPEED := 2.0
+## Sitio del arma dentro de la camara. Es la unica autoridad del encuadre del
+## viewmodel: la sonda del ADS (`tools/check_weapon.gd`) monta el mismo rig para
+## poder medir la punteria sin abrir el juego.
+const WEAPON_RIG_POS := Vector3(0.0, -0.185, -0.345)
 
 var camera: Camera3D
 var weapon
@@ -80,7 +84,7 @@ func _build_weapon() -> void:
     rig.name = "WeaponRig"
     # El arma va CENTRADA en la pantalla (como en una bodycam real: la pistola
     # baja por el centro del encuadre), no desplazada a la derecha.
-    rig.position = Vector3(0.0, -0.185, -0.345)
+    rig.position = WEAPON_RIG_POS
     rig.rotation_degrees = Vector3(0, 0.0, 0)
     camera.add_child(rig)
     weapon = preload("res://scripts/Glock.gd").new()

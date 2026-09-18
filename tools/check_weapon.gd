@@ -5,13 +5,16 @@ extends Node
 ##
 ## Comprueba lo que el ojo no mide: que la pistola este en METROS REALES en el
 ## mundo (174 mm de largo), que existan las piezas que el juego mueve, que la
-## corredera retroceda de verdad (alejandose de la boca) y que el cargador viaje
-## hacia abajo en el espacio del arma. Si algo falla, imprime FALLO y sale con
-## codigo 1.
+## boca de la malla caiga sobre la boca del cañon, que la corredera retroceda de
+## verdad (alejandose de esa boca), que las miras esten en su orden y que al
+## apuntar la linea de miras quede sobre el eje de la camara. Si algo falla,
+## imprime FALLO y sale con codigo 1.
 
 const REAL_LENGTH := 0.174
 const TOLERANCE := 0.002
 const REAL_SLIDE_TRAVEL := 0.039
+## El rig del viewmodel: la sonda monta el mismo que el juego para medir el ADS.
+const PLAYER := preload("res://scripts/Player.gd")
 
 
 func _ready() -> void:
@@ -56,19 +59,39 @@ func _ready() -> void:
 	var mag_axis: Vector3 = weapon.magazine_out_axis()
 	print("mira trasera->delantera mm ",
 		snappedf(weapon.sight_rear.global_position.distance_to(weapon.sight_front.global_position) * 1000.0, 0.1))
+	## El sentido de la boca sale del CAÑON, que es geometria: la recamara esta en
+	## el origen de la pieza y la boca en su vertice mas lejano. La linea de miras
+	## no vale de referencia: con las miras cambiadas de sitio, la comprobacion se
+	## daba la razon a si misma (que es como el eje de la boca quedo al reves y el
+	## punto de boca acabo en la culata, 166 mm del cañon).
+	var bore_dir: Vector3 = sight_axis
+	if weapon.barrel != null:
+		var bore: Vector3 = _witness_position(_witness_vertex(weapon.barrel))
+		bore_dir = (bore - weapon.barrel.global_transform.origin).normalized()
+		print("mira trasera->delantera hacia la boca ", snappedf(sight_axis.dot(bore_dir), 0.01),
+			"  (tiene que ser POSITIVO)")
+		if sight_axis.dot(bore_dir) < 0.9:
+			failures += 1
+			print("FALLO: las miras estan cambiadas de sitio")
+		if weapon.muzzle != null:
+			var bore_mm: float = bore.distance_to(weapon.muzzle.global_position) * 1000.0
+			print("punto de boca a la boca del cañon mm ", snappedf(bore_mm, 0.1))
+			if bore_mm > 12.0:
+				failures += 1
+				print("FALLO: el punto de boca no esta en la boca del cañon")
+
 	# La corredera RETROCEDE: tiene que alejarse de la boca al abrirse. Con el
-	# eje de la boca invertido el arma recorria sus 39 mm hacia DELANTE y se
-	# veia abierta (la corredera salida del armazon). Esta es la comprobacion
-	# que caza ese fallo sin abrir el juego.
+	# eje de la boca invertido el arma recorria sus 39 mm hacia EL MORRO y se
+	# veia abierta (la corredera salida del armazon por delante).
 	weapon.set_slide(0.0)
 	var slide_closed: Vector3 = weapon.slide.global_position
 	weapon.set_slide(1.0)
 	var slide_open: Vector3 = weapon.slide.global_position
 	weapon.set_slide(0.0)
 	var recoil_dir: Vector3 = (slide_open - slide_closed).normalized()
-	print("la corredera al abrir va hacia la boca ", snappedf(recoil_dir.dot(sight_axis), 0.01),
+	print("la corredera al abrir va hacia la boca ", snappedf(recoil_dir.dot(bore_dir), 0.01),
 		"  (tiene que ser NEGATIVO)")
-	if recoil_dir.dot(sight_axis) > -0.9:
+	if recoil_dir.dot(bore_dir) > -0.9:
 		failures += 1
 		print("FALLO: la corredera no retrocede (va hacia la boca)")
 
@@ -136,6 +159,38 @@ func _ready() -> void:
 	if absf(slide_travel - REAL_SLIDE_TRAVEL) > TOLERANCE * 0.5:
 		failures += 1
 		print("FALLO: la corredera no recorre la distancia real")
+
+	# --- PUNTERIA: al apuntar, la linea de miras tiene que quedar sobre el eje de
+	# la camara. Se monta el MISMO rig que el juego (Player.WEAPON_RIG_POS): el
+	# encuadre del viewmodel es parte de lo que se mide. Con las miras cambiadas
+	# el ADS giraba el arma media vuelta y la dejaba de perfil.
+	var cam := Camera3D.new()
+	cam.name = "Camera"
+	cam.fov = 82.0
+	cam.near = 0.04
+	add_child(cam)
+	cam.current = true
+	var rig := Node3D.new()
+	rig.name = "WeaponRig"
+	rig.position = PLAYER.WEAPON_RIG_POS
+	cam.add_child(rig)
+	vm.get_parent().remove_child(vm)
+	rig.add_child(vm)
+	vm.setup(cam)
+	vm.set_pose_inputs(1.0, 0.0, 0.0, Vector2.ZERO, Vector2.ZERO, 0.0)
+	for _i in range(90):
+		vm.update(1.0 / 60.0)
+	vm.force_update_transform()
+	cam.force_update_transform()
+	var cam_fwd: Vector3 = -cam.global_transform.basis.z.normalized()
+	var sight_aim: Vector3 = (weapon.sight_front.global_position - weapon.sight_rear.global_position).normalized()
+	var muzzle_front: float = (cam.global_transform.affine_inverse() * weapon.muzzle.global_position).z
+	print("ADS: linea de miras contra el eje de la camara ", snappedf(sight_aim.dot(cam_fwd), 0.0001),
+		"  (1.0 = alineada)")
+	print("ADS: la boca por delante de la camara m ", snappedf(-muzzle_front, 0.001), "  (positivo)")
+	if sight_aim.dot(cam_fwd) < 0.999 or muzzle_front > -0.05:
+		failures += 1
+		print("FALLO: al apuntar el arma no queda alineada con la camara")
 
 	if failures == 0:
 		print("OK: invariantes del arma")

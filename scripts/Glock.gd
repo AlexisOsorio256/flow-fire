@@ -24,8 +24,10 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## Capacidad del cargador: la fija el arma (GlockWeapon.MAG_CAPACITY) al montar.
 var MAG_SIZE := 17
 ## Recorrido de la corredera en metros reales. La autoridad es el arma
-## (GlockWeapon.slide_offset); aqui se copia al montar.
-var _travel := GlockWeapon.SLIDE_TRAVEL
+## (GlockWeapon.slide_offset); aqui se copia al montar. El tipo va escrito a
+## mano: dejar que se infiera de una constante de otra clase deja el script sin
+## compilar segun como tenga el analizador su cache de clases globales.
+var _travel: float = GlockWeapon.SLIDE_TRAVEL
 ## Corredera: rigidez y amortiguacion del resorte, y en FRACCION del recorrido
 ## donde pasa cada cosa. Asi el unico numero que describe el arma es su recorrido.
 const SLIDE_K := 4000.0
@@ -117,7 +119,7 @@ var mag_offset := 0.0
 var mag_tumble := 0.0
 ## Recorrido del cargador fuera del brocal. La autoridad es el arma
 ## (GlockWeapon.magazine_travel); aqui se copia al montar.
-var _mag_free := GlockWeapon.MAG_TRAVEL
+var _mag_free: float = GlockWeapon.MAG_TRAVEL
 
 var inspecting := false
 var inspect_elapsed := 0.0

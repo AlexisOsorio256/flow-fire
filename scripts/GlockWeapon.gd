@@ -39,11 +39,12 @@ const SLIDE_TRAVEL := 0.039
 ## Cartuchos que entran en el cargador. El 9x19 de la Glock 19 son 17.
 const MAG_CAPACITY := 17
 ## Hacia donde mira la boca de la malla, en el espacio del arma. En este asset
-## el morro esta a +Z (lo confirman la boca, la mira delantera y el corredor del
-## cañon, que son los tres hacia +Z). La corredera retrocede al reves de la boca:
-## con el signo cambiado recorria 39 mm HACIA ADELANTE y el arma se veia abierta.
-## Lo vigila `tools/check_weapon.gd`.
-const MUZZLE_AXIS := Vector3(0.0, 0.0, 1.0)
+## el morro esta a -Z, el mismo eje que mira la camara: lo dice la propia malla
+## (el cañon va delante del gatillo y el cargador detras de los dos) y lo mide
+## `tools/check_weapon.gd` sobre la boca del cañon, no sobre el nodo `Muzzle`.
+## La corredera retrocede al reves de la boca: con el signo cambiado recorria sus
+## 39 mm HACIA EL MORRO y el arma se veia abierta por delante.
+const MUZZLE_AXIS := Vector3(0.0, 0.0, -1.0)
 ## Recorrido real del cargador fuera del brocal, de asentado a libre.
 const MAG_TRAVEL := 0.07
 ## Eje de salida del cargador en espacio del arma (abajo del armazon).

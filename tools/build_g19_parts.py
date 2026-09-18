@@ -14,7 +14,7 @@ veces dentro de la misma malla:
 Aqui se queda solo la copia armada, se reparte en piezas por islas de malla y
 se reasientan los origenes: el gatillo gira sobre su pasador, el cargador sale
 por el brocal y el cañon bascula sobre su recamara. Se endereza al convenio del
-motor (morro a +Z, arriba +Y, cargador cayendo a -Y) y se escala al largo de la
+motor (morro a -Z, arriba +Y, cargador cayendo a -Y) y se escala al largo de la
 malla del autor, 174 mm.
 """
 
@@ -180,8 +180,8 @@ def main():
         m = o.matrix_world.copy()
         o.parent = raiz
         o.matrix_world = m
-    # el morro del autor mira a +Y; con el giro queda a -Y en Blender y el
-    # exportador lo deja mirando a +Z en el motor, que es el eje que declara
+    # el morro del autor mira a -Y; con el giro queda a +Y en Blender y el
+    # exportador lo deja mirando a -Z en el motor, que es el eje que declara
     # GlockWeapon.MUZZLE_AXIS (la corredera retrocede al reves de ese eje).
     raiz.rotation_euler = (0.0, 0.0, math.pi)
     raiz.scale = (escala, escala, escala)
@@ -267,21 +267,33 @@ def main():
             reasentar(piezas[nombre], Vector((0.0, mx.y, mx.z)))
         elif sitio == "atras":
             # el cañon bascula sobre la CARA DE CULATA (la recamara), que tras
-            # enderezar el arma mira a -Y; la boca queda al otro extremo.
+            # enderezar el arma queda a -Y; la boca queda al otro extremo (+Y).
             reasentar(piezas[nombre], Vector((0.0, mn.y, (mn.z + mx.z) / 2)))
         else:
             reasentar(piezas[nombre], Vector((0.0, mx.y, mn.z)))
 
     # --- puntos de interes, colgados de la corredera ----------------------
+    ## El arma ya enderezada mira a +Y en Blender y el exportador la deja a -Z
+    ## en el motor, que es el eje que declara `GlockWeapon.MUZZLE_AXIS`. No hay
+    ## que suponerlo: lo dice la malla. El cargador va DETRAS del gatillo y el
+    ## cañon DELANTE de los dos, asi que +Y es la boca y -Y la culata.
+    ##
+    ## Tener la boca en el extremo equivocado costo dos fallos de una vez: la
+    ## corredera "retrocedia" hacia el morro y el ADS giraba el arma media
+    ## vuelta, porque la mira trasera caia delante de la delantera.
+    ##
+    ## Los puntos van sobre la linea del arma: el armazon no esta centrado en x
+    ## (su centro cae a -19,8 mm).
     if "Slide" in piezas:
         slide = piezas["Slide"]
         mn, mx = caja_de(slide)
-        ancho = mx.x
+        linea_x = (mn.x + mx.x) / 2.0
+        alto = mx.z
         for nombre, pos in [
-            ("SightRear", Vector((0.0, mx.y - 0.006, mx.z))),
-            ("SightFront", Vector((0.0, mn.y + 0.015, mx.z))),
-            ("EjectionPort", Vector((ancho * 0.55, mx.y - 0.075, mx.z))),
-            ("Muzzle", Vector((0.0, mn.y, (mn.z + mx.z) / 2))),
+            ("SightRear", Vector((linea_x, mn.y + 0.006, alto))),
+            ("SightFront", Vector((linea_x, mx.y - 0.015, alto))),
+            ("EjectionPort", Vector((mx.x + 0.003, mx.y - 0.075, alto))),
+            ("Muzzle", Vector((linea_x, mx.y, (mn.z + mx.z) / 2))),
         ]:
             vacio = bpy.data.objects.new(nombre, None)
             bpy.context.collection.objects.link(vacio)

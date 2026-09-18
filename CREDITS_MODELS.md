@@ -20,7 +20,7 @@
   solo paso de Blender, se queda con la copia armada, la reparte por islas de
   malla, recorta el gatillo del armazón, reasienta los orígenes (el gatillo
   sobre su pasador, el cargador sobre el brocal, el cañón sobre la recámara),
-  endereza el arma al convenio del motor (morro a +Z, arriba +Y, cargador
+  endereza el arma al convenio del motor (morro a -Z, arriba +Y, cargador
   cayendo a -Y) y la escala al largo de la malla. El cañón es del autor: no hay
   geometría inventada.
 - Medidas del resultado, comprobadas con `tools/check_weapon.gd`: 174,0 mm de
