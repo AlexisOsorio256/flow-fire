@@ -3,15 +3,16 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d14k0laavrvj0"
-path="res://.godot/imported/concrete_concrete_nor_gl.jpg-3c6f3302c0108d6d2f372eabe8756759.ctex"
+path.s3tc="res://.godot/imported/concrete_concrete_nor_gl.jpg-3c6f3302c0108d6d2f372eabe8756759.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/real/concrete_concrete_nor_gl.jpg"
-dest_files=["res://.godot/imported/concrete_concrete_nor_gl.jpg-3c6f3302c0108d6d2f372eabe8756759.ctex"]
+dest_files=["res://.godot/imported/concrete_concrete_nor_gl.jpg-3c6f3302c0108d6d2f372eabe8756759.s3tc.ctex"]
 
 [params]
 

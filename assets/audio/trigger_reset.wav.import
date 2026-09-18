@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://jbxbn3ao5kppg"
-path="res://.godot/imported/trigger_reset.wav-b8b1deaec2764cbb69a272d474282933.sample"
+uid="uid://bk4khyf605x6w"
+path="res://.godot/imported/trigger_reset.wav-73c401724380624cb0e56af1017d1caf.sample"
 
 [deps]
 
 source_file="res://assets/audio/trigger_reset.wav"
-dest_files=["res://.godot/imported/trigger_reset.wav-b8b1deaec2764cbb69a272d474282933.sample"]
+dest_files=["res://.godot/imported/trigger_reset.wav-73c401724380624cb0e56af1017d1caf.sample"]
 
 [params]
 

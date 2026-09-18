@@ -3,15 +3,16 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cn7qf8mnhhfx7"
-path="res://.godot/imported/metal_metal_plate_rough.jpg-8f0bd47c7774729935bb33a3f98dc5e2.ctex"
+path.s3tc="res://.godot/imported/metal_metal_plate_rough.jpg-8f0bd47c7774729935bb33a3f98dc5e2.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/real/metal_metal_plate_rough.jpg"
-dest_files=["res://.godot/imported/metal_metal_plate_rough.jpg-8f0bd47c7774729935bb33a3f98dc5e2.ctex"]
+dest_files=["res://.godot/imported/metal_metal_plate_rough.jpg-8f0bd47c7774729935bb33a3f98dc5e2.s3tc.ctex"]
 
 [params]
 

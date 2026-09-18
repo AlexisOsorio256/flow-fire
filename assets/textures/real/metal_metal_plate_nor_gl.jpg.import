@@ -3,15 +3,16 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://baw23224ck4ju"
-path="res://.godot/imported/metal_metal_plate_nor_gl.jpg-8cb8a286fdc540dd57fa95217dea8842.ctex"
+path.s3tc="res://.godot/imported/metal_metal_plate_nor_gl.jpg-8cb8a286fdc540dd57fa95217dea8842.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/real/metal_metal_plate_nor_gl.jpg"
-dest_files=["res://.godot/imported/metal_metal_plate_nor_gl.jpg-8cb8a286fdc540dd57fa95217dea8842.ctex"]
+dest_files=["res://.godot/imported/metal_metal_plate_nor_gl.jpg-8cb8a286fdc540dd57fa95217dea8842.s3tc.ctex"]
 
 [params]
 

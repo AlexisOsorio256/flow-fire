@@ -243,7 +243,7 @@ func start_reload() -> bool:
 	reload_empty = chamber <= 0
 	reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TOTAL
 	reload_slide_released = false
-	reload	reload_pose_blend = 0.0
+	reload_pose_blend = 0.0
 	mag_offset = 0.0
 	mag_tumble = 0.0
 	_mag_left = false
@@ -528,7 +528,7 @@ func _seat_reload_mag() -> void:
 	var loaded := mini(MAG_SIZE, reserve)
 	reserve -= loaded
 	mag = loaded
-	reload	_emit_ammo()
+	_emit_ammo()
 
 
 func _finish_reload() -> void:

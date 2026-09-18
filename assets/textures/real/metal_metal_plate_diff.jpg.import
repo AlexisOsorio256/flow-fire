@@ -3,15 +3,16 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bl15m2rgyd0x8"
-path="res://.godot/imported/metal_metal_plate_diff.jpg-7b6e366da54576e2811ee09bb2435e8d.ctex"
+path.s3tc="res://.godot/imported/metal_metal_plate_diff.jpg-7b6e366da54576e2811ee09bb2435e8d.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/real/metal_metal_plate_diff.jpg"
-dest_files=["res://.godot/imported/metal_metal_plate_diff.jpg-7b6e366da54576e2811ee09bb2435e8d.ctex"]
+dest_files=["res://.godot/imported/metal_metal_plate_diff.jpg-7b6e366da54576e2811ee09bb2435e8d.s3tc.ctex"]
 
 [params]
 

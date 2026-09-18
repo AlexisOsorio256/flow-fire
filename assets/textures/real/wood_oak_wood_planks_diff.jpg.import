@@ -3,15 +3,16 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cmmsi8k3kaxw2"
-path="res://.godot/imported/wood_oak_wood_planks_diff.jpg-5eb9a64668790ddf74e2801a1f07e75f.ctex"
+path.s3tc="res://.godot/imported/wood_oak_wood_planks_diff.jpg-5eb9a64668790ddf74e2801a1f07e75f.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/real/wood_oak_wood_planks_diff.jpg"
-dest_files=["res://.godot/imported/wood_oak_wood_planks_diff.jpg-5eb9a64668790ddf74e2801a1f07e75f.ctex"]
+dest_files=["res://.godot/imported/wood_oak_wood_planks_diff.jpg-5eb9a64668790ddf74e2801a1f07e75f.s3tc.ctex"]
 
 [params]
 
