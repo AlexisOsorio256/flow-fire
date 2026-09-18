@@ -61,7 +61,7 @@ func _build_hud() -> void:
     fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
     add_child(fps_label)
 
-    ammo_label = _make_label("18", 48, Color(0.95, 0.97, 1.0, 0.95))
+    ammo_label = _make_label("16", 48, Color(0.95, 0.97, 1.0, 0.95))
     ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     add_child(ammo_label)
 
