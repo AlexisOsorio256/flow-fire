@@ -70,13 +70,16 @@ func _ready() -> void:
 	print("mira trasera->delantera mm ",
 		snappedf(weapon.sight_rear.global_position.distance_to(weapon.sight_front.global_position) * 1000.0, 0.1))
 	## El sentido de la boca sale del CAÑON, que es geometria: la recamara esta en
-	## el origen de la pieza y la boca en su vertice mas lejano. La linea de miras
-	## no vale de referencia: con las miras cambiadas de sitio, la comprobacion se
-	## daba la razon a si misma (que es como el eje de la boca quedo al reves y el
-	## punto de boca acabo en la culata, 166 mm del cañon).
+	## el origen de la pieza y la boca en el CENTROIDE de su cara frontal (los
+	## vertices a <2 mm de la profundidad maxima). El vertice mas lejano es una
+	## esquina de la corona y esta a ~6 mm del anima: medir contra el obligaba a
+	## descentrar la boca para pasar el check. La linea de miras no vale de
+	## referencia: con las miras cambiadas de sitio, la comprobacion se daba la
+	## razon a si misma (que es como el eje de la boca quedo al reves y el punto
+	## de boca acabo en la culata, 166 mm del cañon).
 	var bore_dir: Vector3 = sight_axis
 	if weapon.barrel != null:
-		var bore: Vector3 = _witness_position(_witness_vertex(weapon.barrel))
+		var bore: Vector3 = _barrel_crown(weapon.barrel)
 		bore_dir = (bore - weapon.barrel.global_transform.origin).normalized()
 		print("mira trasera->delantera hacia la boca ", snappedf(sight_axis.dot(bore_dir), 0.01),
 			"  (tiene que ser POSITIVO)")
@@ -231,6 +234,42 @@ func _witness_vertex(part: Node3D) -> Array:
 		for c in n.get_children():
 			stack.append(c)
 	return witness
+
+
+## Centroide en mundo de la cara frontal del cañon: la corona donde termina el
+## anima. Es el punto contra el que tiene que caer `Muzzle` (tolerancia 4 mm).
+func _barrel_crown(part: Node3D) -> Vector3:
+	var origin: Vector3 = part.global_transform.origin
+	var rough: Vector3 = _witness_position(_witness_vertex(part)) - origin
+	if rough.length() < 0.0001:
+		return origin
+	rough = rough.normalized()
+	var verts: Array = []
+	var stack: Array = [part]
+	while not stack.is_empty():
+		var n = stack.pop_back()
+		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+			var mesh_instance: MeshInstance3D = n as MeshInstance3D
+			for s in range(mesh_instance.mesh.get_surface_count()):
+				var arrays: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+				for v in arrays:
+					verts.append(mesh_instance.global_transform * v)
+		for c in n.get_children():
+			stack.append(c)
+	if verts.is_empty():
+		return origin
+	var deepest := -1.0
+	for v in verts:
+		deepest = maxf(deepest, (v - origin).dot(rough))
+	var center := Vector3.ZERO
+	var count := 0
+	for v in verts:
+		if deepest - (v - origin).dot(rough) < 0.002:
+			center += v
+			count += 1
+	if count == 0:
+		return origin
+	return center / float(count)
 
 
 ## Posicion en mundo del vertice testigo.
