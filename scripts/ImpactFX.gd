@@ -157,6 +157,20 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     pm.damping_max = 2.0
     # Sin turbulencia runtime: en Mobile/Mesa colgaba el readback y pintaba
     # negro. La deriva sale de spread + damping + gravedad leve.
+    # Expansion: la voluta crece al derivar (curva 0,6 -> 1,4).
+    var scale_curve := Curve.new()
+    scale_curve.add_point(Vector2(0.0, 0.6))
+    scale_curve.add_point(Vector2(1.0, 1.4))
+    var scale_tex := CurveTexture.new()
+    scale_tex.curve = scale_curve
+    pm.scale_curve = scale_tex
+    # Fade: nace visible y muere transparente (sin pop al liberar).
+    var grad := Gradient.new()
+    grad.set_color(0, Color(0.72, 0.72, 0.70, 0.38))
+    grad.set_color(1, Color(0.72, 0.72, 0.70, 0.0))
+    var grad_tex := GradientTexture1D.new()
+    grad_tex.gradient = grad
+    pm.color_ramp = grad_tex
 
     var particles := GPUParticles3D.new()
     particles.amount = 12
