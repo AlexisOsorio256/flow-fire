@@ -79,7 +79,7 @@ cargador sale por su eje medido.
 
 ## Mano y viewmodel
 
-El rig es deliberadamente mínimo (v1: agarre, clips por venir):
+El rig es deliberadamente mínimo (5 clips horneados):
 
 ```text
 BodyGive
@@ -174,7 +174,8 @@ eje; se puede poner en cero para una comprobación.
 
 Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
 
-- `tools/build_range_assets.py`: reconstruye en Blender el shell y la mano.
+- `tools/build_range_assets.py`: reconstruye en Blender el shell.
+- `tools/build_hand_rig.py`: reconstruye en Blender la mano riggeada (20 huesos, 5 clips).
 - `tools/check_weapon.tscn`: piezas obligatorias, contratos de escala y
   referencia mecánica de la Glock, incluida la mano.
 - `tools/check_range_shell.tscn`: pocas mallas/materiales, dimensiones del
