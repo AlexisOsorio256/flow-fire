@@ -63,9 +63,6 @@ const SOUNDS := {
     "impact_drywall": {"stream": preload("res://assets/audio/impact_drywall.wav"), "db": -7.0, "bus": BUS_WORLD},
     "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -6.0, "bus": BUS_WORLD},
     "impact_wood": {"stream": preload("res://assets/audio/impact_wood.wav"), "db": -6.0, "bus": BUS_WORLD},
-    # Carne: el golpe de cuerpo es su propia grabacion, no una madera con otro
-    # volumen. Solo suena en blancos blandos.
-    "impact_flesh": {"stream": preload("res://assets/audio/impact_flesh.wav"), "db": -8.0, "bus": BUS_WORLD},
     "ricochet": {"stream": preload("res://assets/audio/ricochet.wav"), "db": -8.0, "bus": BUS_WORLD},
     # Silbido de paso de bala: solo cuando el proyectil cruza cerca del oido
     # (ver Ballistics.gd), nunca por disparar.

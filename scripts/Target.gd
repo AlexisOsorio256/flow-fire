@@ -1,11 +1,17 @@
 extends RigidBody3D
 class_name Target
 
+## BLANCO REACTIVO, sin juego dentro: recibe la bala, la marca y la empuja.
+##
+## No hay vida, ni zonas, ni muerte, ni multiplicadores. Este proyecto es un
+## laboratorio de la Glock: lo que se mide de un blanco es como lo golpea la
+## bala (impulso, penetracion, marcas), no cuanto dano acumula.
+##
+## Dos materiales honestos:
+##   paper  hoja penetrable, cuelga de un pin y se deja mecer
+##   steel  placa no penetrable, devuelve chispa y retrocede poco
+
 var kind := "paper"
-var max_health := 100.0
-var health := 100.0
-var dead := false
-var last_hit_zone := "TORSO"
 var plate_height := 0.9
 var plate_width := 0.66
 
@@ -24,16 +30,12 @@ func _ready() -> void:
     _build_visuals()
 
     if kind == "paper":
-        max_health = 100.0
-        health = 100.0
         plate_height = 0.9
         plate_width = 0.66
         set_meta("surface", "paper")
         set_meta("penetrable", true)
         set_meta("penetration_resistance", 1.70)
     else:
-        max_health = 150.0
-        health = 150.0
         plate_height = 0.62
         plate_width = 0.62
         set_meta("surface", "metal")
@@ -83,40 +85,14 @@ func _build_visuals() -> void:
         add_child(collider)
 
 
+## El 9 mm trae ~515 J: empuja el blanco y lo hace oscilar. El acero
+## (no penetrable) recibe mas empuje porque se lleva todo el momento.
 func take_bullet_hit(point: Vector3, normal: Vector3, speed: float, energy: float, direction := Vector3.ZERO) -> void:
-    if dead:
-        return
-    var local_point := to_local(point)
-    var zone := "TORSO"
-    var multiplier := 1.0
-    var armor := 1.0
-    if kind == "steel":
-        zone = "PLACA"
-        armor = 0.55
-    elif local_point.y > plate_height * 0.28:
-        zone = "CABEZA"
-        multiplier = 3.1
-    elif local_point.y < -plate_height * 0.22:
-        zone = "PIERNA"
-        multiplier = 0.65
-
-    var damage := 44.0 * (energy / 520.0) * multiplier * armor
-    health = max(0.0, health - damage)
-    last_hit_zone = zone
-    set_meta("last_hit_zone", zone)
-
     var push := direction.normalized() if direction.length_squared() > 0.1 else -normal.normalized()
-    var impulse_strength := 0.9 + damage * 0.02
-    apply_impulse(push * impulse_strength, point - global_position)
+    var strength := (0.9 + energy / 520.0) * (1.6 if kind == "steel" else 1.0)
+    apply_impulse(push * strength, point - global_position)
     apply_torque_impulse(Vector3(randf_range(-0.08, 0.08), randf_range(-0.12, 0.12), randf_range(-0.08, 0.08)))
-
     _flash()
-
-    if health <= 0.0:
-        dead = true
-        set_meta("dead", true)
-        angular_velocity += Vector3(randf_range(-2.4, -1.0), randf_range(-1.0, 1.0), randf_range(-0.8, 0.8))
-        apply_impulse(push * 2.5, point - global_position)
 
 
 func _flash() -> void:

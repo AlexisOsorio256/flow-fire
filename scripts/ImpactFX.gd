@@ -21,7 +21,6 @@ const HOLE_SIZE := {
     "wood": 0.064,
     "metal": 0.048,
     "paper": 0.040,
-    "flesh": 0.056,
 }
 
 var _holes: Array[Node] = []
@@ -57,8 +56,6 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
         "drywall":
             sound_name = "impact_drywall"
             volume = -5.0
-        "flesh":
-            sound_name = "impact_flesh"
         _:
             sound_name = "impact_concrete"
     GameAudio.play_3d(sound_name, point, volume, randf_range(0.92, 1.08))
@@ -203,8 +200,6 @@ func _cavity_material(surface: String) -> StandardMaterial3D:
             mat.roughness = 0.34
         "paper":
             mat.albedo_color = Color(0.075, 0.066, 0.055)
-        "flesh":
-            mat.albedo_color = Color(0.090, 0.018, 0.016)
         _:
             mat.albedo_color = Color(0.024, 0.024, 0.022)
     mat.roughness = 1.0 if surface != "metal" else mat.roughness
@@ -231,9 +226,6 @@ func _fracture_material(surface: String, is_exit: bool) -> StandardMaterial3D:
         "paper":
             mat.albedo_color = Color(0.70, 0.66, 0.56)
             mat.roughness = 1.0
-        "flesh":
-            mat.albedo_color = Color(0.28, 0.065, 0.050)
-            mat.roughness = 0.90
         _:
             mat.albedo_color = Color(0.38, 0.37, 0.34)
             mat.roughness = 0.95
@@ -288,11 +280,6 @@ const IMPACT_MATERIALS := {
     "paper": {
         "dust": {"amount": 4, "color": Color(0.84, 0.81, 0.74, 0.50), "vel": [0.2, 0.8], "gravity": -1.0, "scale": [0.30, 0.90], "life": 0.35, "size": 0.020, "spread": 44.0},
         "exit_scale": 1.60,
-        "crater": 0.0,
-    },
-    "flesh": {
-        "dust": {"amount": 6, "color": Color(0.42, 0.12, 0.10, 0.55), "vel": [0.4, 1.6], "gravity": -2.2, "scale": [0.4, 1.4], "life": 0.45, "size": 0.034, "spread": 58.0},
-        "exit_scale": 1.0,
         "crater": 0.0,
     },
 }

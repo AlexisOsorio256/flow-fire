@@ -1,44 +1,41 @@
 extends Node3D
 
-signal target_hit(zone: String)
+## Proyectiles, penetracion y rebote. NO decide presentacion: para cada impacto
+## dice DONDE y CONTRA QUE (ImpactFX lo dibuja, GameAudio lo suena) y para cada
+## cuerpo fisico que golpea deja el impulso en Jolt.
+##
+##   material + geometria -> resistencia -> velocidad de salida
+##
+## La geometria la da la forma de colision: una caja se recorre de cara a cara,
+## un cilindro de pared a pared, una esfera de lado a lado. Un cuerpo FINO (una
+## lata) declara `thin_shell` + `wall_thickness`: la bala atraviesa DOS paredes
+## delgadas, no el volumen entero (el aire de dentro no frena nada).
 
-const PROJECTILE_MASS := 0.008
+const PROJECTILE_MASS := 0.00745   # 115 gr, la punta de una 9x19 de Glock 19
 const DRAG_K := 0.00142
 const GRAVITY := 9.81
 const MAX_DISTANCE := 520.0
 const COLLISION_MASK := 1
 const PENETRATION_EPSILON := 0.0015
 const PENETRATION_SEARCH_DISTANCE := 4.0
-# Velocidad mínima para EMERGER con carácter de proyectil y no de gravilla.
-# CALIBRADO: por debajo, la bala se queda dentro del material.
+## Velocidad mínima para EMERGER con carácter de proyectil y no de gravilla.
+## CALIBRADO: por debajo, la bala se queda dentro del material.
 const EXIT_SPEED_MIN := 75.0
+## Fraccion del momento del proyectil que se lleva un cuerpo sin script propio
+## (una lata). Una bala que atraviesa una lata no le entrega todo su momento.
+const IMPULSE_TRANSFER := 0.20
 
 var bullets: Array = []
-var tracer_pool: Array[MeshInstance3D] = []
-var tracer_material: StandardMaterial3D
-var penetration_events := 0
 
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_PAUSABLE
-    tracer_material = StandardMaterial3D.new()
-    tracer_material.albedo_color = Color(1.0, 0.55, 0.16, 0.95)
-    tracer_material.emission_enabled = true
-    tracer_material.emission = Color(1.0, 0.5, 0.1)
-    tracer_material.emission_energy_multiplier = 4.0
-    tracer_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    tracer_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
 
-func fire(origin: Vector3, direction: Vector3, speed: float = 372.0, tracer_chance: float = 0.42) -> void:
+func fire(origin: Vector3, direction: Vector3, speed: float = 372.0) -> void:
     var dir := direction.normalized()
-    var mesh: MeshInstance3D = null
-    if randf() < tracer_chance:
-        mesh = _take_tracer()
-        mesh.visible = true
     var b := {
         "active": true,
-        "mesh": mesh,
         "pos": origin + dir * 0.055,
         "vel": dir * speed,
         "life": 0.0,
@@ -48,8 +45,6 @@ func fire(origin: Vector3, direction: Vector3, speed: float = 372.0, tracer_chan
         "flyby": false,
     }
     bullets.append(b)
-    if mesh != null:
-        _sync_mesh(b)
 
 
 func _physics_process(delta: float) -> void:
@@ -59,7 +54,6 @@ func _physics_process(delta: float) -> void:
     for i in range(bullets.size() - 1, -1, -1):
         var b: Dictionary = bullets[i]
         if not b.active:
-            _release_bullet(b)
             bullets.remove_at(i)
             continue
 
@@ -84,8 +78,6 @@ func _physics_process(delta: float) -> void:
 
         if b.life > 2.2 or b.distance > MAX_DISTANCE:
             b.active = false
-        if b.mesh != null and b.active:
-            _sync_mesh(b)
 
 
 func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> void:
@@ -114,25 +106,20 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
     var collider: Object = hit.collider
     b.distance += point.distance_to(b.pos)
     var surface := "concrete"
+    var penetrable := false
+    var penetration_resistance := 0.0
+    var thin_shell := false
+    var wall_thickness := 0.0
     if collider is Node:
         surface = str(collider.get_meta("surface", "concrete"))
+        penetrable = bool(collider.get_meta("penetrable", false))
+        penetration_resistance = float(collider.get_meta("penetration_resistance", 0.0))
+        thin_shell = bool(collider.get_meta("thin_shell", false))
+        wall_thickness = float(collider.get_meta("wall_thickness", 0.0))
 
     var energy: float = 0.5 * PROJECTILE_MASS * speed * speed
     ImpactFX.spawn_impact(point, normal, collider, surface, false)
-
-    if collider is Node and collider.has_method("take_bullet_hit"):
-        collider.call("take_bullet_hit", point, normal, speed, energy, dir)
-        var zone := "TORSO"
-        if collider.has_meta("last_hit_zone"):
-            zone = str(collider.get_meta("last_hit_zone"))
-        target_hit.emit(zone)
-
-    var penetrable := false
-    var penetration_resistance := 0.0
-    if collider is Node:
-        penetrable = bool(collider.get_meta("penetrable", false))
-        if penetrable:
-            penetration_resistance = float(collider.get_meta("penetration_resistance", 0.0))
+    _push_body(collider, point, dir, energy, speed)
 
     if penetrable:
         if penetration_resistance <= 0.0:
@@ -153,17 +140,27 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
 
         var exit_point: Vector3 = exit["point"]
         var exit_normal: Vector3 = exit["normal"]
-        var actual_thickness: float = exit["distance"]
-        if actual_thickness <= PENETRATION_EPSILON:
+        var geometric_thickness: float = exit["distance"]
+        if geometric_thickness <= PENETRATION_EPSILON:
             b.active = false
             return
+
+        # Grosor BALISTICO: en un cuerpo macizo es la cuerda que recorre la bala;
+        # en una cascara fina (una lata) son sus DOS paredes, no el hueco de aire
+        # de dentro.
+        var thickness := geometric_thickness
+        if thin_shell:
+            if wall_thickness <= 0.0:
+                b.active = false
+                return
+            thickness = 2.0 * wall_thickness
 
         # La resistencia es material; el espesor recorrido viene de la
         # geometría. La pérdida, por tanto, cambia de forma continua si el
         # panel se rota o el tiro entra oblicuo. La decisión de perforar o
         # quedarse dentro se toma ANTES de dibujar la salida: un proyectil que
         # no conserva energía al salir no tiene salida visible.
-        var retained_energy := exp(-penetration_resistance * actual_thickness)
+        var retained_energy := exp(-penetration_resistance * thickness)
         var exit_speed := speed * sqrt(retained_energy)
         if exit_speed < EXIT_SPEED_MIN:
             # Se queda dentro: no hay cara de salida que representar.
@@ -176,9 +173,8 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         # colisión debe ser con la geometría que haya detrás, no con el mismo
         # panel por redondeo del raycast.
         b.pos = exit_point + dir * PENETRATION_EPSILON
-        b.distance += actual_thickness + PENETRATION_EPSILON
+        b.distance += geometric_thickness + PENETRATION_EPSILON
         b.penetrations += 1
-        penetration_events += 1
         if b.penetrations > 4:
             b.active = false
         return
@@ -197,10 +193,23 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
     b.active = false
 
 
-## Busca la cara de salida en la geometría de la forma de colisión. Para cada
-## BoxShape3D del collider se transforma la trayectoria al espacio local y se
-## resuelve el intervalo de intersección de los tres slabs; la cara lejana es
-## la salida real. No se usa grosor de metadata para fabricar un punto.
+## Deja el golpe en el cuerpo fisico. Los cuerpos con script propio (caja, blanco)
+## lo reciben con sus reglas; los demas (una lata) reciben en Jolt el momento que
+## el proyectil les cede al atravesarlos.
+func _push_body(collider: Object, point: Vector3, dir: Vector3, energy: float, speed: float) -> void:
+    if not collider is Node:
+        return
+    if collider.has_method("take_bullet_hit"):
+        collider.call("take_bullet_hit", point, dir.normalized(), speed, energy, dir)
+        return
+    if collider is RigidBody3D:
+        var body := collider as RigidBody3D
+        body.apply_impulse(dir * (IMPULSE_TRANSFER * PROJECTILE_MASS * speed), point - body.global_position)
+
+
+## Busca la cara de salida en la geometria de la forma de colision. Cada forma se
+## transforma al espacio local y se resuelve la salida real; no se usa grosor de
+## metadata para fabricar un punto.
 func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object) -> Dictionary:
     if not collider is CollisionObject3D:
         return {}
@@ -211,51 +220,124 @@ func _find_exit_geometry(entry: Vector3, direction: Vector3, collider: Object) -
         var shape_transform: Transform3D = body.global_transform * body.shape_owner_get_transform(owner_id)
         for shape_index in range(body.shape_owner_get_shape_count(owner_id)):
             var shape := body.shape_owner_get_shape(owner_id, shape_index)
-            if not shape is BoxShape3D:
+            var hit := _exit_of_shape(shape, shape_transform, entry, direction)
+            if hit.is_empty():
                 continue
-            var box := shape as BoxShape3D
-            var inv := shape_transform.affine_inverse()
-            var local_entry := inv * entry
-            var local_direction := (inv * (entry + direction)) - local_entry
-            var half := box.size * 0.5
-            var t_near := -INF
-            var t_far := INF
-            var valid := true
-            for axis in 3:
-                var origin_axis := local_entry[axis]
-                var direction_axis := local_direction[axis]
-                if absf(direction_axis) < 0.000001:
-                    if absf(origin_axis) > half[axis] + PENETRATION_EPSILON:
-                        valid = false
-                        break
-                    continue
-                var t1 := (-half[axis] - origin_axis) / direction_axis
-                var t2 := (half[axis] - origin_axis) / direction_axis
-                t_near = maxf(t_near, minf(t1, t2))
-                t_far = minf(t_far, maxf(t1, t2))
-            if not valid or t_far <= PENETRATION_EPSILON or t_near > PENETRATION_EPSILON * 4.0:
-                continue
-            var local_exit := local_entry + local_direction * t_far
-            var world_exit := shape_transform * local_exit
-            var distance := entry.distance_to(world_exit)
+            var distance: float = hit["distance"]
             if distance <= PENETRATION_EPSILON or distance >= best_distance:
                 continue
-
-            var exit_axis := 0
-            var axis_error := absf(absf(local_exit.x) - half.x)
-            var y_error := absf(absf(local_exit.y) - half.y)
-            var z_error := absf(absf(local_exit.z) - half.z)
-            if y_error < axis_error:
-                exit_axis = 1
-                axis_error = y_error
-            if z_error < axis_error:
-                exit_axis = 2
-            var local_normal := Vector3.ZERO
-            local_normal[exit_axis] = 1.0 if local_exit[exit_axis] >= 0.0 else -1.0
-            var world_normal := (shape_transform.basis * local_normal).normalized()
-            best = {"point": world_exit, "normal": world_normal, "distance": distance}
+            best = hit
             best_distance = distance
     return best
+
+
+func _exit_of_shape(shape: Shape3D, shape_transform: Transform3D, entry: Vector3, direction: Vector3) -> Dictionary:
+    var inv := shape_transform.affine_inverse()
+    var local_entry := inv * entry
+    var local_direction := (inv * (entry + direction)) - local_entry
+    if shape is BoxShape3D:
+        return _exit_box(shape as BoxShape3D, shape_transform, entry, local_entry, local_direction)
+    if shape is CylinderShape3D:
+        return _exit_cylinder(shape as CylinderShape3D, shape_transform, entry, local_entry, local_direction)
+    if shape is SphereShape3D:
+        return _exit_sphere(shape as SphereShape3D, shape_transform, entry, local_entry, local_direction)
+    # Otra forma (capsula, convexa): sin salida analitica no se inventa.
+    return {}
+
+
+func _salida(shape_transform: Transform3D, entry: Vector3, local_entry: Vector3,
+        local_direction: Vector3, t: float, local_normal: Vector3) -> Dictionary:
+    if t <= 0.0:
+        return {}
+    var world_exit: Vector3 = shape_transform * (local_entry + local_direction * t)
+    return {
+        "point": world_exit,
+        "normal": (shape_transform.basis * local_normal).normalized(),
+        "distance": entry.distance_to(world_exit),
+    }
+
+
+func _exit_box(box: BoxShape3D, shape_transform: Transform3D, entry: Vector3,
+        local_entry: Vector3, local_direction: Vector3) -> Dictionary:
+    var half := box.size * 0.5
+    var t_near := -INF
+    var t_far := INF
+    for axis in 3:
+        var origin_axis := local_entry[axis]
+        var direction_axis := local_direction[axis]
+        if absf(direction_axis) < 0.000001:
+            if absf(origin_axis) > half[axis] + PENETRATION_EPSILON:
+                return {}
+            continue
+        var t1 := (-half[axis] - origin_axis) / direction_axis
+        var t2 := (half[axis] - origin_axis) / direction_axis
+        t_near = maxf(t_near, minf(t1, t2))
+        t_far = minf(t_far, maxf(t1, t2))
+    if t_far <= PENETRATION_EPSILON or t_near > PENETRATION_EPSILON * 4.0:
+        return {}
+    var local_exit := local_entry + local_direction * t_far
+    var exit_axis := 0
+    var axis_error := absf(absf(local_exit.x) - half.x)
+    var y_error := absf(absf(local_exit.y) - half.y)
+    var z_error := absf(absf(local_exit.z) - half.z)
+    if y_error < axis_error:
+        exit_axis = 1
+        axis_error = y_error
+    if z_error < axis_error:
+        exit_axis = 2
+    var local_normal := Vector3.ZERO
+    local_normal[exit_axis] = 1.0 if local_exit[exit_axis] >= 0.0 else -1.0
+    return _salida(shape_transform, entry, local_entry, local_direction, t_far, local_normal)
+
+
+func _exit_cylinder(cyl: CylinderShape3D, shape_transform: Transform3D, entry: Vector3,
+        local_entry: Vector3, local_direction: Vector3) -> Dictionary:
+    var radius := cyl.radius
+    var half_h := cyl.height * 0.5
+    var epsilon := 0.000001
+    var best_t := -INF
+    var best_normal := Vector3.ZERO
+    # Pared lateral: cilindro infinito en Y, recortado por las tapas.
+    var a := local_direction.x * local_direction.x + local_direction.z * local_direction.z
+    if a > epsilon:
+        var b := 2.0 * (local_entry.x * local_direction.x + local_entry.z * local_direction.z)
+        var c := local_entry.x * local_entry.x + local_entry.z * local_entry.z - radius * radius
+        var disc := b * b - 4.0 * a * c
+        if disc >= 0.0:
+            var sq := sqrt(disc)
+            var candidates: Array[float] = [(-b - sq) / (2.0 * a), (-b + sq) / (2.0 * a)]
+            for t: float in candidates:
+                var y := local_entry.y + local_direction.y * t
+                if absf(y) <= half_h + epsilon and t > best_t:
+                    best_t = t
+                    best_normal = Vector3(
+                        local_entry.x + local_direction.x * t, 0.0,
+                        local_entry.z + local_direction.z * t).normalized()
+    # Tapas.
+    if absf(local_direction.y) > epsilon:
+        for sign_y: float in [1.0, -1.0]:
+            var t := (sign_y * half_h - local_entry.y) / local_direction.y
+            var px := local_entry.x + local_direction.x * t
+            var pz := local_entry.z + local_direction.z * t
+            if px * px + pz * pz <= radius * radius + epsilon and t > best_t:
+                best_t = t
+                best_normal = Vector3(0.0, sign_y, 0.0)
+    return _salida(shape_transform, entry, local_entry, local_direction, best_t, best_normal)
+
+
+func _exit_sphere(sphere: SphereShape3D, shape_transform: Transform3D, entry: Vector3,
+        local_entry: Vector3, local_direction: Vector3) -> Dictionary:
+    var a := local_direction.dot(local_direction)
+    if a < 0.0000000001:
+        return {}
+    var b := 2.0 * local_entry.dot(local_direction)
+    var c := local_entry.dot(local_entry) - sphere.radius * sphere.radius
+    var disc := b * b - 4.0 * a * c
+    if disc < 0.0:
+        return {}
+    var t := (-b + sqrt(disc)) / (2.0 * a)
+    return _salida(shape_transform, entry, local_entry, local_direction, t,
+        (local_entry + local_direction * t).normalized())
 
 
 ## Punto mas cercano de la recta del proyectil a la camara del jugador.
@@ -289,37 +371,3 @@ func _listener_position() -> Vector3:
         if cam != null:
             return cam.global_position
     return Vector3.ZERO
-
-
-func _take_tracer() -> MeshInstance3D:
-    if not tracer_pool.is_empty():
-        var pooled: MeshInstance3D = tracer_pool.pop_back()
-        pooled.visible = true
-        return pooled
-    var box := BoxMesh.new()
-    box.size = Vector3(0.008, 0.008, 0.26)
-    box.material = tracer_material
-    var mesh := MeshInstance3D.new()
-    mesh.mesh = box
-    mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-    add_child(mesh)
-    return mesh
-
-
-func _release_bullet(b: Dictionary) -> void:
-    var mesh: MeshInstance3D = b.mesh
-    if mesh != null:
-        mesh.visible = false
-        tracer_pool.append(mesh)
-        b.mesh = null
-
-
-func _sync_mesh(b: Dictionary) -> void:
-    var mesh: MeshInstance3D = b.mesh
-    if mesh == null:
-        return
-    mesh.global_position = b.pos
-    var dir: Vector3 = b.vel.normalized()
-    if dir.length_squared() > 0.1:
-        mesh.look_at(b.pos + dir, Vector3.UP)
-        mesh.scale = Vector3(1, 1, 0.75 + clamp(b.vel.length() / 330.0, 0.0, 1.4))

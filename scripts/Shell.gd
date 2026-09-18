@@ -18,7 +18,7 @@ var last_ping := 0.0
 ## un arma en movimiento).
 static func spawn(scene: Node, port: Transform3D, slide_vel: float, player_vel: Vector3) -> Shell:
     var shell := Shell.new()
-    shell.mass = 0.008
+    shell.mass = 0.0039   # casquillo 9x19 vacio: ~3,9 g de laton
     shell.collision_layer = 2
     shell.collision_mask = 1
     shell.continuous_cd = true
@@ -62,7 +62,7 @@ static func spawn(scene: Node, port: Transform3D, slide_vel: float, player_vel: 
     physics_mat.bounce = 0.52
     physics_mat.friction = 0.45
     shell.physics_material_override = physics_mat
-    # Rozamiento del aire sobre una vaina de 8 g: frena en vuelo en vez de
+    # Rozamiento del aire sobre una vaina de 3,9 g: frena en vuelo en vez de
     # cruzar la pantalla de lado a lado en 90 ms (que es lo que hacía).
     shell.linear_damp = 0.9
     shell.angular_damp = 0.5

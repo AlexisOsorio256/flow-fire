@@ -22,6 +22,7 @@ var pillar_mat: StandardMaterial3D
 var lamp_mat: StandardMaterial3D
 var stand_mat: StandardMaterial3D
 var drywall_mat: StandardMaterial3D
+var can_mat: StandardMaterial3D
 
 
 func build() -> void:
@@ -98,6 +99,13 @@ func _materials() -> void:
     stand_mat.metallic = 0.75
     stand_mat.roughness = 0.42
 
+    # Lata de aluminio: metal claro, casi sin espesor. La balistica no la trata
+    # como un cilindro macizo (ver `_make_can`).
+    can_mat = StandardMaterial3D.new()
+    can_mat.albedo_color = Color(0.78, 0.80, 0.84)
+    can_mat.metallic = 0.85
+    can_mat.roughness = 0.32
+
     drywall_mat = StandardMaterial3D.new()
     drywall_mat.albedo_color = Color(0.80, 0.78, 0.73)
     drywall_mat.roughness = 0.92
@@ -154,6 +162,15 @@ func _build_props() -> void:
     # Pladur/yeso penetrable: entrada, salida y paso de bala visibles.
     _make_drywall_panel(Vector3(-8.6, 0.0, -14.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
     _make_drywall_panel(Vector3(8.6, 0.0, -18.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
+
+    # Latas: cascara fina penetrable sobre el bidon de x=6.6 y en el suelo. Son
+    # el caso de prueba de `thin_shell`: la bala las atraviesa perdiendo casi
+    # nada y Jolt las tira y las hace rodar.
+    _make_can(Vector3(6.52, 0.98, -10.92))
+    _make_can(Vector3(6.68, 0.98, -11.04))
+    _make_can(Vector3(6.60, 0.98, -11.16))
+    _make_can(Vector3(-1.60, 0.061, -13.60))
+    _make_can(Vector3(-1.40, 0.061, -13.72))
 
 
 func _build_targets() -> void:
@@ -338,6 +355,54 @@ func _make_drum(x: float, z: float) -> void:
     shape.shape = cyl
     body.add_child(shape)
     body.set_meta("surface", "metal")
+
+
+## Lata de aluminio vacia. Jolt la mueve (rueda, rebota, se voltea) con una
+## CylinderShape3D, pero la balistica NO la trata como un cilindro macizo de
+## aluminio: es una cascara de 0,12 mm, asi que declara `thin_shell` y la bala
+## pierde energia en DOS paredes finas, no en 66 mm de metal. El aire de dentro
+## no frena nada.
+func _make_can(base: Vector3) -> void:
+    var body := RigidBody3D.new()
+    body.name = "Can"
+    body.mass = 0.014
+    body.collision_layer = 1
+    body.collision_mask = 1
+    body.continuous_cd = true
+    body.linear_damp = 0.12
+    body.angular_damp = 0.18
+    body.position = base
+    add_child(body)
+
+    var mesh_instance := MeshInstance3D.new()
+    var mesh := CylinderMesh.new()
+    mesh.height = 0.122
+    mesh.top_radius = 0.033
+    mesh.bottom_radius = 0.033
+    mesh.radial_segments = 20
+    mesh.material = can_mat
+    mesh_instance.mesh = mesh
+    body.add_child(mesh_instance)
+
+    var shape := CollisionShape3D.new()
+    var cyl := CylinderShape3D.new()
+    cyl.height = 0.122
+    cyl.radius = 0.033
+    shape.shape = cyl
+    body.add_child(shape)
+
+    var mat := PhysicsMaterial.new()
+    mat.bounce = 0.28
+    mat.friction = 0.5
+    body.physics_material_override = mat
+
+    body.set_meta("dynamic_decal", true)
+    body.set_meta("surface", "metal")
+    body.set_meta("penetrable", true)
+    body.set_meta("thin_shell", true)
+    body.set_meta("wall_thickness", 0.00012)
+    # Aluminio: casi no roba energia a la bala (exp(-200 * 0,00024) ~ 0,95).
+    body.set_meta("penetration_resistance", 200.0)
 
 
 func _make_paper_target(x: float, z: float) -> void:

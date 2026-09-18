@@ -21,8 +21,8 @@ func _ready() -> void:
     set_meta("penetration_resistance", 7.0)
 
 
-## Un 9 mm a 300 m/s trae ~360 J: empuja la caja y la hace girar sin
-## lanzarla como un juguete. La escala es la misma norma que Target.
+## Una 9x19 de 115 granos a 372 m/s trae ~515 J: empuja la caja y la hace girar
+## sin lanzarla como un juguete. La escala es la misma norma que Target.
 func take_bullet_hit(point: Vector3, normal: Vector3, speed: float, energy: float, direction := Vector3.ZERO) -> void:
     var push := direction.normalized() if direction.length_squared() > 0.1 else -normal.normalized()
     var strength := 1.2 + (energy / 520.0) * 2.0

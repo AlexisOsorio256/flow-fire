@@ -25,7 +25,6 @@ func setup(p) -> void:
     player = p
     if player != null and is_instance_valid(player.weapon):
         player.weapon.ammo_changed.connect(_on_ammo_changed)
-    Ballistics.target_hit.connect(_on_target_hit)
     _on_ammo_changed(player.weapon.mag if player != null else 17, 1, 68, false)
 
 
@@ -93,12 +92,6 @@ func _on_ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool) -> 
     reserve_label.text = "/ " + str(reserve)
     reload_label.visible = reloading or (display <= 0)
     reload_label.text = "RECARGANDO" if reloading else "RECARGAR (R)"
-
-
-## La señal se mantiene (es API pública) pero ya no se dibuja nada en pantalla:
-## apuntar con las miras reales y sin marcadores es más creíble.
-func _on_target_hit(_zone: String) -> void:
-    pass
 
 
 func _process(delta: float) -> void:
