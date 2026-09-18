@@ -276,6 +276,7 @@ func _update_trigger(delta: float) -> void:
 	if not trigger_held:
 		if trigger_latched:
 			# Reset fisico: disparador vuelto a su umbral y corredera en bateria.
+			# PENDIENTE: click dedicado de reset; slide_hand a -14 dB es placeholder.
 			if trigger_visual < 0.35 and absf(slide_pos) < 0.0025:
 				trigger_ready = true
 				trigger_latched = false
@@ -389,8 +390,8 @@ func _update_reload(delta: float) -> void:
 		_slide_release_sounded = true
 		GameAudio.play_2d("slide_release", 0.0, randf_range(0.98, 1.03))
 
-	# 6. Asiento: municion + golpe de masa + la palma en la culata.
-	if not _mag_seated and reload_elapsed >= RELOAD_MAG_SEAT_T:
+	# 6. Asiento: municion + golpe de masa. Un solo hito (reload_mag_seated).
+	if not reload_mag_seated and reload_elapsed >= RELOAD_MAG_SEAT_T:
 		_seat_reload_mag()
 		recoil.kick_mag_seat()
 		# Sin palma sin mano: el asiento es magin.
