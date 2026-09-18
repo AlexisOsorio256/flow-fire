@@ -134,17 +134,18 @@ func build() -> void:
 	if barrel != null:
 		_barrel_rest_basis = barrel.transform.basis
 
-	# El GLB canonico llega en metros: se mide y se VALIDA, no se corrige en
-	# silencio. Si la desviacion supera el 3% avisa: el asset no es canonico.
+	# El GLB canonico llega en metros: se VALIDA. Dentro del 3% la escala es 1.0
+	# exacta (cero correccion silenciosa); fuera, se corrige y se avisa alto.
 	var measured_length := _model_length(root)
-	model_scale = REAL_LENGTH / maxf(measured_length, 0.0001)
+	var raw_scale := REAL_LENGTH / maxf(measured_length, 0.0001)
+	if absf(raw_scale - 1.0) > 0.03:
+		push_warning("GLB no canonico: escala %.4f (malla %.1f mm)" % [raw_scale, measured_length * 1000.0])
+		model_scale = raw_scale
+	else:
+		model_scale = 1.0
 	scale = Vector3(model_scale, model_scale, model_scale)
-	if absf(model_scale - 1.0) > 0.03:
-		push_warning("GLB no canonico: escala %.4f (malla %.1f mm)" % [model_scale, measured_length * 1000.0])
 	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
-	## TRIGGER_TRAVEL esta en metros, asi que los dos tienen que hablar de lo
-	## mismo. Medido antes de escalar salia 8 veces largo y el gatillo andaba
-	## 0,6 mm en vez de 5.
+	## TRIGGER_TRAVEL esta en metros. Con escala canonica 1.0 es identidad.
 	if trigger != null:
 		_trigger_lever = maxf(_lever(trigger), 0.001)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
