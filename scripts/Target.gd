@@ -26,7 +26,9 @@ func _ready() -> void:
     continuous_cd = true
     set_meta("dynamic_decal", true)
     linear_damp = 0.4
-    angular_damp = 0.5
+    # Acero colgado: oscila segundos (medido wmax 0,54 rad/s con 9 mm).
+    # El papel amortigua rapido; el acero no: damp comun lo mataba en ~0,8 s.
+    angular_damp = 0.18 if kind == "steel" else 0.5
     _build_visuals()
 
     if kind == "paper":
