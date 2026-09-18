@@ -404,11 +404,11 @@ func _spawn_light(point: Vector3, surface: String) -> void:
         return
     var light := OmniLight3D.new()
     light.omni_range = 0.85
-    light.light_energy = 0.9
+    light.light_energy = 0.35
     light.light_color = Color(1.0, 0.72, 0.34)
     light.shadow_enabled = false
     add_child(light)
-    light.global_position = point + Vector3.UP * 0.05
+    light.global_position = point + Vector3.UP * 0.10
     var tween := create_tween()
     tween.tween_property(light, "light_energy", 0.0, 0.045)
     tween.finished.connect(light.queue_free)
