@@ -11,6 +11,7 @@ Compatibility/OpenGL: la hoja debe ensenar lo que el juego dibuja de verdad.
     python3 tools/review_contact_sheet.py reload | reload_empty | inspect | idle
     python3 tools/review_contact_sheet.py burst   (rafaga de 4, apila retroceso)
     python3 tools/review_contact_sheet.py can     (latas: agujero + vuelco + rodadura)
+    python3 tools/review_contact_sheet.py wall    (pladur: entrada + salida + paso)
 
 Sale en captures/review/<accion>_sheet.png. Los frames temporales se borran.
 Para fuego usa burst denso (~60 FPS durante ~0.8 s); para acciones lentas,
@@ -40,6 +41,7 @@ PRESETS = {
     "ads": (30, 0.25, lambda fs: fs, 6),
     "crate": (30, 0.25, lambda fs: fs, 6),
     "can": (30, 0.25, lambda fs: fs, 6),
+    "wall": (30, 0.25, lambda fs: fs, 6),
     "steel": (30, 0.25, lambda fs: fs, 6),
     # La recarga dura 2,10 s (2,35 s en seco): a 34 ms de juego por frame
     # hacen falta 66/76 frames para ver el final (suelta de corredera y vuelta
@@ -63,6 +65,7 @@ CROPS = {
     "ads": (330, 150, 630, 390),
     "crate": (0, 0, 960, 540),
     "can": (0, 0, 960, 540),
+    "wall": (0, 0, 960, 540),
     "steel": (0, 0, 960, 540),
     "reload": (300, 235, 700, 540),
     "reload_empty": (300, 235, 700, 540),
@@ -78,7 +81,7 @@ def parse_ms(name):
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else "fire"
     if action not in PRESETS:
-        print("accion desconocida:", action, "(fire|burst|pen|ads|crate|steel|can|reload|reload_empty|inspect|idle)")
+        print("accion desconocida:", action, "(fire|burst|pen|ads|crate|steel|can|wall|reload|reload_empty|inspect|idle)")
         return 1
     total, ts, select, cols = PRESETS[action]
     tmp = tempfile.mkdtemp(prefix="review_frames_")

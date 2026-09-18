@@ -110,6 +110,13 @@ func _trigger() -> void:
 			weapon.force_fire_once()
 			_burst_left = 1
 			_burst_gap = 14
+		"wall":
+			# Pladur de 12,7 mm: dos tiros para ver entrada + salida + paso
+			# (el tabique se atraviesa y la bala sigue).
+			_shots_tried += 1
+			weapon.force_fire_once()
+			_burst_left = 1
+			_burst_gap = 14
 		"can":
 			# Latas del suelo (6,6 cm): se apunta con las miras como haria un
 			# tirador; desde cadera el anima no perdona y los tiros se van al
@@ -137,10 +144,16 @@ func _trigger() -> void:
 
 func _process(_delta: float) -> void:
 	_frame += 1
-	if _frame == warmup - 4 and (action == "pen" or action == "crate" or action == "steel" or action == "can"):
+	if _frame == warmup - 4 and (action == "pen" or action == "crate" or action == "steel" or action == "can" or action == "wall"):
 		var player := _game.get_node_or_null("Player")
 		if player != null:
-			if action == "pen":
+			if action == "wall":
+				# Delante del tabique de x=8.6 (z=-18): a 2 m, al centro del
+				# panel (2,6 x 2,4 m: no hay como fallar).
+				(player as Node3D).global_position = Vector3(8.6, 0.05, -16.0)
+				player.set("pitch", -0.18)
+				player.set("pitch_target", -0.18)
+			elif action == "pen":
 				# Delante del blanco de papel x=0: blanco sobre fondo, oscila al
 				# recibir, y el papel se atraviesa (entrada + salida + paso).
 				(player as Node3D).global_position = Vector3(0.0, 0.05, -16.5)
@@ -171,7 +184,7 @@ func _process(_delta: float) -> void:
 		# Rafaga: disparos extra separados _burst_gap frames (~90 ms de juego).
 		# En ads el primero cae con el blend ya asentado (el del trigger no
 		# existe: (frame-warmup)>0 lo excluye en el instante cero).
-		if (action == "burst" or action == "pen" or action == "ads" or action == "crate" or action == "steel" or action == "can") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
+		if (action == "burst" or action == "pen" or action == "ads" or action == "crate" or action == "steel" or action == "can" or action == "wall") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
 			var weapon := _player_weapon()
 			if weapon != null and (_frame - warmup) > 0:
 				_shots_tried += 1
