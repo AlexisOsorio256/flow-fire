@@ -61,19 +61,18 @@ const ARMA_GIRO_RIG := -PI * 0.5
 ## Nada aqui es un numero magico: sale de la geometria real del GLB.
 const GUN_LENGTH := 0.186
 const GUN_TOP_OVER_ORIGIN := 0.035
-## Pose de cadera (validada).
-## Cadera con el rig sencillo, CALIBRADO en pantalla: mas cerca para que la
-## Glock gane tamano y mas abajo para que no tape los blancos.
-const HIP_POS := Vector3(0.0, 0.06, -0.26)
+## Pose de cadera (verificada en :0).
+## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
+const HIP_POS := Vector3(0.13, -0.06, -0.38)
 ## Ojo -> mira trasera en ADS.
-const ADS_SIGHT_DISTANCE := 0.54
-## Pose de recarga: lleva el gesto abajo-derecha para que el guante no
-## llene el objetivo; el giro ensena el brocal. CALIBRADO en pantalla.
-const RELOAD_POSE_UP := 0.0
-const RELOAD_POSE_RIGHT := 0.02
-const RELOAD_POSE_FWD := 0.02
-const RELOAD_POSE_PITCH := 0.12
-const RELOAD_POSE_ROLL := -0.20
+const ADS_SIGHT_DISTANCE := 0.32
+## Pose de recarga: el arma sube al centro-bajo y se inclina para
+## ensenar el brocal; el objetivo queda libre (verificado en :0).
+const RELOAD_POSE_UP := 0.10
+const RELOAD_POSE_RIGHT := 0.0
+const RELOAD_POSE_FWD := 0.03
+const RELOAD_POSE_PITCH := 0.22
+const RELOAD_POSE_ROLL := -0.15
 
 const VIEWMODEL_LAYER := 13
 const VIEWMODEL_LAYER_BIT := 1 << (VIEWMODEL_LAYER - 1)
@@ -472,13 +471,12 @@ func _align_arms_with_mesh(measure: Dictionary, holder: Node3D) -> void:
 	if holder == null or arms_skeleton == null:
 		return
 	gun_frame_bind = measure["frame"]
-	var target := Vector3(0.0296, 0.1286, GUN_LENGTH)
 	var frame_box: AABB = measure["frame_box"]
-	var axis_scale := Vector3(
-		target.x / maxf(frame_box.size.x, 0.000001),
-		target.y / maxf(frame_box.size.y, 0.000001),
-		target.z / maxf(frame_box.size.z, 0.000001)
-	)
+	# Escala UNIFORME por el largo del canon: conserva todos los angulos del
+	# rig (la no uniforme por ejes cizallaba el esqueleto y dejaba la pistola
+	# vertical). Las proporciones reales del arma salen solas del GLB.
+	var uni := GUN_LENGTH / maxf(frame_box.size.z, 0.000001)
+	var axis_scale := Vector3(uni, uni, uni)
 	holder.basis = Basis.IDENTITY.scaled(axis_scale) * gun_frame_bind.inverse()
 	var centred := _box_in_frame(_bounds(measure["verts"]), holder.basis)
 	# Ojo: la cadena incluye arms_root (identidad) y Armature (336x): al medir
@@ -559,7 +557,9 @@ func magazine_to_hand() -> void:
 	var mag := weapon.magazine.global_transform
 	hand_socket.transform = mano.affine_inverse() * mag
 	_mag_home = weapon.magazine.get_parent()
-	weapon.magazine.reparent(hand_socket, false)
+	# Conservar el global: el socket cuelga del esqueleto (otra escala) y con
+	# keep=false el cargador heredaria su tamano multiplicado por ~4.
+	weapon.magazine.reparent(hand_socket, true)
 	_mag_in_hand = true
 
 
@@ -570,6 +570,8 @@ func magazine_to_weapon() -> void:
 	if _mag_home != null:
 		weapon.magazine.reparent(_mag_home, false)
 		weapon.magazine.position = weapon.magazine_rest
+		weapon.magazine.rotation = Vector3.ZERO
+		weapon.magazine.scale = Vector3.ONE
 	_mag_in_hand = false
 
 
@@ -581,9 +583,9 @@ func magazine_in_hand() -> bool:
 # Materiales y utilidades de malla
 # ---------------------------------------------------------------------------
 const FABRIC_SPECULAR := 0.22
-## El key del viewmodel (2.9) quema el salvia del autor: se baja a 0.32,
-## CALIBRADO sobre captura en pantalla (a 0.5 salia casi blanco).
-const ARMS_TAME := 0.32
+## El key del viewmodel (2.9) quema el salvia del autor: se baja a 0.22
+## (verificado en :0; a 0.5 sale casi blanco).
+const ARMS_TAME := 0.22
 const ARMS_ROUGHNESS := 0.95
 
 
