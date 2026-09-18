@@ -24,4 +24,22 @@ func _ready() -> void:
 	var worst5 := ms[int(ms.size() * 0.95)]
 	print("FPS   media %.1f ms (%.0f fps) | peor5 %.1f ms | peor1 %.1f ms | max %.1f ms" % [
 		mean, 1000.0 / mean, worst5, worst1, ms[ms.size() - 1]])
+	# La escena de este harness no es Main.tscn: GameAudio.play_3d() agrega la
+	# vaina a la escena actual y, al salir en seco, el playback WAV queda vivo.
+	# Detener y liberar las voces de prueba evita que el propio medidor reporte
+	# una fuga que no existe en la ejecución normal.
+	main.queue_free()
+	await get_tree().process_frame
+	_free_audio_nodes(GameAudio)
+	_free_audio_nodes(get_tree().current_scene)
+	await get_tree().process_frame
 	get_tree().quit()
+
+
+func _free_audio_nodes(root: Node) -> void:
+	for child in root.get_children():
+		if child is AudioStreamPlayer or child is AudioStreamPlayer3D:
+			child.stop()
+			child.free()
+		else:
+			_free_audio_nodes(child)

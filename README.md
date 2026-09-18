@@ -1,159 +1,200 @@
 # FlowFire
 
-**Un laboratorio FPS de una sola pistola: la Glock 19.** El proyecto existe para
-profundizar una cadena, y sólo esa cadena:
+Laboratorio FPS centrado en una sola Glock 19: ciclo mecánico, disparo,
+proyectil, material, penetración, física, audio y feedback visual. El rango es
+un instrumento pequeño de medición, no un mapa de juego.
 
-```
-Glock -> disparo -> ciclo mecanico -> proyectil -> material
-      -> penetracion/rebote -> reaccion fisica -> sonido -> feedback visual
-```
+## Contrato de producción
 
-Todo lo que no haga esa cadena más convincente o más barata de mantener no
-pertenece a `main` todavía. No hay multijugador, ni lobby, ni mapa: hay un rango
-donde experimentarla.
+- Una autoridad por estado y por transformación. `Glock.gd` decide la mecánica;
+  los demás scripts la representan o la hacen sonar.
+- Una sola ruta de producción. Si falta un asset obligatorio, el arranque falla;
+  no hay offsets históricos, piezas procedurales de reserva ni sistemas de
+  armas genéricos.
+- Los problemas de asset se resuelven en Blender; los de gameplay, física y
+  audio en Godot o en las herramientas offline que los producen.
+- Los objetos declaran material y geometría. Los números de resistencia viven
+  únicamente en `Ballistics.MATERIALS`.
+- `CREDITS_MODELS.md`, `CREDITS_TEXTURES.md` y `CREDITS_AUDIO.md` son la fuente
+  de atribución; Git conserva los assets y herramientas retirados.
 
-El proyecto se mantiene **100% con IA**, así que la eficiencia incluye **menos
-búsqueda mental para la siguiente IA**: cada responsabilidad importante tiene un
-módulo obvio, una sola autoridad y un nombre explícito. Separar
-responsabilidades cuando eso reduce la búsqueda **no** es sobreingeniería;
-sobreingeniería es apilar `Manager -> Service -> Adapter -> EventBus` sin una
-necesidad real.
-
-## Contrato
-
-1. **Una sola autoridad por comportamiento y por transformación mecánica.** Una
-   pieza no puede recibir el mismo transform de la animación, del procedural y de
-   otro sistema a la vez. Si dos capas pueden escribir lo mismo, el ownership
-   queda escrito junto al código correspondiente, no aquí.
-2. **Una sola ruta de producción.** Sin fallbacks, flags ni legacy activo. Git es
-   el rollback.
-3. **Nada de arquitectura especulativa:** ni managers, ni event buses, ni
-   interfaces genéricas, ni capas "por si luego sirven". Tampoco un sistema de
-   armas genérico mientras haya una sola arma.
-4. **Cambios locales antes que rediseños.** La causa se arregla donde está.
-5. **No dividir archivos por tamaño**, sino cuando una IA necesita buscar menos.
-6. **Los detalles técnicos viven junto al código que los usa.** README = reglas
-   estables; código = verdad técnica actual; Git = historia y también el museo de
-   los assets y herramientas que ya no se usan.
-7. **No inventes alcance.** El alcance lo fija la sección de abajo; nada de
-   features nuevas por iniciativa propia.
-8. **Assets:** licencia compatible (nunca NonCommercial) y crédito en
-   `CREDITS_*.md` en el mismo cambio. Un asset = una representación: el `.glb`
-   lleva sus texturas dentro y el importador no deja copias sueltas en el repo.
-9. **Elimina lo que tu cambio vuelva obsoleto:** código, flags, comentarios,
-   docs y herramientas que ya no se usan. Una herramienta rota es peor que no
-   tener herramienta.
-10. **Mantén este README corto y verdadero.** Si algo aquí ya no es cierto, se
-    corrige en el mismo cambio.
-
-**Prioridad:** correctitud → profundidad física / sensación → estabilidad →
-rendimiento → calidad audiovisual → features.
-
-## Arquitectura
+## Arquitectura real
 
 | Responsabilidad | Autoridad |
 |---|---|
-| Arranque y escena | `scripts/Main.gd` |
-| Mecánica del arma: munición, recámara, gatillo, cadencia, corredera, recarga, inspección | `scripts/Glock.gd` |
-| Piezas del arma (Frame, Slide, Magazine, puntos) y su escala real | `scripts/GlockWeapon.gd` |
-| Viewmodel: montaje del arma, pose, ADS, encuadre | `scripts/GlockViewmodel.gd` |
-| Retroceso y peso: el arma en el agarre + cesión del conjunto | `scripts/GlockRecoil.gd` |
-| Fogonazo, luz de boca, humo | `scripts/WeaponFX.gd` |
-| Audio | `scripts/GameAudio.gd` |
-| Balística, penetración, rebote | `scripts/Ballistics.gd` |
-| Impactos | `scripts/ImpactFX.gd` |
-| Vaina expulsada | `scripts/Shell.gd` |
-| Jugador y cámara | `scripts/Player.gd` |
-| HUD y post bodycam | `scripts/HUD.gd` + `shaders/bodycam.gdshader` |
-| Mundo y rango (incluidas las latas de cascara fina) | `scripts/World.gd` |
-| Blancos y cajas reactivas | `scripts/Target.gd`, `scripts/Crate.gd` |
+| Arranque y composición | `scripts/Main.gd` |
+| Estado de Glock: munición, recámara, gatillo, corredera, recarga, inspección | `scripts/Glock.gd` |
+| Piezas, sockets, escala y movimiento de la malla | `scripts/GlockWeapon.gd` |
+| Montaje, pose, ADS y mano | `scripts/GlockViewmodel.gd` |
+| Retroceso rápido del arma y cesión lenta del conjunto | `scripts/GlockRecoil.gd` |
+| Fogonazo, humo y luz de boca | `scripts/WeaponFX.gd` |
+| Proyectil, penetración, rebote e impulso | `scripts/Ballistics.gd` |
+| Decals, partículas y sonidos de impacto | `scripts/ImpactFX.gd` + `GameAudio` |
+| Cargador expulsado y casquillos | `scripts/MagazineDrop.gd`, `scripts/Shell.gd` |
+| Arquitectura visual, colisiones de sala y luminarias | `scenes/RangeShell.tscn` + `assets/models/range_shell.glb` |
+| Estaciones balísticas, blancos y cuerpos físicos | `scripts/World.gd`, `scripts/Target.gd`, `scripts/Crate.gd` |
 
-Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
-Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
+La escena principal es `scenes/Main.tscn`. Los autoloads son `GameAudio`,
+`ImpactFX` y `Ballistics`. El renderer es Mobile y la física es Jolt.
 
-**Referencia: Glock 19 Gen5 stock** (185 x 128 x 30 mm, 15 tiros, ~12,5 mm de
-disparador, 39 mm de corredera). **La pistola va en metros.** El GLB canonico
-llega ya en metros y Godot solo valida; la malla actual mide 174 mm (11 mm
-corta: aproximacion visual declarada, no se estira). El encuadre se calibra
-alrededor. Lo comprueba `tools/check_weapon.gd`.
+## Glock 19: referencia y asset
 
-**El arma no está en ningún esqueleto.** Es un árbol de piezas rígidas: `Frame`,
-`Slide`, `Magazine`, `Trigger`, `Barrel`, los herrajes y los puntos de boca,
-miras y puerto. Mover la corredera, el cargador o el gatillo es escribir un
-`transform`. El gatillo gira sobre su pasador y el cañón cae cuando el arma se
-abre; las dos cosas se miden sobre la malla, no se suponen. `Trigger` y `Barrel`
-siguen siendo opcionales: si faltan, el arma funciona sin ellos.
+La referencia física es una Glock 19 Gen5 stock: 185 × 128 × 30 mm, cargador
+estándar de 15 cartuchos, recorrido de disparador aproximado de 12,5 mm y
+recorrido de corredera de 39 mm. Esos datos no se modifican para hacerlos
+coincidir con la malla.
 
-**Los brazos no están en producción.** El asset anterior (13,4 MB, 78 huesos y
-cinco clips cuyos instantes había que remedir en cada cambio) está congelado
-fuera del árbol; Git lo conserva. La pistola flota montada en el pivote. Cuando
-el arma esté cerrada entrarán unos brazos limpios como **capa de presentación**,
-nunca como columna de la mecánica.
+El `g19_pistol.glb` canónico es una aproximación visual: mide aproximadamente
+174 mm de largo, 127 mm de alto y 31 mm de ancho. Godot la importa en metros,
+valida ese contrato y mantiene escala 1; no la estira ni corrige sus orígenes en
+runtime. La diferencia de largo frente a la referencia real queda declarada,
+no escondida.
 
-**Una pistola.** Glock 19. No hay tabla de armas ni código por arma a propósito.
+Su árbol obligatorio es:
 
-### Cómo se comporta la bala
+```text
+Glock
+├── Frame
+├── Slide
+├── Barrel
+├── Trigger
+├── Magazine
+├── Muzzle
+├── EjectionPort
+├── SightRear
+├── SightFront
+├── Grip
+└── Magwell
+```
 
-- La forma de colisión manda: la salida se resuelve analíticamente en cajas,
-  cilindros y esferas, y el espesor que atraviesa la bala es geometría real, no
-  metadata.
-- Un cuerpo **fino** (una lata) declara `thin_shell` + `wall_thickness`: pierde
-  energía en dos paredes delgadas y no en 66 mm de metal macizo. Jolt se encarga
-  de que ruede y se voltee.
-- Sin trazadoras: una Glock normal no las dispara. El proyectil no deja estela.
+`Muzzle` cuelga de `Barrel`; `Grip` y `Magwell` de `Frame`; `EjectionPort`,
+`SightRear` y `SightFront` de `Slide`. Si falta una pieza o un padre es
+incorrecto, `GlockWeapon.build()` devuelve error y el viewmodel no arranca.
+El pivote de retroceso sale de `Grip`.
 
-### Dónde se pide cada ajuste
+La Glock no está en un esqueleto. `Slide`, `Barrel`, `Trigger` y `Magazine`
+son piezas rígidas con transform propio. La corredera recorre 39 mm, el cañón
+retrocede inicialmente y luego cae, el gatillo gira sobre su pasador y el
+cargador sale por su eje medido.
 
-| Petición | Un solo sitio |
-|---|---|
-| "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, `RECOIL_*_VEL` (rad/s y m/s verdaderos) |
-| "el arma está mal encuadrada" | `GRIP_POS` / `GRIP_ROT` en `GlockViewmodel.gd` |
-| "la corredera no llega / recorre de más" | `SLIDE_TRAVEL` en `GlockWeapon.gd` |
-| "el cargador sale por donde no debe" | `MAGAZINE_OUT_AXIS` / `MAG_TRAVEL` en `GlockWeapon.gd` |
-| "la recarga va a destiempo" | los `RELOAD_*_T` de `Glock.gd` (segundos reales de la mecánica) |
-| "una lata no reacciona como debería" | `penetration_resistance` / `wall_thickness` en `World.gd` |
-| "agrupa muy abierto/cerrado" | `SHOT_DISPERSION_SIGMA` en `Glock.gd` (mrad reales por eje) |
+## Mano y viewmodel
 
-Invariantes objetivas: `tools/check_weapon.gd` (malla en metros, capacidad 15,
-Muzzle bajo Barrel, corredera, brocal, gatillo sobre su pasador, caida del canon).
-Inspector del asset: `tools/check_viewmodel.gd` (poses a PNG, sin mecanica);
-sonda CPU: `tools/check_fps.gd` (no GPU real). Acciones reales a PNG:
-`tools/review_contact_sheet.py` (dispara por senales de verdad y cuenta
-disparos ocurridos, no intentos). El GLB es la fuente canónica: trae piezas, orígenes y sockets reales dentro.
-`tools/build_g19_parts.py` cumplió la migración y se retiró al historial.
-Prohibido verificar en headless para lo visual: para mirar se abre Godot en la
-pantalla del usuario (`:0`).
+La capa provisional es deliberadamente pequeña:
 
-## Workflow IA + usuario
+```text
+BodyGive
+├── RightHand       right_hand.glb: 1 mesh, 4.224 tris, 1 material
+└── WeaponGrip
+    └── WeaponSocket
+        └── Glock
+```
 
-- **La IA abre el juego en tu pantalla, toma capturas y juzga.** Si algo se ve
-  mal, la IA ejecuta Godot en `:0`, saca sus propias capturas de esa pantalla y
-  juzga sobre ellas. Nunca pide al usuario imágenes de lo que puede ver sola.
-- **Las capturas no se versionan.** `captures/` está ignorado por Git: se generan
-  para mirar, se miran y se borran. Una hoja de revisión es evidencia de trabajo,
-  no un asset.
-- **Ciclo:** cambio pequeño → la IA lo verifica en el juego con capturas →
-  commit/push → el usuario valida en su Godot → feedback → corregir.
-- **Honestidad antes que avance.** Si algo atrasa el proyecto, la IA lo dice y
-  propone una forma mejor de reemplazarlo. Prohibido decir "ya quedó" sin
-  haberlo verificado en el juego.
-- **Tests:** no se ejecutan automáticamente. Una comprobación automática solo se
-  justifica si el usuario la pide explícitamente o autoriza una invariante
-  concreta (pregunta objetiva que el usuario no responde mejor mirando o
-  escuchando, pequeña y atada a esa invariante).
-- **Comentarios:** explican invariantes actuales y el porqué de una decisión no
-  obvia. Un valor calibrado puede decir `CALIBRADO: razón actual`, pero no cita
-  herramientas ni experimentos que ya no existen.
+`right_hand.glb` es una mano derecha con antebrazo/manga, pose horneada sobre el
+`Grip`, cero huesos y cero animaciones. La mano no escribe ningún transform del
+arma; `WeaponSocket` aplica el retroceso rápido y `BodyGive` la cesión lenta.
+No hay mano izquierda, IK, retarget ni `AnimationPlayer` para brazos. Durante la
+recarga el cargador puede moverse solo: la mecánica visible sigue siendo
+coherente y no se inventan Foley de manos inexistentes.
 
-## Alcance
+## Rango de medición
 
-El renderer es **Mobile** (también para Android), pero hoy lo que manda es lo que
-se ve y se siente en el rango. Un mapa de juego esta fuera de alcance; ampliar
-el rango y anadir estaciones de prueba esta dentro (instrumento de medicion).
-**Fuera de alcance ahora mismo:** multijugador, lobby, mapa, controles Android
-finales, vida de blancos, puntuación y más de una arma.
+`range_shell.glb` es sólo presentación estática: suelo, paredes, techo,
+columnas, vigas, separadores, canaletas, luminarias, marcaciones y bullet trap.
+Tiene pocas mallas y materiales PBR embebidos; no contiene latas, cajas,
+drywall, blancos ni metadatos balísticos. Sus colisiones, ReflectionProbe y
+luminarias viven en `scenes/RangeShell.tscn`.
 
----
+`World.gd` conserva únicamente las estaciones funcionales:
 
-**FlowFire no debe impresionar por todo lo que tiene, sino por lo absurdamente
-bien hecho que está lo poco que tiene.**
+- cerca de 5 m: latas y objetos ligeros;
+- 10–15 m: madera, cajas, bidones y drywall penetrable;
+- 18 m: papel;
+- 27 m: acero y ángulos;
+- 35 m: agrupación;
+- 50 m: caída y cero.
+
+La sala es interior. Las luminarias de `RangeShell.tscn` son la fuente directa,
+el ambiente está controlado y no hay sol atravesando el techo. La iluminación
+privada del viewmodel es tenue y sólo evita que la Glock desaparezca; las luces
+del mundo también alcanzan la capa del arma.
+
+## Audio
+
+Los WAV hero son secos y los masters permanecen fuera del importador en
+`assets/audio/source/`. La única sala es el bus `Range`:
+
+```text
+Weapons ─┐
+         ├── Range (único AudioEffectReverb) ── Master
+World ───┘
+```
+
+La topología vive en `default_bus_layout.tres`; `GameAudio.gd` la valida y no
+crea buses ni reverb de repuesto en runtime. No se usa +6 dB ni HardLimiter como
+sustituto de mezcla. El aluminio tiene `impact_aluminum.wav`, un derivado PCM
+offline más brillante y más bajo que el acero, no un pitch hack en runtime.
+
+Cada sonido corresponde a un evento que existe: el golpe del cargador y de los
+casquillos nace del contacto físico, el reset del gatillo es propio, y los
+golpes de corredera están ligados a sus umbrales mecánicos. No se añaden manos,
+ropa ni rebotes pregrabados.
+
+## Balística y física
+
+`Ballistics.gd` es la única autoridad de:
+
+```text
+material + geometría + velocidad
+→ penetración → velocidad de salida → impulso p_entrada - p_salida
+```
+
+La salida usa la forma de colisión que recibió el impacto. Una lata o un bidón
+fino declara `thin_shell` y `wall_thickness`: se atraviesan sus dos paredes,
+no el diámetro completo del cilindro. Una caja hueca está formada por seis
+paneles reales; cada panel puede producir su propia entrada/salida y Jolt aporta
+el torque por el punto de impacto. `Target` y `Crate` no inventan callbacks de
+balística.
+
+La tabla única mantiene separados `steel`, `aluminum`, `gypsum`, `pine`,
+`paper` y `concrete`. ImpactFX conserva perfiles, decals, partículas y audio
+distintos para esos materiales.
+
+El proyectil nace en `Muzzle`, alineado con el ánima; fogonazo y humo usan la
+misma dirección. El cero de miras es paralelo y explícito. La dispersión es
+gaussiana, mecánica y con media cero: `SHOT_DISPERSION_SIGMA = 1,6 mrad` por
+eje; se puede poner en cero para una comprobación.
+
+## Herramientas y verificación
+
+Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
+
+- `tools/build_range_assets.py`: reconstruye en Blender el shell y la mano.
+- `tools/check_weapon.tscn`: piezas obligatorias, contratos de escala y
+  referencia mecánica de la Glock, incluida la mano.
+- `tools/check_range_shell.tscn`: pocas mallas/materiales, dimensiones del
+  rango y separación de objetos funcionales.
+- `tools/check_fps.tscn`: sonda CPU pequeña para detectar regresiones obvias.
+- `tools/review_contact_sheet.py`: ejecuta acciones reales (`fire`, `ads`,
+  `reload`, `inspect`, `pen`, `steel`, `can`, etc.) y cuenta la señal
+  `shot_fired`; las capturas sólo son evidencia local y no se versionan.
+- `tools/process_audio.sh` y `tools/build_shot.py`: procesamiento offline y
+  medición de duración, peak, RMS, cresta y clipping.
+
+Los checks estructurales se pueden ejecutar con `godot --headless --path .`.
+La revisión visual se hace en una ventana real de Godot; un PNG vacío o un
+inspector headless no certifica un viewmodel.
+
+Para regenerar los dos assets Blender:
+
+```text
+blender --background --python tools/build_range_assets.py
+```
+
+## Fuera de alcance
+
+Multijugador, lobby, mapa, controles Android finales, vida/puntuación de
+blancos, mano izquierda, rigs complejos y más de una arma.
+
+FlowFire busca más realidad con menos arquitectura: una Glock bien montada,
+un rango legible y una cadena física/audiovisual que se pueda seguir sin
+buscar quién manda.
