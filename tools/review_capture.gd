@@ -15,7 +15,11 @@ var warmup := 40
 var total := 50
 var time_scale := 1.0
 var _burst_left := 0
-var _burst_gap := 3
+# La corredera vuelve a bateria en ~50-70 ms (K=4000, C=80, 39 mm): la rafaga
+# separa sus intentos 10 frames (~90 ms de juego a time-scale 0,08) para que los
+# 4 sean disparos REALES (lo confirma la linea REVIEW). Con 3 frames (~27 ms) la
+# mitad se los tragaba el _can_fire y la hoja mentia.
+var _burst_gap := 10
 
 var _frame := 0
 var _t0 := 0
