@@ -105,12 +105,16 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
 
     var sound_name := "impact_concrete"
     var volume := 0.0
+    var pitch := randf_range(0.92, 1.08)
     match surface:
         "metal":
             sound_name = "impact_metal"
         "aluminum":
+            # Chapa fina de 0,12 mm, no bloque: menos cuerpo (-6 dB) y resonancia
+            # mas aguda que el acero. Misma muestra, otro registro.
             sound_name = "impact_metal"
             volume = -6.0
+            pitch = randf_range(1.25, 1.45)
         "wood":
             sound_name = "impact_wood"
         "paper":
@@ -121,7 +125,7 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
             volume = -5.0
         _:
             sound_name = "impact_concrete"
-    GameAudio.play_3d(sound_name, point, volume, randf_range(0.92, 1.08))
+    GameAudio.play_3d(sound_name, point, volume, pitch)
 
 
 ## Humo de boca: una voluta palida que se lee contra el fondo negro del rango.

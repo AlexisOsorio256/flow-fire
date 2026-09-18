@@ -39,8 +39,11 @@ PRESETS = {
     "ads": (30, 0.25, lambda fs: fs, 6),
     "crate": (30, 0.25, lambda fs: fs, 6),
     "steel": (30, 0.25, lambda fs: fs, 6),
-    "reload": (46, 0.25, lambda fs: fs[::3], 7),
-    "reload_empty": (46, 0.25, lambda fs: fs[::3], 7),
+    # La recarga dura 2,10 s (2,35 s en seco): a 34 ms de juego por frame
+    # hacen falta 66/76 frames para ver el final (suelta de corredera y vuelta
+    # a bateria), no solo la mitad.
+    "reload": (66, 0.25, lambda fs: fs[::4], 7),
+    "reload_empty": (76, 0.25, lambda fs: fs[::4], 7),
     "inspect": (46, 0.30, lambda fs: fs[::3], 6),
     "idle": (10, 1.0, lambda fs: fs[::2], 5),
 }
@@ -87,7 +90,12 @@ def main():
             "--warmup=40", "--total=%d" % total,
             "--time-scale=%s" % ts,
         ]
-        subprocess.run(cmd, check=True, capture_output=True, cwd=REPO)
+        proc = subprocess.run(cmd, check=True, capture_output=True, cwd=REPO)
+        for line in (proc.stdout.decode() + proc.stderr.decode()).splitlines():
+            # Lo unico que importa del log: disparos REALES (senal shot_fired),
+            # no intentos. Si la hoja dice "rafaga de 4" esto debe decir 4.
+            if "REVIEW disparos" in line:
+                print(line.strip())
         frames = sorted(
             (f for f in os.listdir(tmp) if f.endswith(".png")),
             key=lambda f: int(f.split("_")[1]),
