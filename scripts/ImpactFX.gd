@@ -15,7 +15,7 @@ extends Node3D
 ## tenga debajo (funciona en el renderer Mobile), asi que el agujero se adapta a
 ## una pared, a un bidon curvado o a una lata sin fabricar geometria por impacto:
 ## antes eran ~90 lineas de malla procedural por agujero y el borde tenia que
-## inventarse el relieve. Lo unico que se genera aqui son CINCO siluetas (una por
+## inventarse el relieve. Lo unico que se genera aqui son siluetas (una por
 ## material) UNA vez al arrancar, con el hundimiento, el labio y el color ya
 ## cocidos dentro.
 ##
@@ -45,6 +45,7 @@ const HOLE_SIZE := {
     "gypsum": 0.064,
     "wood": 0.064,
     "metal": 0.048,
+    "steel": 0.048,
     "aluminum": 0.042,
     "paper": 0.040,
 }
@@ -56,6 +57,7 @@ const CAVITY_TINT := {
     "gypsum": Color(0.085, 0.080, 0.072),
     "wood": Color(0.050, 0.031, 0.015),
     "metal": Color(0.055, 0.058, 0.064),
+    "steel": Color(0.035, 0.038, 0.045),
     "aluminum": Color(0.62, 0.63, 0.65),
     "paper": Color(0.075, 0.066, 0.055),
 }
@@ -64,6 +66,7 @@ const LIP_TINT := {
     "gypsum": Color(0.74, 0.71, 0.65),
     "wood": Color(0.46, 0.30, 0.14),
     "metal": Color(0.32, 0.33, 0.36),
+    "steel": Color(0.24, 0.26, 0.30),
     "aluminum": Color(0.78, 0.79, 0.81),
     "paper": Color(0.70, 0.66, 0.56),
 }
@@ -110,6 +113,8 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
         "concrete":
             sound_name = "impact_concrete"
         "metal":
+            sound_name = "impact_metal"
+        "steel":
             sound_name = "impact_metal"
         "aluminum":
             # Chapa fina de 0,12 mm, no bloque: menos cuerpo (-6 dB) y resonancia
@@ -335,6 +340,12 @@ const IMPACT_MATERIALS := {
         "exit_scale": 1.15,
         "crater": 0.0,
     },
+    "steel": {
+        "debris": {"amount": 22, "color": Color(1.0, 0.72, 0.26, 1.0), "vel": [3.4, 9.0], "gravity": -12.0, "scale": [0.30, 1.20], "life": 0.42, "size": 0.026, "spread": 56.0, "spark": true, "stretch": 5.5},
+        "dust": {"amount": 3, "color": Color(0.38, 0.39, 0.42, 0.28), "vel": [0.3, 1.0], "gravity": -2.0, "scale": [0.35, 0.95], "life": 0.34, "size": 0.026, "spread": 48.0},
+        "exit_scale": 1.10,
+        "crater": 0.0,
+    },
     "aluminum": {
         "debris": {"amount": 4, "color": Color(1.0, 0.80, 0.40, 1.0), "vel": [2.0, 5.0], "gravity": -11.0, "scale": [0.30, 0.90], "life": 0.22, "size": 0.012, "spread": 50.0, "spark": true},
         "dust": {"amount": 3, "color": Color(0.70, 0.71, 0.72, 0.30), "vel": [0.3, 1.0], "gravity": -2.0, "scale": [0.30, 0.90], "life": 0.30, "size": 0.022, "spread": 44.0},
@@ -412,7 +423,7 @@ func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) 
 
 
 func _spawn_light(point: Vector3, surface: String) -> void:
-    if surface != "metal" and surface != "aluminum":
+    if surface != "metal" and surface != "steel" and surface != "aluminum":
         return
     var light := OmniLight3D.new()
     light.omni_range = 0.85
