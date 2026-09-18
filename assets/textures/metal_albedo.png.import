@@ -15,7 +15,7 @@ dest_files=["res://.godot/imported/metal_albedo.png-b6f3b407b3047a7ff86accbca0bb
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

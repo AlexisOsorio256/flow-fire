@@ -1,6 +1,7 @@
 extends Node
-## Renderiza el viewmodel a PNG en varias poses, sin depender de que la ventana
-## del juego se vea. Es una sonda de lectura: deja mirar que hay montado.
+## Inspector del ASSET a PNG (poses fijas, sin mecanica). No valida acciones:
+## no ejecuta ciclo, timings, flash, audio ni recarga real. Para acciones usar
+## review_capture con señales reales y conteo de disparos.
 ##
 ##   godot --path . tools/check_viewmodel.tscn -- --out=/tmp/vm
 ##

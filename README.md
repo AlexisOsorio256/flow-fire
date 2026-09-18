@@ -71,13 +71,11 @@ rendimiento → calidad audiovisual → features.
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
 
-**La pistola va en metros reales.** La escala sale de medir la malla, no de un
-número escrito a mano, y nadie la multiplica después para que quepa en un
-encuadre: el encuadre se calibra alrededor. La malla de Rotuma mide 174 mm de
-largo y 127 mm de alto; una G19 real mide 187 × 128, así que el arma se dibuja
-a la medida de su malla y no se estira para cuadrar la ficha del fabricante. Lo
-que sí es de la pistola de verdad son las mecánicas: 39 mm de corredera y 5 mm
-de gatillo, medidos en el mundo. Lo comprueba `tools/check_weapon.gd`.
+**Referencia: Glock 19 Gen5 stock** (185 x 128 x 30 mm, 15 tiros, ~12,5 mm de
+disparador, 39 mm de corredera). **La pistola va en metros.** El GLB canonico
+llega ya en metros y Godot solo valida; la malla actual mide 174 mm (11 mm
+corta: aproximacion visual declarada, no se estira). El encuadre se calibra
+alrededor. Lo comprueba `tools/check_weapon.gd`.
 
 **El arma no está en ningún esqueleto.** Es un árbol de piezas rígidas: `Frame`,
 `Slide`, `Magazine`, `Trigger`, `Barrel`, los herrajes y los puntos de boca,
@@ -115,10 +113,10 @@ nunca como columna de la mecánica.
 | "la recarga va a destiempo" | los `RELOAD_*_T` de `Glock.gd` (segundos reales de la mecánica) |
 | "una lata no reacciona como debería" | `penetration_resistance` / `wall_thickness` en `World.gd` |
 
-Invariantes objetivas: `tools/check_weapon.gd` (escala real, piezas, recorrido de
-corredera, eje del cargador, giro del gatillo sobre su pasador, caída del cañón).
-Sonda visual: `tools/check_viewmodel.gd` (renderiza las poses a PNG);
-rendimiento: `tools/check_fps.gd`. La preparación del asset es un solo paso:
+Invariantes objetivas: `tools/check_weapon.gd` (malla en metros, capacidad 15,
+Muzzle bajo Barrel, corredera, brocal, gatillo sobre su pasador, caida del canon).
+Inspector del asset: `tools/check_viewmodel.gd` (poses a PNG, sin mecanica);
+sonda CPU: `tools/check_fps.gd` (no GPU real). La preparación del asset es un solo paso:
 `tools/build_g19_parts.py` parte la malla del autor (que trae el arma armada y
 despiezada a la vez) en `Frame`, `Slide`, `Magazine`, `Trigger` y `Barrel`, y
 reasienta los orígenes de cada pieza.
@@ -149,9 +147,10 @@ pantalla del usuario (`:0`).
 ## Alcance
 
 El renderer es **Mobile** (también para Android), pero hoy lo que manda es lo que
-se ve y se siente en el rango. **Fuera de alcance ahora mismo:** multijugador,
-lobby, mapa, controles Android finales, vida de blancos, puntuación y más de una
-arma. Cuando el usuario lo ordene, Git tiene la historia y el README cambia.
+se ve y se siente en el rango. Un mapa de juego esta fuera de alcance; ampliar
+el rango y anadir estaciones de prueba esta dentro (instrumento de medicion).
+**Fuera de alcance ahora mismo:** multijugador, lobby, mapa, controles Android
+finales, vida de blancos, puntuación y más de una arma.
 
 ---
 

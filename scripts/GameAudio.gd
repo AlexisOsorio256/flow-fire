@@ -1,6 +1,8 @@
 extends Node
 
-## Audio real CC0 con mix por buses.
+## Audio mixto con mix por buses: CC0, Sonniss (EULA sin atribucion) y sintesis propia.
+## El disparo actual es placeholder compuesto de alta calidad (G18C+Beretta93R+Sintesis),
+## no una G19 pura; la sala es IR sintetica pendiente de bus RangeReverb.
 ##
 ## Los WAV de `assets/audio/` están normalizados por familia con
 ## `tools/process_audio.sh` (mismo ataque, cola corta, pico < -1.2 dBFS). Si se
@@ -54,9 +56,8 @@ const SOUNDS := {
     "slide_hand": {"stream": preload("res://assets/audio/slide_hand.wav"), "db": -16.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
-    # Recarga completa: la ropa al moverse, el cargador vacio rebotando en el
-    # suelo, la palma en la culata al asentar y el reten de la corredera. Sin
-    # estos cuatro la recarga eran dos clics flotando en silencio.
+    # Mecanica de recarga: reten, insercion, asiento y reten de corredera.
+    # Sin Foley de manos/ropa/palma mientras no haya mano (ver Glock.gd).
     "reload_rustle": {"stream": preload("res://assets/audio/reload_rustle.wav"), "db": -16.0, "bus": BUS_WEAPONS},
     "mag_slap": {"stream": preload("res://assets/audio/mag_slap.wav"), "db": -11.0, "bus": BUS_WEAPONS},
     "slide_release": {"stream": preload("res://assets/audio/slide_release.wav"), "db": -18.0, "bus": BUS_WEAPONS},
@@ -120,6 +121,18 @@ func _setup_buses() -> void:
 
     var world := _ensure_bus(BUS_WORLD)
     AudioServer.set_bus_volume_db(world, -3.0)
+    # Sala del rango como BUS con Reverb (no IR horneada por tiro): al agrandar
+    # el recinto cambia una configuracion, no cinco WAV. Los disparos actuales
+    # aun traen cola horneada (placeholder); la reverb aqui es corta y baja.
+    var verb := AudioEffectReverb.new()
+    verb.room_size = 0.55
+    verb.damping = 0.45
+    verb.spread = 1.0
+    verb.hipass = 250.0
+    verb.dry = 1.0
+    verb.wet = 0.18
+    verb.predelay_msec = 18.0
+    AudioServer.add_bus_effect(world, verb)
 
     # Master: sólo techo de seguridad, sin pre-ganancia (no debe bombear).
     var master := AudioServer.get_bus_index("Master")

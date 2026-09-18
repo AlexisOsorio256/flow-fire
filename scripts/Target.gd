@@ -20,7 +20,7 @@ var base_material: StandardMaterial3D
 
 
 func _ready() -> void:
-    mass = 2.0 if kind == "paper" else 6.0
+    mass = 0.4 if kind == "paper" else 6.0
     collision_layer = 1
     collision_mask = 1
     continuous_cd = true
@@ -49,14 +49,14 @@ func _build_visuals() -> void:
         base_material.roughness = 0.95
         base_material.cull_mode = BaseMaterial3D.CULL_DISABLED
         var box := BoxMesh.new()
-        box.size = Vector3(plate_width, plate_height, 0.022)
+        box.size = Vector3(plate_width, plate_height, 0.004)
         box.material = base_material
         plate_mesh = MeshInstance3D.new()
         plate_mesh.mesh = box
         add_child(plate_mesh)
 
         var shape := BoxShape3D.new()
-        shape.size = Vector3(plate_width, plate_height, 0.022)
+        shape.size = Vector3(plate_width, plate_height, 0.004)
         var collider := CollisionShape3D.new()
         collider.shape = shape
         add_child(collider)
@@ -85,13 +85,11 @@ func _build_visuals() -> void:
         add_child(collider)
 
 
-## El 9 mm trae ~515 J: empuja el blanco y lo hace oscilar. El acero
-## (no penetrable) recibe mas empuje porque se lleva todo el momento.
-func take_bullet_hit(point: Vector3, normal: Vector3, speed: float, energy: float, direction := Vector3.ZERO) -> void:
-    var push := direction.normalized() if direction.length_squared() > 0.1 else -normal.normalized()
-    var strength := (0.9 + energy / 520.0) * (1.6 if kind == "steel" else 1.0)
-    apply_impulse(push * strength, point - global_position)
-    apply_torque_impulse(Vector3(randf_range(-0.08, 0.08), randf_range(-0.12, 0.12), randf_range(-0.08, 0.08)))
+## Flash visual al recibir bala. El momento lo pone Ballistics (delta-p a Jolt);
+## aqui no hay fisica propia ni torques aleatorios.
+func take_bullet_hit(_point: Vector3, _normal: Vector3, _speed: float, _energy: float, _direction := Vector3.ZERO) -> void:
+    _flash()
+func bullet_flash() -> void:
     _flash()
 
 

@@ -24,10 +24,11 @@
   cayendo a -Y) y la escala al largo de la malla. El cañón es del autor: no hay
   geometría inventada.
 - Medidas del resultado, comprobadas con `tools/check_weapon.gd`: 174,0 mm de
-  largo, 127,0 mm de alto, 31,0 mm de ancho y 146,3 mm entre miras. El asset no
-  es exacto al milímetro: una Glock 19 real mide 187 × 128 × 30 con ~152 mm de
-  radio de miras. El arma se dibuja a la medida de la malla, en metros, y no se
-  estira para cuadrar la ficha del fabricante.
+  largo (malla), 127,0 mm de alto, 31,0 mm de ancho y 146,3 mm entre miras.
+  REFERENCIA: G19 Gen5 stock (185 x 128 x 30, ~152 mm entre miras, 15 tiros,
+  ~12,5 mm de disparador). La malla es aproximacion visual, 11 mm corta; se
+  dibuja a su medida en metros y no se estira. Sockets por AABB pendientes de
+  medida manual en Blender; Muzzle ya cuelga de Barrel en runtime.
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
   `Barrel`— sin esqueleto y sin animaciones.
 

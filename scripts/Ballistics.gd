@@ -11,6 +11,9 @@ extends Node3D
 ## lata) declara `thin_shell` + `wall_thickness`: la bala atraviesa DOS paredes
 ## delgadas, no el volumen entero (el aire de dentro no frena nada).
 
+## TABLA UNICA DE MATERIALES BALISTICOS (resistencia por metro).
+## Los objetos declaran material + geometria; nadie escribe numeros sueltos.
+const MATERIALS := {"pine": 7.0, "gypsum": 27.0, "paper": 1.7, "aluminum": 200.0, "steel": 900.0, "concrete": 55.0}
 const PROJECTILE_MASS := 0.00745   # 115 gr, la punta de una 9x19 de Glock 19
 const DRAG_K := 0.00142
 const GRAVITY := 9.81
@@ -21,9 +24,8 @@ const PENETRATION_SEARCH_DISTANCE := 4.0
 ## Velocidad mínima para EMERGER con carácter de proyectil y no de gravilla.
 ## CALIBRADO: por debajo, la bala se queda dentro del material.
 const EXIT_SPEED_MIN := 75.0
-## Fraccion del momento del proyectil que se lleva un cuerpo sin script propio
-## (una lata). Una bala que atraviesa una lata no le entrega todo su momento.
-const IMPULSE_TRANSFER := 0.20
+## El impulso disponible es p_in - p_out: lo que la bala pierde se lo lleva el
+## cuerpo. Si se detiene, p_out = 0. Sin factores inventados.
 
 var bullets: Array = []
 
@@ -36,7 +38,7 @@ func fire(origin: Vector3, direction: Vector3, speed: float = 372.0) -> void:
     var dir := direction.normalized()
     var b := {
         "active": true,
-        "pos": origin + dir * 0.055,
+        "pos": origin + dir * 0.004,
         "vel": dir * speed,
         "life": 0.0,
         "distance": 0.0,
@@ -117,57 +119,49 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         thin_shell = bool(collider.get_meta("thin_shell", false))
         wall_thickness = float(collider.get_meta("wall_thickness", 0.0))
 
-    var energy: float = 0.5 * PROJECTILE_MASS * speed * speed
-    ImpactFX.spawn_impact(point, normal, collider, surface, false)
-    _push_body(collider, point, dir, energy, speed)
-
+    var p_in: float = PROJECTILE_MASS * speed
     if penetrable:
         if penetration_resistance <= 0.0:
-            # Un volumen penetrable sin resistencia calibrada no tiene una
-            # propiedad física completa: no inventamos una pérdida ni una
-            # salida. La entrada sí ocurrió; el proyectil se detiene aquí.
             push_warning("Penetrable sin penetration_resistance: " + str(collider))
+            ImpactFX.spawn_impact(point, normal, collider, surface, false)
+            _push_body(collider, point, dir, p_in)
             b.active = false
             return
-
         var exit := _find_exit_geometry(point, dir, collider)
         if exit.is_empty():
-            # Sin segunda cara del mismo volumen no existe una penetración
-            # demostrable. Esto evita el antiguo punto de salida fabricado a
-            # partir de metadata de grosor.
+            ImpactFX.spawn_impact(point, normal, collider, surface, false)
+            _push_body(collider, point, dir, p_in)
             b.active = false
             return
-
         var exit_point: Vector3 = exit["point"]
         var exit_normal: Vector3 = exit["normal"]
         var geometric_thickness: float = exit["distance"]
         if geometric_thickness <= PENETRATION_EPSILON:
+            ImpactFX.spawn_impact(point, normal, collider, surface, false)
+            _push_body(collider, point, dir, p_in)
             b.active = false
             return
-
-        # Grosor BALISTICO: en un cuerpo macizo es la cuerda que recorre la bala;
-        # en una cascara fina (una lata) son sus DOS paredes, no el hueco de aire
-        # de dentro.
+        # Grosor BALISTICO con angulo: macizo = cuerda; cascara fina = 2 paredes
+        # corregidas por incidencia (1/cos). Sin angulo se subestima el oblicuo.
+        var incidence_in: float = absf(dir.dot(normal))
         var thickness := geometric_thickness
         if thin_shell:
             if wall_thickness <= 0.0:
+                ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                _push_body(collider, point, dir, p_in)
                 b.active = false
                 return
-            thickness = 2.0 * wall_thickness
-
-        # La resistencia es material; el espesor recorrido viene de la
-        # geometría. La pérdida, por tanto, cambia de forma continua si el
-        # panel se rota o el tiro entra oblicuo. La decisión de perforar o
-        # quedarse dentro se toma ANTES de dibujar la salida: un proyectil que
-        # no conserva energía al salir no tiene salida visible.
+            thickness = 2.0 * wall_thickness / maxf(incidence_in, 0.3)
         var retained_energy := exp(-penetration_resistance * thickness)
         var exit_speed := speed * sqrt(retained_energy)
         if exit_speed < EXIT_SPEED_MIN:
-            # Se queda dentro: no hay cara de salida que representar.
+            ImpactFX.spawn_impact(point, normal, collider, surface, false)
+            _push_body(collider, point, dir, p_in)
             b.active = false
             return
-
+        ImpactFX.spawn_impact(point, normal, collider, surface, false)
         ImpactFX.spawn_impact(exit_point, exit_normal, collider, surface, true)
+        _push_body(collider, point, dir, p_in - PROJECTILE_MASS * exit_speed)
         b.vel *= sqrt(retained_energy)
         # Dejamos sólo una separación numérica de la cara de salida: la próxima
         # colisión debe ser con la geometría que haya detrás, no con el mismo
@@ -179,6 +173,8 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
             b.active = false
         return
 
+    ImpactFX.spawn_impact(point, normal, collider, surface, false)
+    _push_body(collider, point, dir, p_in)
     var incidence: float = abs(dir.dot(normal))
     if incidence < 0.31 and speed > 110.0 and b.ricochets < 2 and (surface == "metal" or surface == "concrete"):
         if randf() < 0.55:
@@ -193,18 +189,20 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
     b.active = false
 
 
-## Deja el golpe en el cuerpo fisico. Los cuerpos con script propio (caja, blanco)
-## lo reciben con sus reglas; los demas (una lata) reciben en Jolt el momento que
-## el proyectil les cede al atravesarlos.
-func _push_body(collider: Object, point: Vector3, dir: Vector3, energy: float, speed: float) -> void:
-    if not collider is Node:
+## UNICA autoridad de momento balistico: delta-p (p_in - p_out) a Jolt.
+## Los blancos/cajas solo declaran masa/material/geometria y un flash visual;
+## nada de torques aleatorios (el impulso fuera del centro ya gira solo).
+func _push_body(collider: Object, point: Vector3, dir: Vector3, impulse: float) -> void:
+    if not collider is RigidBody3D:
+        if collider is Node and (collider as Node).has_method("bullet_flash"):
+            (collider as Node).call("bullet_flash")
         return
-    if collider.has_method("take_bullet_hit"):
-        collider.call("take_bullet_hit", point, dir.normalized(), speed, energy, dir)
+    var body := collider as RigidBody3D
+    if impulse <= 0.0:
         return
-    if collider is RigidBody3D:
-        var body := collider as RigidBody3D
-        body.apply_impulse(dir * (IMPULSE_TRANSFER * PROJECTILE_MASS * speed), point - body.global_position)
+    body.apply_impulse(dir.normalized() * impulse, point - body.global_position)
+    if (collider as Node).has_method("bullet_flash"):
+        (collider as Node).call("bullet_flash")
 
 
 ## Busca la cara de salida en la geometria de la forma de colision. Cada forma se

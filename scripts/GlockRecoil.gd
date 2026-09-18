@@ -19,12 +19,15 @@ extends RefCounted
 ## El resto son limites de seguridad.
 
 # --- 1. arma ---------------------------------------------------------------
-const RECOIL_KICK := 5.10        # grados/s de cabeceo por disparo
-const RECOIL_KICK_SIDE := 0.14   # dispersion lateral, simetrica
+# Unidades VERDADERAS: velocidades iniciales del resorte (rad/s y m/s).
+# Con WEAPON_K/C actuales dan ~7,8 grados de pico, ~2,5 mm atras y ~0,5 mm
+# arriba. No son angulos ni recorridos: quien los lea como cm los rompe.
+const RECOIL_PITCH_VEL := 5.10   # rad/s de cabeceo por disparo
+const RECOIL_YAW_VEL := 0.14     # rad/s dispersion lateral, simetrica
 const WEAPON_K := 520.0          # rigidez del resorte del arma
 const WEAPON_C := 18.0           # amortiguacion
-const PUSH_HIP := 0.095          # recorrido hacia el tirador (m)
-const PUSH_RISE := 0.018         # subida (m)
+const RECOIL_BACK_VEL := 0.095   # m/s hacia el tirador
+const RECOIL_RISE_VEL := 0.018   # m/s subida
 
 # --- 2. conjunto -----------------------------------------------------------
 const GIVE := 0.55               # fraccion del empuje que cede el conjunto
@@ -46,19 +49,19 @@ var give_vel := Vector3.ZERO
 var give_rot := Vector3.ZERO
 var give_rot_vel := Vector3.ZERO
 ## Punto de giro del cabeceo, en espacio del WeaponSocket. Lo coloca el
-## viewmodel para que el arma rote sobre la empuñadura y no sobre su centro.
-var pivot := Vector3.ZERO
+## viewmodel sobre la empuñadura (CALIBRADO aprox, pendiente medida Blender).
+var pivot := Vector3(0.0, -0.055, 0.025)
 
 
 ## El disparo tiene dos tiempos: primero el arma gira y se hunde en el agarre;
 ## despues el conjunto cede una fraccion.
 func kick_shot() -> void:
 	rot_vel += Vector3(
-		RECOIL_KICK + randf() * 0.30,
-		(randf() - 0.5) * RECOIL_KICK_SIDE,
+		RECOIL_PITCH_VEL + randf() * 0.30,
+		(randf() - 0.5) * RECOIL_YAW_VEL,
 		(randf() - 0.5) * 0.18)
-	vel += Vector3((randf() - 0.5) * 0.012, PUSH_RISE, PUSH_HIP + randf() * 0.015)
-	give_vel += Vector3((randf() - 0.5) * 0.010, 0.012, PUSH_HIP * GIVE)
+	vel += Vector3((randf() - 0.5) * 0.012, RECOIL_RISE_VEL, RECOIL_BACK_VEL + randf() * 0.015)
+	give_vel += Vector3((randf() - 0.5) * 0.010, 0.012, RECOIL_BACK_VEL * GIVE)
 	give_rot_vel += Vector3(0.34 + randf() * 0.05, 0.0, (randf() - 0.5) * 0.07)
 
 

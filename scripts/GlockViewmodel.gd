@@ -31,8 +31,9 @@ extends Node3D
 ## es un arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS
 ## (GRIP_POS / GRIP_ROT), no una medicion en runtime.
 ##
-## ESCALA: el arma va en metros reales (174 mm, lo que mide su malla). Nadie la
-## escala para que quepa en un encuadre; el encuadre se calibra alrededor.
+## ESCALA: el arma va en metros (malla 174 mm; referencia Gen5 185 mm, se
+## declara aproximacion visual). Nadie la escala para encuadrar; el encuadre se
+## calibra alrededor.
 
 ## El arma dentro del pivote. CALIBRADO mirando en :0: pone la pistola en el
 ## encuadre bodycam y la deja apuntando como la apuntaba el autor. Radianes.
@@ -129,7 +130,7 @@ func mount() -> void:
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
 	if recoil != null:
-		recoil.set_pivot(Vector3.ZERO)
+		recoil.set_pivot(Vector3(0.0, -0.055, 0.025))
 
 
 ## Cargador fuera del brocal, en metros (0 asentado). Lo decide Glock.gd.
@@ -152,8 +153,9 @@ func set_magazine_tumble(angle: float) -> void:
 # ---------------------------------------------------------------------------
 # Materiales y capas
 # ---------------------------------------------------------------------------
-## Todo el viewmodel va a su propia capa: el post del bodycam y las luces del
-## mundo no lo tocan.
+## Todo el viewmodel va a su propia capa para aislar su KEY/FILL.
+## Las luces del mundo SI lo tocan (light_cull_mask por defecto es todo) y el
+## post bodycam (fullscreen sobre screen_texture) tambien lo procesa.
 func _apply_viewmodel_layer(root_node: Node) -> void:
 	var stack: Array = [root_node]
 	while not stack.is_empty():

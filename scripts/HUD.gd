@@ -25,7 +25,7 @@ func setup(p) -> void:
     player = p
     if player != null and is_instance_valid(player.weapon):
         player.weapon.ammo_changed.connect(_on_ammo_changed)
-    _on_ammo_changed(player.weapon.mag if player != null else 17, 1, 68, false)
+    _on_ammo_changed(player.weapon.mag if player != null else 15, 1, 60, false)
 
 
 func _build_post() -> void:
@@ -65,7 +65,7 @@ func _build_hud() -> void:
     ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     add_child(ammo_label)
 
-    reserve_label = _make_label("/ 68", 22, Color(0.85, 0.88, 0.94, 0.8))
+    reserve_label = _make_label("/ 60", 22, Color(0.85, 0.88, 0.94, 0.8))
     reserve_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     add_child(reserve_label)
 

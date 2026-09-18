@@ -113,20 +113,18 @@ func _materials() -> void:
 
 
 func _build_room() -> void:
-    var floor := _static_box(self, "Floor", Vector3(24, 0.3, 42), Vector3(0, -0.15, -15), concrete_mat)
+    var floor := _static_box(self, "Floor", Vector3(24, 0.3, 72), Vector3(0, -0.15, -30), concrete_mat)
     floor.set_meta("surface", "concrete")
     _distance_lines()
-    var ceiling := _static_box(self, "Ceiling", Vector3(24, 0.2, 42), Vector3(0, 4.2, -15), ceiling_mat)
+    var ceiling := _static_box(self, "Ceiling", Vector3(24, 0.2, 72), Vector3(0, 4.2, -30), ceiling_mat)
     ceiling.set_meta("surface", "concrete")
-    var ceiling_mesh := ceiling.get_child(0) as MeshInstance3D
-    if ceiling_mesh != null:
-        ceiling_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    # El techo ocluye: nada de luz exterior entrando por geometria.
 
-    var left := _static_box(self, "WallLeft", Vector3(0.3, 4.2, 42), Vector3(-12, 2.1, -15), wall_mat)
+    var left := _static_box(self, "WallLeft", Vector3(0.3, 4.2, 72), Vector3(-12, 2.1, -30), wall_mat)
     left.set_meta("surface", "concrete")
-    var right := _static_box(self, "WallRight", Vector3(0.3, 4.2, 42), Vector3(12, 2.1, -15), wall_mat)
+    var right := _static_box(self, "WallRight", Vector3(0.3, 4.2, 72), Vector3(12, 2.1, -30), wall_mat)
     right.set_meta("surface", "concrete")
-    var back := _static_box(self, "WallBack", Vector3(24, 4.2, 0.3), Vector3(0, 2.1, -36), wall_mat)
+    var back := _static_box(self, "WallBack", Vector3(24, 4.2, 0.3), Vector3(0, 2.1, -66), wall_mat)
     back.set_meta("surface", "concrete")
     var front := _static_box(self, "WallFront", Vector3(24, 4.2, 0.3), Vector3(0, 2.1, 6), wall_mat)
     front.set_meta("surface", "concrete")
@@ -174,10 +172,15 @@ func _build_props() -> void:
 
 
 func _build_targets() -> void:
+    # Estaciones de medicion: 18 m papel, 27 m acero/angulos, 35 m agrupacion,
+    # 50 m caida/zero. Cada cosa responde una pregunta concreta.
     for i in range(5):
         _make_paper_target(-4.0 + i * 2.0, -18.0)
     for i in range(3):
         _make_steel_target(-3.0 + i * 3.0, -27.0)
+    for i in range(3):
+        _make_paper_target(-2.0 + i * 2.0, -35.0)
+    _make_steel_target(0.0, -50.0)
 
 
 ## Lineas de distancia (5/10/15 m desde el tirador): pintura sobre el suelo,
@@ -186,7 +189,7 @@ func _distance_lines() -> void:
     var paint := StandardMaterial3D.new()
     paint.albedo_color = Color(0.75, 0.72, 0.62)
     paint.roughness = 0.9
-    for z in [-5.0, -10.0, -15.0]:
+    for z in [-5.0, -10.0, -15.0, -25.0, -35.0, -50.0]:
         var strip := MeshInstance3D.new()
         var mesh := BoxMesh.new()
         mesh.size = Vector3(6.0, 0.012, 0.09)
@@ -197,20 +200,8 @@ func _distance_lines() -> void:
 
 
 func _build_lights() -> void:
-    var sun := DirectionalLight3D.new()
-    sun.name = "Sun"
-    sun.rotation_degrees = Vector3(-58, -32, 0)
-    sun.light_energy = 1.15
-    sun.light_color = Color(1.0, 0.96, 0.9)
-    sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 55.0
-    sun.shadow_bias = 0.08
-    sun.shadow_normal_bias = 1.0
-    sun.shadow_blur = 1.5
-    sun.directional_shadow_blend_splits = true
-    add_child(sun)
-
-    for z in [-4.0, -12.0, -20.0, -28.0]:
+    # Interior honesto: solo luminarias + ambient. Sin sol atravesando el techo.
+    for z in [-4.0, -12.0, -20.0, -28.0, -38.0, -50.0, -60.0]:
         for x in [-5.0, 5.0]:
             _make_lamp(x, z)
 
@@ -228,8 +219,8 @@ func _make_lamp(x: float, z: float) -> void:
     var light := OmniLight3D.new()
     light.position = Vector3(x, 3.55, z)
     light.light_color = Color(1.0, 0.96, 0.88)
-    light.light_energy = 4.2
-    light.omni_range = 7.0
+    light.light_energy = 5.0
+    light.omni_range = 9.0
     light.shadow_enabled = false
     add_child(light)
 
@@ -324,11 +315,10 @@ func _make_drywall_panel(base: Vector3, panel_size: Vector2, rot_y: float) -> vo
     root.position = base
     root.rotation.y = rot_y
     add_child(root)
-    var body := _static_box(root, "DrywallSheet", Vector3(panel_size.x, panel_size.y, 0.06), Vector3(0.0, panel_size.y * 0.5, 0.0), drywall_mat)
+    var body := _static_box(root, "DrywallSheet", Vector3(panel_size.x, panel_size.y, 0.0127), Vector3(0.0, panel_size.y * 0.5, 0.0), drywall_mat)
     body.set_meta("surface", "drywall")
     body.set_meta("penetrable", true)
-    # Una hoja (6 cm) la atraviesa una 9 mm; DOS hojas pegadas (12 cm) la
-    # detienen: v_sale = v·exp(-R·t/2) < 75 m/s exige R ≳ 26.7 /m.
+    # Hoja honesta de 1/2" (12,7 mm): la 9 mm la pasa; doble hoja la frena.
     body.set_meta("penetration_resistance", 27.0)
 
 
@@ -355,6 +345,10 @@ func _make_drum(x: float, z: float) -> void:
     shape.shape = cyl
     body.add_child(shape)
     body.set_meta("surface", "metal")
+    body.set_meta("penetrable", true)
+    body.set_meta("thin_shell", true)
+    body.set_meta("wall_thickness", 0.0012)
+    body.set_meta("penetration_resistance", 900.0)
 
 
 ## Lata de aluminio vacia. Jolt la mueve (rueda, rebota, se voltea) con una
@@ -397,7 +391,7 @@ func _make_can(base: Vector3) -> void:
     body.physics_material_override = mat
 
     body.set_meta("dynamic_decal", true)
-    body.set_meta("surface", "metal")
+    body.set_meta("surface", "aluminum")
     body.set_meta("penetrable", true)
     body.set_meta("thin_shell", true)
     body.set_meta("wall_thickness", 0.00012)

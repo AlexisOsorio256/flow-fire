@@ -229,18 +229,15 @@ def main():
         piezas["Trigger"] = gat
 
     # --- colocacion del origen --------------------------------------------
-    # La Glock vieja trae el origen centrado en Y y Z, pero 19.8 mm a la
-    # derecha del eje del arma en X. Se replica para que el encuadre del
-    # viewmodel (GlockViewmodel.HIP_POS) siga valiendo sin retocar nada.
-    # Esto va ANTES de reasentar los pivotes: mover la malla con los origenes
-    # ya puestos descoloca las piezas.
+    # Sin herencia del asset muerto: el origen es el centro de la malla actual.
+    # El encuadre se recalibra en GlockViewmodel, no se heredan coordenadas.
     mn, mx = caja([o for o in bpy.data.objects if o.type == 'MESH'])
-    sitio = Vector((-0.0198, 0.0, 0.0)) - (mn + mx) / 2
+    sitio = Vector((0.0, 0.0, 0.0)) - (mn + mx) / 2
     for o in bpy.data.objects:
         if o.type == 'MESH':
             o.data.transform(Matrix.Translation(sitio))
             o.data.update()
-    print("origen colocado: centro del arma en (-19.8, 0.0, 0.0) mm")
+    print("origen colocado: centro de la malla actual en (0, 0, 0)")
 
     # --- origenes: cada pieza gira sobre su eje de verdad -----------------
     def caja_de(o):
@@ -283,22 +280,26 @@ def main():
     ## vuelta, porque la mira trasera caia delante de la delantera.
     ##
     ## Los puntos van sobre la linea del arma: el armazon no esta centrado en x
-    ## (su centro cae a -19,8 mm).
-    if "Slide" in piezas:
+    ## (aproximacion AABB pendiente de medida manual).
+    # APROXIMACION por AABB pendiente de canonicalizacion manual en Blender:
+    # Muzzle/EjectionPort/Sights deben colocarse a mano sobre la geometria real
+    # y exportarse dentro del GLB. Muzzle cuelga de Barrel (no de Slide).
+    if "Slide" in piezas and "Barrel" in piezas:
         slide = piezas["Slide"]
+        barrel = piezas["Barrel"]
         mn, mx = caja_de(slide)
         linea_x = (mn.x + mx.x) / 2.0
         alto = mx.z
-        for nombre, pos in [
-            ("SightRear", Vector((linea_x, mn.y + 0.006, alto))),
-            ("SightFront", Vector((linea_x, mx.y - 0.015, alto))),
-            ("EjectionPort", Vector((mx.x + 0.003, mx.y - 0.075, alto))),
-            ("Muzzle", Vector((linea_x, mx.y, (mn.z + mx.z) / 2))),
+        for nombre, pos, padre in [
+            ("SightRear", Vector((linea_x, mn.y + 0.006, alto)), slide),
+            ("SightFront", Vector((linea_x, mx.y - 0.015, alto)), slide),
+            ("EjectionPort", Vector((mx.x + 0.003, mx.y - 0.075, alto)), slide),
+            ("Muzzle", Vector((linea_x, mx.y, (mn.z + mx.z) / 2)), barrel),
         ]:
             vacio = bpy.data.objects.new(nombre, None)
             bpy.context.collection.objects.link(vacio)
-            vacio.parent = slide
-            vacio.location = slide.matrix_world.inverted() @ pos
+            vacio.parent = padre
+            vacio.location = padre.matrix_world.inverted() @ pos
             vacio.rotation_mode = 'QUATERNION'
             vacio.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
 

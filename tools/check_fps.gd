@@ -1,5 +1,5 @@
 extends Node
-## Mide la velocidad del juego real. Imprime ms por frame: media, peor 1% y
+## Sonda de CPU/frame-loop (no GPU real, no resolucion/driver fijos). Imprime ms por frame: media, peor 1% y
 ## peor 5%. Un solo numero no dice nada; el peor 1% es el que se siente.
 
 func _ready() -> void:

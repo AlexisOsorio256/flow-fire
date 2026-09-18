@@ -3,14 +3,15 @@ extends Node
 ##
 ##   godot --headless --path . tools/check_weapon.tscn
 ##
-## Comprueba lo que el ojo no mide: que la pistola este en METROS REALES en el
-## mundo (174 mm de largo), que existan las piezas que el juego mueve, que la
+## Comprueba lo que el ojo no mide: malla 174 mm en metros (referencia Gen5 185 mm, que existan las piezas que el juego mueve, que la
 ## boca de la malla caiga sobre la boca del cañon, que la corredera retroceda de
 ## verdad (alejandose de esa boca), que las miras esten en su orden y que al
 ## apuntar la linea de miras quede sobre el eje de la camara. Si algo falla,
 ## imprime FALLO y sale con codigo 1.
 
-const REAL_LENGTH := 0.174
+const MESH_LENGTH := 0.174
+const REFERENCE_LENGTH := 0.185
+const MAG_STANDARD := 15
 const TOLERANCE := 0.002
 const REAL_SLIDE_TRAVEL := 0.039
 ## El rig del viewmodel: la sonda monta el mismo que el juego para medir el ADS.
@@ -31,7 +32,13 @@ func _ready() -> void:
 
 	print("--- ARMA ---")
 	print("escala del modelo ", snappedf(weapon.model_scale, 0.0001),
-		"  capacidad ", weapon.capacity)
+		"  capacidad ", weapon.capacity, " (std Gen5 15)")
+	if weapon.capacity != MAG_STANDARD:
+		failures += 1
+		print("FALLO: capacidad no es el estandar Gen5 de 15")
+	if weapon.muzzle != null and weapon.barrel != null and weapon.muzzle.get_parent() != weapon.barrel:
+		failures += 1
+		print("FALLO: Muzzle debe colgar de Barrel, no de Slide")
 
 	# El largo se mide DENTRO del arma (unidades del modelo) y se lleva al mundo
 	# con la escala que el arma tiene de verdad: asi se caza cualquier escala
@@ -40,8 +47,8 @@ func _ready() -> void:
 	var length: float = _local_length(weapon) * world_scale
 	_local_aabb(weapon, true)
 	print("largo en el mundo mm ", snappedf(length * 1000.0, 0.1),
-		"  (real %.1f, escala del nodo %.4f)" % [REAL_LENGTH * 1000.0, world_scale])
-	if absf(length - REAL_LENGTH) > TOLERANCE:
+		"  (malla %.1f, ref %.1f, escala %.4f)" % [MESH_LENGTH * 1000.0, REFERENCE_LENGTH * 1000.0, world_scale])
+	if absf(length - MESH_LENGTH) > TOLERANCE:
 		failures += 1
 		print("FALLO: la pistola no esta en escala real en el mundo")
 
@@ -50,7 +57,7 @@ func _ready() -> void:
 			or weapon.frame == null or weapon.slide == null or weapon.magazine == null:
 		failures += 1
 		print("FALLO: falta una pieza o un punto que el juego usa")
-	# Trigger y Barrel son opcionales: el asset actual no los trae.
+	# Trigger y Barrel existen en el asset actual; si faltan, el arma sigue pero avisa.
 	print("trigger ", "si" if weapon.trigger != null else "NO (opcional)",
 		"  barrel ", "si" if weapon.barrel != null else "NO (opcional)")
 
@@ -76,7 +83,7 @@ func _ready() -> void:
 		if weapon.muzzle != null:
 			var bore_mm: float = bore.distance_to(weapon.muzzle.global_position) * 1000.0
 			print("punto de boca a la boca del cañon mm ", snappedf(bore_mm, 0.1))
-			if bore_mm > 12.0:
+			if bore_mm > 4.0:
 				failures += 1
 				print("FALLO: el punto de boca no esta en la boca del cañon")
 
@@ -117,7 +124,7 @@ func _ready() -> void:
 		var trigger_travel: float = tip_released.distance_to(tip_pressed)
 		var pin_shift: float = pivot.distance_to(weapon.trigger.global_transform.origin)
 		print("gatillo mm ", snappedf(trigger_travel * 1000.0, 0.1),
-			"  (recorrido real %.1f)  pasador movido mm %.2f" % [
+			"  (recorrido Gen5 %.1f)  pasador movido mm %.2f" % [
 				weapon.TRIGGER_TRAVEL * 1000.0, pin_shift * 1000.0])
 		if absf(trigger_travel - weapon.TRIGGER_TRAVEL) > 0.0012 or pin_shift > 0.0002:
 			failures += 1

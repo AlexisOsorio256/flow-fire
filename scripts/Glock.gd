@@ -21,8 +21,8 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## hueso, y la recarga es una linea de tiempo de la MECANICA (segundos reales de
 ## esta pistola), no instantes remedidos de un clip de brazos ajenos.
 
-## Capacidad del cargador: la fija el arma (GlockWeapon.MAG_CAPACITY) al montar.
-var MAG_SIZE := 17
+## Capacidad del cargador ESTANDAR G19 Gen5: 15. La fija el arma al montar.
+var MAG_SIZE := 15
 ## Recorrido de la corredera en metros reales. La autoridad es el arma
 ## (GlockWeapon.slide_offset); aqui se copia al montar. El tipo va escrito a
 ## mano: dejar que se infiera de una constante de otra clase deja el script sin
@@ -91,9 +91,9 @@ var viewmodel: GlockViewmodel
 var recoil: GlockRecoil
 var fx: WeaponFX
 
-var mag := 17
+var mag := 15
 var chamber := 1
-var reserve := 68
+var reserve := 60
 var trigger_held := false
 var trigger_ready := true
 var trigger_latched := false
@@ -141,7 +141,6 @@ var shot_pulse := 0.0
 
 # --- Cargador: hitos de la recarga, no cronometros sueltos -----------------
 var _mag_left := false
-var _mag_seated := false
 var _magin_sounded := false
 var _mag_dropped := false
 var _mag_entered := false
@@ -245,19 +244,17 @@ func start_reload() -> bool:
 	reload_empty = chamber <= 0
 	reload_total = RELOAD_EMPTY_TOTAL if reload_empty else RELOAD_TOTAL
 	reload_slide_released = false
-	reload_mag_seated = false
-	reload_pose_blend = 0.0
+	reload	reload_pose_blend = 0.0
 	mag_offset = 0.0
 	mag_tumble = 0.0
 	_mag_left = false
-	_mag_seated = false
 	_magin_sounded = false
 	_mag_dropped = false
 	_mag_entered = false
 	_slide_release_sounded = false
 	aim = false
 	trigger_held = false
-	GameAudio.play_2d("reload_rustle", 0.0, randf_range(0.97, 1.04))
+	# Sin Foley de manos inexistentes: solo mecanica visible.
 	viewmodel.set_magazine_visible(true)
 	viewmodel.set_magazine_tumble(0.0)
 	_emit_ammo()
@@ -276,15 +273,14 @@ func _update_trigger(delta: float) -> void:
 	if trigger_held and trigger_ready and not reloading and chamber <= 0 and not slide_locked:
 		trigger_ready = false
 		trigger_latched = true
-		trigger_reset_timer = 0.075
 		GameAudio.play_2d("empty")
 	if not trigger_held:
 		if trigger_latched:
-			trigger_reset_timer -= delta
-			if trigger_reset_timer <= 0.0:
+			# Reset fisico: disparador vuelto a su umbral y corredera en bateria.
+			if trigger_visual < 0.35 and absf(slide_pos) < 0.0025:
 				trigger_ready = true
 				trigger_latched = false
-				GameAudio.play_2d("slide_hand", -8.0, randf_range(1.25, 1.35))
+				GameAudio.play_2d("slide_hand", -14.0, randf_range(1.25, 1.35))
 		else:
 			trigger_ready = true
 
@@ -294,7 +290,6 @@ func _fire() -> void:
 	inspecting = false
 	trigger_ready = false
 	trigger_latched = true
-	trigger_reset_timer = 0.075
 	slide_extracted = false
 	slide_open = false
 	slide_rear_sound_emitted = false
@@ -304,17 +299,11 @@ func _fire() -> void:
 	recoil.kick_shot()
 	GameAudio.play_shot()
 
+	# Bala por el anima: nace en la boca, sale por el anima, dispersion cero.
 	var origin := viewmodel.muzzle.global_position
-	var cam_fwd := -camera.global_transform.basis.z.normalized()
-	var aim_point := camera.global_position + cam_fwd * 46.0
-	var dir := (aim_point - origin).normalized()
-	var right := camera.global_transform.basis.x.normalized()
-	var up := camera.global_transform.basis.y.normalized()
-	var move_amount := clampf(player_speed / 4.35, 0.0, 1.0)
-	var spread := 0.00055 if aim_blend > 0.55 else 0.0036 + move_amount * 0.0052
-	dir = (dir + right * randf_range(-spread, spread) + up * randf_range(-spread, spread)).normalized()
-	Ballistics.fire(origin, dir, MUZZLE_SPEED)
-	fx.fire(origin, cam_fwd)
+	var bore: Vector3 = (-viewmodel.muzzle.global_transform.basis.z).normalized()
+	Ballistics.fire(origin, bore, MUZZLE_SPEED)
+	fx.fire(origin, bore)
 	emit_signal("shot_fired")
 	_emit_ammo()
 
@@ -403,10 +392,9 @@ func _update_reload(delta: float) -> void:
 
 	# 6. Asiento: municion + golpe de masa + la palma en la culata.
 	if not _mag_seated and reload_elapsed >= RELOAD_MAG_SEAT_T:
-		_mag_seated = true
 		_seat_reload_mag()
 		recoil.kick_mag_seat()
-		GameAudio.play_2d("mag_slap", -4.0, randf_range(0.97, 1.04))
+		# Sin palma sin mano: el asiento es magin.
 
 	# Recarga en seco: se suelta la corredera.
 	if reload_empty and not reload_slide_released and reload_elapsed >= RELOAD_SLIDE_T:
@@ -505,7 +493,7 @@ func inspect_weapon() -> void:
 	inspect_elapsed = 0.0
 	inspect_locked = false
 	inspect_released = false
-	GameAudio.play_2d("handling", 6.0, randf_range(0.98, 1.02))
+	# Sin manos que suenen: la inspeccion es solo corredera.
 
 
 func _update_inspect(delta: float) -> void:
@@ -518,7 +506,7 @@ func _update_inspect(delta: float) -> void:
 		slide_locked = true
 		slide_pos = _travel
 		slide_vel = 0.0
-		GameAudio.play_2d("chamber_check", 6.0, randf_range(0.98, 1.04))
+		GameAudio.play_2d("slide_rear", 0.0, randf_range(0.98, 1.04))
 	if not inspect_released and inspect_elapsed >= INSPECT_RELEASE_T:
 		inspect_released = true
 		slide_locked = false
@@ -535,20 +523,22 @@ func _update_inspect(delta: float) -> void:
 func _seat_reload_mag() -> void:
 	if reload_mag_seated:
 		return
-	var pool := reserve + mag
-	var loaded := mini(MAG_SIZE, pool)
-	reserve = pool - loaded
+	# Lo eyectado se pierde: el cargador nuevo se llena solo desde reserve.
+	var loaded := mini(MAG_SIZE, reserve)
+	reserve -= loaded
 	mag = loaded
-	reload_mag_seated = true
-	_emit_ammo()
+	reload	_emit_ammo()
 
 
 func _finish_reload() -> void:
 	if not reload_mag_seated:
+		push_warning("Recarga: asiento perdido, reparando visible")
 		_seat_reload_mag()
 	if reload_empty and chamber <= 0 and mag > 0:
 		mag -= 1
 		chamber = 1
+	elif reload_empty and chamber <= 0:
+		push_warning("Recarga en seco sin cartucho que alimentar")
 	reloading = false
 	reload_pose_blend = 0.0
 	mag_offset = 0.0

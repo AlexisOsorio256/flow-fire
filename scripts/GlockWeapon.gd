@@ -3,23 +3,26 @@ extends Node3D
 
 ## EL ARMA: la Glock 19 en piezas rigidas, sin esqueleto y sin tabla.
 ##
-## El .glb del arma (lo prepara tools/build_g19_parts.py) trae las piezas como
-## nodos, cada una con su PROPIO origen:
+## ARMA DE REFERENCIA: Glock 19 Gen5 stock, 9x19. Ficha congelada:
+##   largo total 185 mm, cañon 102 mm, alto 128 mm, ancho 30 mm,
+##   cargador estandar 15 cartuchos, recorrido de disparador ~12,5 mm (manual),
+##   recorrido de corredera 39 mm (medido en el mundo).
+## El .glb actual (Rotuma) mide 174 mm de largo: es APROXIMACION VISUAL, 11 mm
+## corto frente a la ficha. Se dibuja a la medida de su malla y no se estira.
+##
+## El .glb del arma trae las piezas como nodos, cada una con su PROPIO origen:
 ##
 ##   Frame      armazon. Es el origen del arma y no lo mueve nadie.
 ##   Slide      corredera            <- set_slide(0..1)       (Glock.gd)
 ##   Magazine   cargador             <- set_magazine_offset   (Glock.gd)
 ##   Trigger    gatillo              <- set_trigger(0..1)     (Glock.gd)
-##   Barrel     cañon                <- cae con la corredera (set_slide)
-##   Muzzle / EjectionPort / SightRear / SightFront
-##              puntos medidos sobre la malla, colgados de la corredera.
+##   Barrel     cañon + Muzzle       <- cae con la corredera (set_slide)
+##   EjectionPort / SightRear / SightFront
+##              puntos APROXIMADOS por AABB de corredera, pendientes de
+##              canonicalizacion en Blender (sockets reales dentro del GLB).
 ##
-## El asset es la "G19 Pistol, Game Ready" de Rotuma (CC-BY 4.0). Ese archivo
-## trae la pistola DOS veces dentro de una sola malla: armada y despiezada, mas
-## un cargador de repuesto y tres piezas flotantes del expositor. El script
-## tools/build_g19_parts.py se queda con la copia armada, la reparte por islas,
-## recorta el gatillo del armazon y reasienta los origenes. Siguen siendo
-## opcionales: si faltan, el arma funciona igual y `build()` lo dice por consola.
+## Muzzle cuelga de Barrel en runtime (reparent en build): el fogonazo no viaja
+## con la corredera. Si el GLB futuro ya lo trae bajo Barrel, no se toca.
 ##
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
@@ -28,16 +31,17 @@ extends Node3D
 ##   "el arma esta mal encuadrada" -> GlockViewmodel.GRIP_POS / GRIP_ROT
 
 const MODEL := "res://assets/models/g19_pistol.glb"
-## Largo real de la pistola, extremo a extremo. De aqui sale la escala del
-## modelo: no hay que calibrarla a mano. El asset de Rotuma ya viene a esa
-## medida (174 mm de largo y 127 mm de alto medidos en su malla); si algun dia
-## se cambia, la escala lo corrige.
+## Largo de la MALLA actual, extremo a extremo (174 mm medidos). No es la ficha:
+## la Gen5 real mide 185 mm. El GLB canonico llega ya en metros; Godot solo
+## VALIDA, no corrige en silencio (avisa si la escala se desvia >3%).
 const REAL_LENGTH := 0.174
+const REFERENCE_LENGTH := 0.185
+const REFERENCE_NAME := "Glock 19 Gen5 stock"
 ## Recorrido real de la corredera. Es la unica autoridad del recorrido: la
 ## mecanica de Glock.gd y el dibujo la leen de aqui.
 const SLIDE_TRAVEL := 0.039
-## Cartuchos que entran en el cargador. El 9x19 de la Glock 19 son 17.
-const MAG_CAPACITY := 17
+## Cartuchos del cargador ESTANDAR de G19 Gen5: 15. Los de 17 son extendidos.
+const MAG_CAPACITY := 15
 ## Hacia donde mira la boca de la malla, en el espacio del arma. En este asset
 ## el morro esta a -Z, el mismo eje que mira la camara: lo dice la propia malla
 ## (el cañon va delante del gatillo y el cargador detras de los dos) y lo mide
@@ -49,12 +53,13 @@ const MUZZLE_AXIS := Vector3(0.0, 0.0, -1.0)
 const MAG_TRAVEL := 0.07
 ## Eje de salida del cargador en espacio del arma (abajo del armazon).
 const MAGAZINE_OUT_AXIS := Vector3(0.0, -1.0, 0.0)
-## Recorrido real del gatillo, medido en la punta del diente. Son los ~5 mm que
-## anda el disparador de una Glock de suelto a fondo.
-const TRIGGER_TRAVEL := 0.005
+## Recorrido real del disparador Gen5, medido en la punta: ~12,5 mm (manual).
+const TRIGGER_TRAVEL := 0.0125
 ## Cuanto baja el cañon cuando la corredera esta atras del todo. El bloqueo lo
 ## suelta el armazon y la recamara cae; son ~1,5 grados sobre la cara de culata.
 const BARREL_DROP := 0.026
+## Tramo inicial en que cañon y corredera retroceden JUNTOS antes del desbloqueo.
+const BARREL_LOCK_TRAVEL := 0.004
 ## Eje lateral del arma en el espacio de su padre. El gatillo gira sobre el
 ## pasador y el cañon cae sobre este eje, NO sobre los ejes locales de cada
 ## pieza: las dos traen su propio origen y su propio giro.
@@ -78,6 +83,7 @@ var sight_rear: Node3D
 var sight_front: Node3D
 
 var _slide_rest := Vector3.ZERO
+var _barrel_rest := Vector3.ZERO
 ## Base local de cada pieza que gira: se multiplica por el giro del frame del
 ## padre, asi no importa como venga orientada la pieza en el archivo.
 var _trigger_rest_basis := Basis.IDENTITY
@@ -113,6 +119,8 @@ func build() -> void:
 		return
 
 	_slide_rest = slide.position
+	if barrel != null:
+		_barrel_rest = barrel.position
 	magazine_rest = magazine.position
 	_magazine_rest_basis = magazine.transform.basis
 	if trigger != null:
@@ -120,10 +128,13 @@ func build() -> void:
 	if barrel != null:
 		_barrel_rest_basis = barrel.transform.basis
 
-	# La escala sale de medir el largo de la malla contra el largo REAL del arma.
+	# El GLB canonico llega en metros: se mide y se VALIDA, no se corrige en
+	# silencio. Si la desviacion supera el 3% avisa: el asset no es canonico.
 	var measured_length := _model_length(root)
 	model_scale = REAL_LENGTH / maxf(measured_length, 0.0001)
 	scale = Vector3(model_scale, model_scale, model_scale)
+	if absf(model_scale - 1.0) > 0.03:
+		push_warning("GLB no canonico: escala %.4f (malla %.1f mm)" % [model_scale, measured_length * 1000.0])
 	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
 	## TRIGGER_TRAVEL esta en metros, asi que los dos tienen que hablar de lo
 	## mismo. Medido antes de escalar salia 8 veces largo y el gatillo andaba
@@ -132,6 +143,10 @@ func build() -> void:
 		_trigger_lever = maxf(_lever(trigger), 0.001)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
 	_slide_travel = SLIDE_TRAVEL / model_scale
+	if barrel != null and muzzle != null and muzzle.get_parent() != barrel:
+		var g := muzzle.global_transform
+		barrel.add_child(muzzle)
+		muzzle.global_transform = g
 
 	var missing: Array = []
 	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
@@ -188,10 +203,14 @@ func set_slide(t: float) -> void:
 		return
 	var amount := clampf(t, 0.0, 1.0)
 	slide.position = _slide_rest - muzzle_axis * (_slide_travel * amount)
-	## El cañon no viaja con la corredera: cae. Con la corredera atras del todo
-	## la recamara asoma por el puerto de eyeccion y el arma queda "abierta".
+	## Cañon Glock: retrocede JUNTO a la corredera ~4 mm, luego se detiene y cae.
+	## Muzzle cuelga de Barrel, asi que el fogonazo no viaja con la corredera.
 	if barrel != null:
-		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * amount)) * _barrel_rest_basis
+		var slide_m := SLIDE_TRAVEL * amount
+		var joint_m := minf(slide_m, BARREL_LOCK_TRAVEL)
+		barrel.position = _barrel_rest - muzzle_axis * (joint_m / maxf(model_scale, 0.0001))
+		var unlock := clampf((slide_m - BARREL_LOCK_TRAVEL) / maxf(SLIDE_TRAVEL - BARREL_LOCK_TRAVEL, 0.0001), 0.0, 1.0)
+		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * unlock)) * _barrel_rest_basis
 
 
 ## Brazo de palanca del gatillo EN METROS DE MUNDO: el pasador es el origen de

@@ -20,6 +20,8 @@ var _burst_gap := 3
 var _frame := 0
 var _t0 := 0
 var _game: Node = null
+var _shots_fired := 0
+var _shots_tried := 0
 
 
 func _ready() -> void:
@@ -42,6 +44,14 @@ func _ready() -> void:
 	Engine.time_scale = time_scale
 	_game = load("res://scenes/Main.tscn").instantiate()
 	add_child(_game)
+	await get_tree().process_frame
+	var _w := _player_weapon()
+	if _w != null:
+		_w.shot_fired.connect(_on_shot_fired)
+
+
+func _on_shot_fired() -> void:
+	_shots_fired += 1
 
 
 func _player_weapon() -> Node:
@@ -53,6 +63,7 @@ func _player_weapon() -> Node:
 
 func _trigger() -> void:
 	_t0 = Time.get_ticks_msec()
+	_shots_tried += 1
 	var weapon := _player_weapon()
 	if weapon == null:
 		return
@@ -95,7 +106,7 @@ func _trigger() -> void:
 			weapon.set("slide_pos", 0.039)
 			weapon.start_reload()
 		"inspect":
-			# Con la corredera atras: verifica que la mecanica la sujeta
+			# Preset manual (no es pulsar F con arma cerrada): verifica retencion,
 			# durante el gesto y la suelta al final.
 			weapon.set("slide_locked", true)
 			weapon.set("slide_pos", 0.039)
@@ -134,6 +145,7 @@ func _process(_delta: float) -> void:
 		if (action == "burst" or action == "pen" or action == "ads" or action == "crate" or action == "steel") and _burst_left > 0 and (_frame - warmup) % _burst_gap == 0:
 			var weapon := _player_weapon()
 			if weapon != null and (_frame - warmup) > 0:
+				_shots_tried += 1
 				weapon.force_fire_once()
 				_burst_left -= 1
 		var img := get_viewport().get_texture().get_image()
@@ -141,4 +153,5 @@ func _process(_delta: float) -> void:
 		var ms := int((Time.get_ticks_msec() - _t0) * time_scale)
 		img.save_png("%s/f_%04d_%dms.png" % [out_dir, _frame - warmup, ms])
 	elif _frame >= warmup + total:
+		print("REVIEW disparos intentados=", _shots_tried, " ocurridos=", _shots_fired)
 		get_tree().quit()

@@ -28,7 +28,7 @@ const PING_SPEED := 0.45
 const LIFE := 20.0
 
 var life := 0.0
-var _pinged := false
+var last_ping := -1.0
 
 
 ## Suelta el cargador de `source` en la escena, con la velocidad con la que sale
@@ -113,9 +113,15 @@ func _process(delta: float) -> void:
 
 
 func _on_body_entered(_body: Node) -> void:
-	if _pinged or life < 0.04:
+	if life < 0.04:
 		return
-	if linear_velocity.length() < PING_SPEED:
+	var speed := linear_velocity.length()
+	if speed < PING_SPEED:
 		return
-	_pinged = true
-	GameAudio.play_3d("mag_drop", global_position, 0.0, randf_range(0.95, 1.06))
+	# Cada contacto real suena: la muestra debe ser UN golpe, no cinco rebotes
+	# horneados. Nivel y pitch derivan de la velocidad, como Shell.
+	if life - last_ping < 0.12:
+		return
+	last_ping = life
+	var db := clampf(-6.0 + speed * 1.2, -6.0, 2.0)
+	GameAudio.play_3d("mag_drop", global_position, db, randf_range(0.92, 1.08) + speed * 0.01)

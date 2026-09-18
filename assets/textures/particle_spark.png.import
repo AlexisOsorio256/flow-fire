@@ -15,7 +15,7 @@ dest_files=["res://.godot/imported/particle_spark.png-7a7fe6d55f7974770bcea4113c
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

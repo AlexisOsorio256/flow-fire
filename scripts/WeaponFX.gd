@@ -7,9 +7,8 @@ extends Node3D
 ## recarga. La autoridad es `Glock.gd`, que avisa cuando se dispara (`fire()`) y
 ## este módulo anima el evento visual. El humo lo sigue haciendo `ImpactFX`.
 ##
-## Cuelga de la BOCA REAL de la pistola (el nodo `Muzzle` de `GlockWeapon`, que
-## vive en la corredera), no del armazon: hereda posicion y orientacion del arma
-## durante todo el ciclo, incluido su retroceso.
+## Cuelga de la BOCA REAL (nodo `Muzzle` bajo Barrel): no viaja con la
+## corredera. La direccion sale de MUZZLE_AXIS (-Z), no de +Z supuesto.
 ##
 ## Dos volúmenes, dos trabajos:
 ##   FlashCore  ~10 mm emisivos sobre el eje del cañón. Es el fogonazo: cae a
@@ -34,6 +33,7 @@ const GAS_DECAY := 1.4
 const CORE_EMISSION := 1.7
 
 var muzzle_light: OmniLight3D
+var world_flash: OmniLight3D
 var flash_mesh: MeshInstance3D  # gases (aditivo)
 var core_mesh: MeshInstance3D   # núcleo caliente (emisivo)
 var timer := 0.0
@@ -56,6 +56,14 @@ func build() -> void:
 	# en la capa del mundo delante de la boca; la luz solo define el arma.
 	muzzle_light.light_cull_mask = GlockViewmodel.VIEWMODEL_LAYER_BIT
 	add_child(muzzle_light)
+	world_flash = OmniLight3D.new()
+	world_flash.light_color = Color(1.0, 0.75, 0.45)
+	world_flash.light_energy = 0.0
+	world_flash.omni_range = 6.0
+	world_flash.omni_attenuation = 1.1
+	world_flash.shadow_enabled = false
+	world_flash.light_cull_mask = 1
+	add_child(world_flash)
 
 	_gas_mat = StandardMaterial3D.new()
 	_gas_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -97,7 +105,7 @@ func build() -> void:
 	core_mesh.visible = false
 	add_child(core_mesh)
 
-	print("WEAPONFX fogonazo nucleo+gas en la boca de la corredera")
+	print("WEAPONFX fogonazo nucleo+gas en la boca del canon (-Z)")
 
 
 func update(delta: float) -> void:
@@ -109,6 +117,8 @@ func update(delta: float) -> void:
 	if not lit:
 		if muzzle_light != null:
 			muzzle_light.light_energy = 0.0
+		if world_flash != null:
+			world_flash.light_energy = 0.0
 		return
 	var f := timer / FLASH_TIME
 	# Los dos volúmenes se apagan a ritmos distintos: el núcleo con pow alto
@@ -116,10 +126,10 @@ func update(delta: float) -> void:
 	_gas_mat.albedo_color = Color(1.0, 1.0, 1.0) * pow(f, GAS_DECAY)
 	_core_mat.emission_energy_multiplier = CORE_EMISSION * pow(f, CORE_DECAY)
 	if muzzle_light != null:
-		# Pico caliente que muere con el fogonazo, no franja fija: desde atras
-		# (cadera) una luz sostenida parecia una linea encendida sobre la
-		# corredera al disparar seguido.
 		muzzle_light.light_energy = randf_range(0.35, 0.60) * f
+	if world_flash != null:
+		# Pulso corto al mundo: una Glock en interior si marca las paredes.
+		world_flash.light_energy = randf_range(1.2, 2.0) * f * f
 
 
 ## Evento de disparo completo: fogonazo + humo de boca.
@@ -208,7 +218,7 @@ func _build_gas_mesh() -> ArrayMesh:
 	# mas aire a los lados. La raiz (boca) no se toca.
 	for i in range(1, verts.size()):
 		var v: Vector3 = verts[i]
-		verts[i] = Vector3(v.x * 1.2, v.y, v.z * 0.65)
+		verts[i] = Vector3(v.x * 1.2, v.y, -v.z * 0.65)
 	var idx := PackedInt32Array()
 	for i in range(n):
 		var a := 1 + i
@@ -250,7 +260,7 @@ func _build_core_mesh() -> ArrayMesh:
 	# Como el gas: corto hacia delante para que desde atras no haga lapiz.
 	for i in range(verts.size()):
 		var v: Vector3 = verts[i]
-		verts[i] = Vector3(v.x * 1.1, v.y, v.z * 0.65)
+		verts[i] = Vector3(v.x * 1.1, v.y, -v.z * 0.65)
 	for i in range(ring.size()):
 		var a: int = 1 + i
 		var b: int = 1 + ((i + 1) % ring.size())

@@ -178,6 +178,8 @@ func _physics_process(delta: float) -> void:
         velocity.y = -0.5
 
     move_and_slide()
+    if weapon != null:
+        weapon.player_velocity = velocity
     current_speed = Vector2(velocity.x, velocity.z).length()
     current_move_norm = clampf(current_speed / WALK_SPEED, 0.0, 1.0)
 

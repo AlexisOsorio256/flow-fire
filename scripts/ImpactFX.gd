@@ -45,6 +45,7 @@ const HOLE_SIZE := {
     "drywall": 0.064,
     "wood": 0.064,
     "metal": 0.048,
+    "aluminum": 0.042,
     "paper": 0.040,
 }
 
@@ -55,6 +56,7 @@ const CAVITY_TINT := {
     "drywall": Color(0.085, 0.080, 0.072),
     "wood": Color(0.050, 0.031, 0.015),
     "metal": Color(0.055, 0.058, 0.064),
+    "aluminum": Color(0.62, 0.63, 0.65),
     "paper": Color(0.075, 0.066, 0.055),
 }
 const LIP_TINT := {
@@ -62,6 +64,7 @@ const LIP_TINT := {
     "drywall": Color(0.74, 0.71, 0.65),
     "wood": Color(0.46, 0.30, 0.14),
     "metal": Color(0.32, 0.33, 0.36),
+    "aluminum": Color(0.78, 0.79, 0.81),
     "paper": Color(0.70, 0.66, 0.56),
 }
 ## Lado de la textura de silueta. 96 px sobra para un agujero de 5 cm.
@@ -105,6 +108,9 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
     match surface:
         "metal":
             sound_name = "impact_metal"
+        "aluminum":
+            sound_name = "impact_metal"
+            volume = -6.0
         "wood":
             sound_name = "impact_wood"
         "paper":
@@ -313,6 +319,12 @@ const IMPACT_MATERIALS := {
         "exit_scale": 1.15,
         "crater": 0.0,
     },
+    "aluminum": {
+        "debris": {"amount": 4, "color": Color(1.0, 0.80, 0.40, 1.0), "vel": [2.0, 5.0], "gravity": -11.0, "scale": [0.30, 0.90], "life": 0.22, "size": 0.012, "spread": 50.0, "spark": true},
+        "dust": {"amount": 3, "color": Color(0.70, 0.71, 0.72, 0.30), "vel": [0.3, 1.0], "gravity": -2.0, "scale": [0.30, 0.90], "life": 0.30, "size": 0.022, "spread": 44.0},
+        "exit_scale": 1.25,
+        "crater": 0.0,
+    },
     "paper": {
         "dust": {"amount": 4, "color": Color(0.84, 0.81, 0.74, 0.50), "vel": [0.2, 0.8], "gravity": -1.0, "scale": [0.30, 0.90], "life": 0.35, "size": 0.020, "spread": 44.0},
         "exit_scale": 1.60,
@@ -381,7 +393,7 @@ func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) 
 
 
 func _spawn_light(point: Vector3, surface: String) -> void:
-    if surface != "metal":
+    if surface != "metal" and surface != "aluminum":
         return
     var light := OmniLight3D.new()
     light.omni_range = 0.85
