@@ -112,6 +112,7 @@ nunca como columna de la mecánica.
 | "el cargador sale por donde no debe" | `MAGAZINE_OUT_AXIS` / `MAG_TRAVEL` en `GlockWeapon.gd` |
 | "la recarga va a destiempo" | los `RELOAD_*_T` de `Glock.gd` (segundos reales de la mecánica) |
 | "una lata no reacciona como debería" | `penetration_resistance` / `wall_thickness` en `World.gd` |
+| "agrupa muy abierto/cerrado" | `SHOT_DISPERSION_SIGMA` en `Glock.gd` (mrad reales por eje) |
 
 Invariantes objetivas: `tools/check_weapon.gd` (malla en metros, capacidad 15,
 Muzzle bajo Barrel, corredera, brocal, gatillo sobre su pasador, caida del canon).
