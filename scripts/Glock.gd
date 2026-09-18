@@ -561,14 +561,13 @@ func _seat_reload_mag() -> void:
 
 
 func _finish_reload() -> void:
+	# Una sola ruta: el asiento ocurre en su hito y la recamara la alimenta la
+	# corredera al volver a bateria. Si alguno falto es un bug de timeline, y
+	# se deja roto y gritando en vez de repararlo en silencio.
 	if not reload_mag_seated:
-		push_warning("Recarga: asiento perdido, reparando visible")
-		_seat_reload_mag()
-	if reload_empty and chamber <= 0 and mag > 0:
-		mag -= 1
-		chamber = 1
-	elif reload_empty and chamber <= 0:
-		push_warning("Recarga en seco sin cartucho que alimentar")
+		push_error("Recarga: el asiento no ocurrio en su hito")
+	if reload_empty and chamber <= 0:
+		push_error("Recarga en seco: la corredera no alimento")
 	reloading = false
 	reload_pose_blend = 0.0
 	mag_offset = 0.0
