@@ -209,9 +209,10 @@ func _add_decal(parent: Node3D, mask: Texture2D, footprint: float) -> void:
     ## 0,45 de normal_fade: en una pared perpendicular el decal se apaga en vez
     ## de estirarse por el canto.
     decal.normal_fade = 0.45
-    decal.distance_fade_enabled = true
-    decal.distance_fade_begin = 9.0
-    decal.distance_fade_length = 5.0
+    ## Sin distance fade: el laboratorio tiene estaciones a 18/27/35/50 m y con
+    ## begin=9/length=5 el agujero desaparecia a ~14 m (una penetracion correcta
+    ## parecia "no hizo nada"). El pool (128 total, 8 por superficie) ya controla
+    ## la memoria; la evidencia manda.
     parent.add_child(decal)
 
 
