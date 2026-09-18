@@ -116,7 +116,9 @@ nunca como columna de la mecánica.
 Invariantes objetivas: `tools/check_weapon.gd` (malla en metros, capacidad 15,
 Muzzle bajo Barrel, corredera, brocal, gatillo sobre su pasador, caida del canon).
 Inspector del asset: `tools/check_viewmodel.gd` (poses a PNG, sin mecanica);
-sonda CPU: `tools/check_fps.gd` (no GPU real). El GLB es la fuente canónica: trae piezas, orígenes y sockets reales dentro.
+sonda CPU: `tools/check_fps.gd` (no GPU real). Acciones reales a PNG:
+`tools/review_contact_sheet.py` (dispara por senales de verdad y cuenta
+disparos ocurridos, no intentos). El GLB es la fuente canónica: trae piezas, orígenes y sockets reales dentro.
 `tools/build_g19_parts.py` cumplió la migración y se retiró al historial.
 Prohibido verificar en headless para lo visual: para mirar se abre Godot en la
 pantalla del usuario (`:0`).
