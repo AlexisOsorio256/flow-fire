@@ -107,8 +107,8 @@ nunca como columna de la mecánica.
 |---|---|
 | "el recoil se ve falso" / "que pese más" | `scripts/GlockRecoil.gd`, 3 constantes juntas |
 | "el arma está mal encuadrada" | `GRIP_POS` / `GRIP_ROT` en `GlockViewmodel.gd` |
-| "la corredera no llega / recorre de más" | `CORREDERA` en `GlockWeapon.gd` |
-| "el cargador sale por donde no debe" | `MAGAZINE_OUT_AXIS` / `MAG_FUERA` en `GlockWeapon.gd` |
+| "la corredera no llega / recorre de más" | `SLIDE_TRAVEL` en `GlockWeapon.gd` |
+| "el cargador sale por donde no debe" | `MAGAZINE_OUT_AXIS` / `MAG_TRAVEL` en `GlockWeapon.gd` |
 | "la recarga va a destiempo" | los `RELOAD_*_T` de `Glock.gd` (segundos reales de la mecánica) |
 | "una lata no reacciona como debería" | `penetration_resistance` / `wall_thickness` en `World.gd` |
 

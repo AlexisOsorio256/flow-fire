@@ -245,7 +245,7 @@ func _exit_of_shape(shape: Shape3D, shape_transform: Transform3D, entry: Vector3
     return {}
 
 
-func _salida(shape_transform: Transform3D, entry: Vector3, local_entry: Vector3,
+func _exit_point(shape_transform: Transform3D, entry: Vector3, local_entry: Vector3,
         local_direction: Vector3, t: float, local_normal: Vector3) -> Dictionary:
     if t <= 0.0:
         return {}
@@ -287,7 +287,7 @@ func _exit_box(box: BoxShape3D, shape_transform: Transform3D, entry: Vector3,
         exit_axis = 2
     var local_normal := Vector3.ZERO
     local_normal[exit_axis] = 1.0 if local_exit[exit_axis] >= 0.0 else -1.0
-    return _salida(shape_transform, entry, local_entry, local_direction, t_far, local_normal)
+    return _exit_point(shape_transform, entry, local_entry, local_direction, t_far, local_normal)
 
 
 func _exit_cylinder(cyl: CylinderShape3D, shape_transform: Transform3D, entry: Vector3,
@@ -322,7 +322,7 @@ func _exit_cylinder(cyl: CylinderShape3D, shape_transform: Transform3D, entry: V
             if px * px + pz * pz <= radius * radius + epsilon and t > best_t:
                 best_t = t
                 best_normal = Vector3(0.0, sign_y, 0.0)
-    return _salida(shape_transform, entry, local_entry, local_direction, best_t, best_normal)
+    return _exit_point(shape_transform, entry, local_entry, local_direction, best_t, best_normal)
 
 
 func _exit_sphere(sphere: SphereShape3D, shape_transform: Transform3D, entry: Vector3,
@@ -336,7 +336,7 @@ func _exit_sphere(sphere: SphereShape3D, shape_transform: Transform3D, entry: Ve
     if disc < 0.0:
         return {}
     var t := (-b + sqrt(disc)) / (2.0 * a)
-    return _salida(shape_transform, entry, local_entry, local_direction, t,
+    return _exit_point(shape_transform, entry, local_entry, local_direction, t,
         (local_entry + local_direction * t).normalized())
 
 

@@ -21,11 +21,11 @@ signal ammo_changed(mag: int, chamber: int, reserve: int, reloading: bool)
 ## hueso, y la recarga es una linea de tiempo de la MECANICA (segundos reales de
 ## esta pistola), no instantes remedidos de un clip de brazos ajenos.
 
-## Capacidad del cargador: la fija el arma (GlockWeapon.CARGADOR) al montar.
+## Capacidad del cargador: la fija el arma (GlockWeapon.MAG_CAPACITY) al montar.
 var MAG_SIZE := 17
 ## Recorrido de la corredera en metros reales. La autoridad es el arma
-## (GlockWeapon.corredera); aqui se copia al montar.
-var _travel := GlockWeapon.CORREDERA
+## (GlockWeapon.slide_offset); aqui se copia al montar.
+var _travel := GlockWeapon.SLIDE_TRAVEL
 ## Corredera: rigidez y amortiguacion del resorte, y en FRACCION del recorrido
 ## donde pasa cada cosa. Asi el unico numero que describe el arma es su recorrido.
 const SLIDE_K := 4000.0
@@ -38,7 +38,7 @@ const SLIDE_BATTERY_AT := 0.10    # ya volvio a bateria
 const SLIDE_CLOSED_AT := 0.026    # cerrada del todo
 ## 9x19 de la Glock 19: punta de 115 granos a ~372 m/s. El proyectil no deja
 ## estela: una Glock normal no dispara trazadoras.
-const BALA_VELOCIDAD := 372.0
+const MUZZLE_SPEED := 372.0
 
 ## LINEA DE TIEMPO DE LA RECARGA (segundos reales, no instantes de un clip).
 ## El cargador sale, cae fuera de cuadro, entra el lleno y asienta. `_MAG_IN`
@@ -124,8 +124,8 @@ func _ready() -> void:
 	add_child(viewmodel)
 	viewmodel.mount()
 	if viewmodel.weapon != null:
-		MAG_SIZE = viewmodel.weapon.capacidad
-		_travel = viewmodel.weapon.corredera
+		MAG_SIZE = viewmodel.weapon.capacity
+		_travel = viewmodel.weapon.slide_offset
 		mag = MAG_SIZE
 		reserve = MAG_SIZE * 4
 	if viewmodel.muzzle != null:
@@ -272,7 +272,7 @@ func _fire() -> void:
 	var move_amount := clampf(player_speed / 4.35, 0.0, 1.0)
 	var spread := 0.00055 if aim_blend > 0.55 else 0.0036 + move_amount * 0.0052
 	dir = (dir + right * randf_range(-spread, spread) + up * randf_range(-spread, spread)).normalized()
-	Ballistics.fire(origin, dir, BALA_VELOCIDAD)
+	Ballistics.fire(origin, dir, MUZZLE_SPEED)
 	fx.fire(origin, cam_fwd)
 	emit_signal("shot_fired")
 	_emit_ammo()

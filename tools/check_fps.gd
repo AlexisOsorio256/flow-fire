@@ -12,16 +12,16 @@ func _ready() -> void:
 		await get_tree().process_frame
 		ms.append(get_process_delta_time() * 1000.0)
 		if i == 120:
-			var w = (main.get_node("Player") as Node).get("weapon")
-			if w != null:
-				w.force_fire_once()
+			var weapon = (main.get_node("Player") as Node).get("weapon")
+			if weapon != null:
+				weapon.force_fire_once()
 	ms.sort()
 	var total := 0.0
 	for v in ms:
 		total += v
-	var media := total / ms.size()
-	var peor1 := ms[int(ms.size() * 0.99)]
-	var peor5 := ms[int(ms.size() * 0.95)]
+	var mean := total / ms.size()
+	var worst1 := ms[int(ms.size() * 0.99)]
+	var worst5 := ms[int(ms.size() * 0.95)]
 	print("FPS   media %.1f ms (%.0f fps) | peor5 %.1f ms | peor1 %.1f ms | max %.1f ms" % [
-		media, 1000.0 / media, peor5, peor1, ms[ms.size() - 1]])
+		mean, 1000.0 / mean, worst5, worst1, ms[ms.size() - 1]])
 	get_tree().quit()

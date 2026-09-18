@@ -8,184 +8,184 @@ extends Node
 ## cargador viaje hacia abajo en el espacio del arma. Si algo falla, imprime
 ## FALLO y sale con codigo 1.
 
-const LARGO_REAL := 0.174
-const TOLERANCIA := 0.002
-const CORREDERA_REAL := 0.039
+const REAL_LENGTH := 0.174
+const TOLERANCE := 0.002
+const REAL_SLIDE_TRAVEL := 0.039
 
 
 func _ready() -> void:
 	var vm: Node3D = GlockViewmodel.new()
 	add_child(vm)
 	vm.mount()
-	var arma = vm.get("weapon")
-	var fallos := 0
+	var weapon = vm.get("weapon")
+	var failures := 0
 
-	if arma == null:
+	if weapon == null:
 		print("FALLO: el arma no monto")
 		get_tree().quit(1)
 		return
 
 	print("--- ARMA ---")
-	print("escala del modelo ", snappedf(arma.escala, 0.0001),
-		"  capacidad ", arma.capacidad)
+	print("escala del modelo ", snappedf(weapon.model_scale, 0.0001),
+		"  capacidad ", weapon.capacity)
 
 	# El largo se mide DENTRO del arma (unidades del modelo) y se lleva al mundo
 	# con la escala que el arma tiene de verdad: asi se caza cualquier escala
 	# heredada de un padre (era el bug de los brazos a ARMS_SCALE).
-	var escala_mundo: float = arma.global_transform.basis.get_scale().x
-	var largo: float = _largo_local(arma) * escala_mundo
-	_caja_local(arma, true)
-	print("largo en el mundo mm ", snappedf(largo * 1000.0, 0.1),
-		"  (real %.1f, escala del nodo %.4f)" % [LARGO_REAL * 1000.0, escala_mundo])
-	if absf(largo - LARGO_REAL) > TOLERANCIA:
-		fallos += 1
+	var world_scale: float = weapon.global_transform.basis.get_scale().x
+	var length: float = _local_length(weapon) * world_scale
+	_local_aabb(weapon, true)
+	print("largo en el mundo mm ", snappedf(length * 1000.0, 0.1),
+		"  (real %.1f, escala del nodo %.4f)" % [REAL_LENGTH * 1000.0, world_scale])
+	if absf(length - REAL_LENGTH) > TOLERANCE:
+		failures += 1
 		print("FALLO: la pistola no esta en escala real en el mundo")
 
-	if arma.muzzle == null or arma.ejection_port == null \
-			or arma.sight_rear == null or arma.sight_front == null \
-			or arma.frame == null or arma.slide == null or arma.magazine == null:
-		fallos += 1
+	if weapon.muzzle == null or weapon.ejection_port == null \
+			or weapon.sight_rear == null or weapon.sight_front == null \
+			or weapon.frame == null or weapon.slide == null or weapon.magazine == null:
+		failures += 1
 		print("FALLO: falta una pieza o un punto que el juego usa")
 	# Trigger y Barrel son opcionales: el asset actual no los trae.
-	print("trigger ", "si" if arma.trigger != null else "NO (opcional)",
-		"  barrel ", "si" if arma.barrel != null else "NO (opcional)")
+	print("trigger ", "si" if weapon.trigger != null else "NO (opcional)",
+		"  barrel ", "si" if weapon.barrel != null else "NO (opcional)")
 
-	var adelante: Vector3 = (arma.sight_front.global_position - arma.sight_rear.global_position).normalized()
-	var arriba: Vector3 = arma.slide.global_transform.basis.y.normalized()
-	var salida: Vector3 = arma.magazine_out_axis()
+	var sight_axis: Vector3 = (weapon.sight_front.global_position - weapon.sight_rear.global_position).normalized()
+	var up: Vector3 = weapon.slide.global_transform.basis.y.normalized()
+	var mag_axis: Vector3 = weapon.magazine_out_axis()
 	print("mira trasera->delantera mm ",
-		snappedf(arma.sight_rear.global_position.distance_to(arma.sight_front.global_position) * 1000.0, 0.1))
-	print("eje de salida del cargador ", salida.snapped(Vector3(0.01, 0.01, 0.01)),
-		"  abajo=", snappedf(salida.dot(arriba), 0.01), "  avance=", snappedf(absf(salida.dot(adelante)), 0.01))
-	if salida.dot(arriba) > -0.8 or absf(salida.dot(adelante)) > 0.4:
-		fallos += 1
+		snappedf(weapon.sight_rear.global_position.distance_to(weapon.sight_front.global_position) * 1000.0, 0.1))
+	print("eje de salida del cargador ", mag_axis.snapped(Vector3(0.01, 0.01, 0.01)),
+		"  abajo=", snappedf(mag_axis.dot(up), 0.01), "  avance=", snappedf(absf(mag_axis.dot(sight_axis)), 0.01))
+	if mag_axis.dot(up) > -0.8 or absf(mag_axis.dot(sight_axis)) > 0.4:
+		failures += 1
 		print("FALLO: el cargador no sale hacia abajo por el brocal")
 
 	# El gatillo gira sobre el pasador: si el eje estuviera mal, la punta se
 	# moveria en diagonal o el pasador se iria de sitio.
-	if arma.trigger != null:
-		var origen: Vector3 = arma.trigger.global_transform.origin
+	if weapon.trigger != null:
+		var pivot: Vector3 = weapon.trigger.global_transform.origin
 		## Se sigue el MISMO vertice en las dos poses. Buscar "el mas lejano"
 		## cada vez no vale: la punta es un filo y el argmax salta de un vertice
 		## a otro, que es como esta comprobacion midio 0,6 mm de 5 mm.
-		var testigo: Array = _testigo(arma.trigger)
-		arma.set_trigger(0.0)
-		var punta_suelto := _sigue(testigo)
-		arma.set_trigger(1.0)
-		var punta_fondo := _sigue(testigo)
+		var witness: Array = _witness_vertex(weapon.trigger)
+		weapon.set_trigger(0.0)
+		var tip_released := _witness_position(witness)
+		weapon.set_trigger(1.0)
+		var tip_pressed := _witness_position(witness)
 		## Mundo ya viene en metros: no se vuelve a escalar.
-		var recorrido_gatillo: float = punta_suelto.distance_to(punta_fondo)
-		var pasador: float = origen.distance_to(arma.trigger.global_transform.origin)
-		print("gatillo mm ", snappedf(recorrido_gatillo * 1000.0, 0.1),
+		var trigger_travel: float = tip_released.distance_to(tip_pressed)
+		var pin_shift: float = pivot.distance_to(weapon.trigger.global_transform.origin)
+		print("gatillo mm ", snappedf(trigger_travel * 1000.0, 0.1),
 			"  (recorrido real %.1f)  pasador movido mm %.2f" % [
-				arma.TRIGGER_TRAVEL * 1000.0, pasador * 1000.0])
-		if absf(recorrido_gatillo - arma.TRIGGER_TRAVEL) > 0.0012 or pasador > 0.0002:
-			fallos += 1
+				weapon.TRIGGER_TRAVEL * 1000.0, pin_shift * 1000.0])
+		if absf(trigger_travel - weapon.TRIGGER_TRAVEL) > 0.0012 or pin_shift > 0.0002:
+			failures += 1
 			print("FALLO: el gatillo no gira sobre su pasador")
-		arma.set_trigger(0.0)
+		weapon.set_trigger(0.0)
 
 	# El cañon cae al abrirse el arma: si subiera, el giro esta al reves.
-	if arma.barrel != null:
+	if weapon.barrel != null:
 		## Se mide la BOCA del cañon, no el nodo `Muzzle`: ese cuelga de la
 		## corredera y se mueve con ella, asi que no dice nada del cañon.
-		var boca_testigo: Array = _testigo(arma.barrel)
-		arma.set_slide(0.0)
-		var boca_suelto := _sigue(boca_testigo)
-		arma.set_slide(1.0)
-		var boca_abierto := _sigue(boca_testigo)
-		arma.set_slide(0.0)
-		print("cañon al abrir mm ", snappedf((boca_suelto - boca_abierto).dot(arriba) * 1000.0, 0.1),
+		var muzzle_witness: Array = _witness_vertex(weapon.barrel)
+		weapon.set_slide(0.0)
+		var muzzle_closed := _witness_position(muzzle_witness)
+		weapon.set_slide(1.0)
+		var muzzle_open := _witness_position(muzzle_witness)
+		weapon.set_slide(0.0)
+		print("cañon al abrir mm ", snappedf((muzzle_closed - muzzle_open).dot(up) * 1000.0, 0.1),
 			"  (baja si es positivo)")
-		if (boca_suelto - boca_abierto).dot(arriba) < 0.0005:
-			fallos += 1
+		if (muzzle_closed - muzzle_open).dot(up) < 0.0005:
+			failures += 1
 			print("FALLO: el cañon no cae al abrir la corredera")
 
 	# El gatillo NO puede salir con el cargador. Hasta ahora los dos vivian en el
 	# mismo nodo del autor, asi que al expulsar el cargador se iba el gatillo.
-	if arma.trigger != null and arma.magazine != null:
-		var gatillo_antes: Vector3 = arma.trigger.global_transform.origin
-		arma.set_magazine_offset(1.0)
-		var gatillo_fuera: Vector3 = arma.trigger.global_transform.origin
-		arma.set_magazine_offset(0.0)
+	if weapon.trigger != null and weapon.magazine != null:
+		var trigger_before: Vector3 = weapon.trigger.global_transform.origin
+		weapon.set_magazine_offset(1.0)
+		var trigger_after: Vector3 = weapon.trigger.global_transform.origin
+		weapon.set_magazine_offset(0.0)
 		print("gatillo quieto con el cargador fuera mm ",
-			snappedf(gatillo_antes.distance_to(gatillo_fuera) * 1000.0, 2))
-		if gatillo_antes.distance_to(gatillo_fuera) > 0.0005:
-			fallos += 1
+			snappedf(trigger_before.distance_to(trigger_after) * 1000.0, 2))
+		if trigger_before.distance_to(trigger_after) > 0.0005:
+			failures += 1
 			print("FALLO: el gatillo se va con el cargador")
 
-	var recorrido: float = (arma.corredera / arma.escala) * escala_mundo
-	print("recorrido de corredera mm ", snappedf(recorrido * 1000.0, 0.1),
-		"  (real %.1f)" % (CORREDERA_REAL * 1000.0))
-	if absf(recorrido - CORREDERA_REAL) > TOLERANCIA * 0.5:
-		fallos += 1
+	var slide_travel: float = (weapon.slide_offset / weapon.model_scale) * world_scale
+	print("recorrido de corredera mm ", snappedf(slide_travel * 1000.0, 0.1),
+		"  (real %.1f)" % (REAL_SLIDE_TRAVEL * 1000.0))
+	if absf(slide_travel - REAL_SLIDE_TRAVEL) > TOLERANCE * 0.5:
+		failures += 1
 		print("FALLO: la corredera no recorre la distancia real")
 
-	if fallos == 0:
+	if failures == 0:
 		print("OK: invariantes del arma")
 	else:
-		print("FALLOS: ", fallos)
-	get_tree().quit(1 if fallos > 0 else 0)
+		print("FALLOS: ", failures)
+	get_tree().quit(1 if failures > 0 else 0)
 
 
 ## Vertice testigo de la pieza: el mas lejano a su origen (la punta del
 ## gatillo, la boca del cañon). Devuelve [malla, indice] para poder seguir ESE
 ## vertice en otra pose.
-func _testigo(pieza: Node3D) -> Array:
-	var testigo: Array = []
+func _witness_vertex(part: Node3D) -> Array:
+	var witness: Array = []
 	var radio := 0.0
-	var origen: Vector3 = pieza.global_transform.origin
-	var pila: Array = [pieza]
-	while not pila.is_empty():
-		var n = pila.pop_back()
+	var pivot: Vector3 = part.global_transform.origin
+	var stack: Array = [part]
+	while not stack.is_empty():
+		var n = stack.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-			var malla: MeshInstance3D = n as MeshInstance3D
-			for s in range(malla.mesh.get_surface_count()):
-				var vertices: PackedVector3Array = malla.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+			var mesh_instance: MeshInstance3D = n as MeshInstance3D
+			for s in range(mesh_instance.mesh.get_surface_count()):
+				var vertices: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
 				for i in range(vertices.size()):
-					var d: float = (malla.global_transform * vertices[i]).distance_to(origen)
+					var d: float = (mesh_instance.global_transform * vertices[i]).distance_to(pivot)
 					if d > radio:
 						radio = d
-						testigo = [malla, i]
+						witness = [mesh_instance, i]
 		for c in n.get_children():
-			pila.append(c)
-	return testigo
+			stack.append(c)
+	return witness
 
 
 ## Posicion en mundo del vertice testigo.
-func _sigue(testigo: Array) -> Vector3:
-	if testigo.is_empty():
+func _witness_position(witness: Array) -> Vector3:
+	if witness.is_empty():
 		return Vector3.ZERO
-	var malla: MeshInstance3D = testigo[0]
-	var vertices: PackedVector3Array = malla.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-	return malla.global_transform * vertices[testigo[1]]
+	var mesh_instance: MeshInstance3D = witness[0]
+	var vertices: PackedVector3Array = mesh_instance.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	return mesh_instance.global_transform * vertices[witness[1]]
 
 
 ## Largo de la pistola en unidades del PROPIO arma (sin rotaciones de padre).
 
 
-func _largo_local(raiz: Node3D) -> float:
-	return maxf(_caja_local(raiz, false).size.x, maxf(_caja_local(raiz, false).size.y, _caja_local(raiz, false).size.z))
+func _local_length(root: Node3D) -> float:
+	return maxf(_local_aabb(root, false).size.x, maxf(_local_aabb(root, false).size.y, _local_aabb(root, false).size.z))
 
 
 ## Caja del arma en su propio espacio. Con `detalle` imprime la caja de cada
 ## malla: si el largo sale mal, aqui se ve QUE pieza se esta saliendo.
-func _caja_local(raiz: Node3D, detalle: bool) -> AABB:
-	var caja := AABB()
-	var primero := true
-	var inversa := raiz.global_transform.affine_inverse()
-	var pila: Array = [raiz]
-	while not pila.is_empty():
-		var n = pila.pop_back()
+func _local_aabb(root: Node3D, verbose: bool) -> AABB:
+	var box := AABB()
+	var first := true
+	var inverse := root.global_transform.affine_inverse()
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var n = stack.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-			var local: AABB = (inversa * (n as Node3D).global_transform) * (n as MeshInstance3D).mesh.get_aabb()
-			if detalle:
+			var local_box: AABB = (inverse * (n as Node3D).global_transform) * (n as MeshInstance3D).mesh.get_aabb()
+			if verbose:
 				print("  pieza ", (n as Node3D).name, "  caja ",
-					local.size.snapped(Vector3(0.001, 0.001, 0.001)),
-					"  desde ", local.position.snapped(Vector3(0.001, 0.001, 0.001)))
-			caja = local if primero else caja.merge(local)
-			primero = false
+					local_box.size.snapped(Vector3(0.001, 0.001, 0.001)),
+					"  desde ", local_box.position.snapped(Vector3(0.001, 0.001, 0.001)))
+			box = local_box if first else box.merge(local_box)
+			first = false
 		for c in n.get_children():
-			pila.append(c)
-	if detalle:
-		print("  caja total ", caja.size.snapped(Vector3(0.001, 0.001, 0.001)))
-	return caja
+			stack.append(c)
+	if verbose:
+		print("  caja total ", box.size.snapped(Vector3(0.001, 0.001, 0.001)))
+	return box

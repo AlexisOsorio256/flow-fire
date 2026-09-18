@@ -24,23 +24,23 @@ extends Node3D
 ## AQUI NO HAY GAMEPLAY: la autoridad de cada pieza es `Glock.gd`, y este archivo
 ## solo la representa. Los unicos numeros que viven aqui son los del arma fisica.
 ##
-##   "la corredera no llega" -> CORREDERA
+##   "la corredera no llega" -> SLIDE_TRAVEL
 ##   "el arma esta mal encuadrada" -> GlockViewmodel.GRIP_POS / GRIP_ROT
 
-const MALLA := "res://assets/models/g19_pistol.glb"
+const MODEL := "res://assets/models/g19_pistol.glb"
 ## Largo real de la pistola, extremo a extremo. De aqui sale la escala del
 ## modelo: no hay que calibrarla a mano. 174 mm es la Glock 19 de verdad, y el
 ## asset ya viene a esa medida; si algun dia se cambia, la escala lo corrige.
-const LARGO := 0.174
+const REAL_LENGTH := 0.174
 ## Recorrido real de la corredera. Es la unica autoridad del recorrido: la
 ## mecanica de Glock.gd y el dibujo la leen de aqui.
-const CORREDERA := 0.039
+const SLIDE_TRAVEL := 0.039
 ## Cartuchos que entran en el cargador. El 9x19 de la Glock 19 son 17.
-const CARGADOR := 17
+const MAG_CAPACITY := 17
 ## La boca del arma en la malla. La corredera retrocede al reves.
-const ADELANTE := Vector3(0.0, 0.0, -1.0)
+const MUZZLE_AXIS := Vector3(0.0, 0.0, -1.0)
 ## Recorrido real del cargador fuera del brocal, de asentado a libre.
-const MAG_FUERA := 0.07
+const MAG_TRAVEL := 0.07
 ## Eje de salida del cargador en espacio del arma (abajo del armazon).
 const MAGAZINE_OUT_AXIS := Vector3(0.0, -1.0, 0.0)
 ## Recorrido real del gatillo, medido en la punta del diente. Son los ~5 mm que
@@ -54,10 +54,10 @@ const BARREL_DROP := 0.026
 ## pieza: las dos traen su propio origen y su propio giro.
 const SIDE_AXIS := Vector3(1.0, 0.0, 0.0)
 
-var corredera := CORREDERA
-var capacidad := CARGADOR
-var adelante := ADELANTE
-var escala := 1.0
+var slide_offset := SLIDE_TRAVEL
+var capacity := MAG_CAPACITY
+var muzzle_axis := MUZZLE_AXIS
+var model_scale := 1.0
 
 var frame: Node3D
 var slide: Node3D
@@ -85,22 +85,22 @@ var magazine_rest := Vector3.ZERO
 
 
 func build() -> void:
-	var packed := load(MALLA) as PackedScene
+	var packed := load(MODEL) as PackedScene
 	if packed == null:
-		push_warning("No se pudo cargar el arma: " + MALLA)
+		push_warning("No se pudo cargar el arma: " + MODEL)
 		return
-	var raiz := packed.instantiate()
-	add_child(raiz)
+	var root := packed.instantiate()
+	add_child(root)
 
-	frame = _buscar(raiz, "Frame")
-	slide = _buscar(raiz, "Slide")
-	magazine = _buscar(raiz, "Magazine")
-	trigger = _buscar(raiz, "Trigger")
-	barrel = _buscar(raiz, "Barrel")
-	muzzle = _buscar(raiz, "Muzzle")
-	ejection_port = _buscar(raiz, "EjectionPort")
-	sight_rear = _buscar(raiz, "SightRear")
-	sight_front = _buscar(raiz, "SightFront")
+	frame = _find_child(root, "Frame")
+	slide = _find_child(root, "Slide")
+	magazine = _find_child(root, "Magazine")
+	trigger = _find_child(root, "Trigger")
+	barrel = _find_child(root, "Barrel")
+	muzzle = _find_child(root, "Muzzle")
+	ejection_port = _find_child(root, "EjectionPort")
+	sight_rear = _find_child(root, "SightRear")
+	sight_front = _find_child(root, "SightFront")
 	if frame == null or slide == null or magazine == null:
 		push_warning("El arma no trae Frame/Slide/Magazine")
 		return
@@ -113,9 +113,9 @@ func build() -> void:
 		_barrel_rest_basis = barrel.transform.basis
 
 	# La escala sale de medir el largo de la malla contra el largo REAL del arma.
-	var largo_medido := _largo(raiz)
-	escala = LARGO / maxf(largo_medido, 0.0001)
-	scale = Vector3(escala, escala, escala)
+	var measured_length := _model_length(root)
+	model_scale = REAL_LENGTH / maxf(measured_length, 0.0001)
+	scale = Vector3(model_scale, model_scale, model_scale)
 	## El brazo de palanca se mide DESPUES de escalar: `_lever` mide en mundo y
 	## TRIGGER_TRAVEL esta en metros, asi que los dos tienen que hablar de lo
 	## mismo. Medido antes de escalar salia 8 veces largo y el gatillo andaba
@@ -123,33 +123,33 @@ func build() -> void:
 	if trigger != null:
 		_trigger_lever = maxf(_lever(trigger), 0.001)
 	# El recorrido visible se ancla al real, no al hueco de la malla.
-	_slide_travel = CORREDERA / escala
-	_mag_travel = MAG_FUERA / escala
+	_slide_travel = SLIDE_TRAVEL / model_scale
+	_mag_travel = MAG_TRAVEL / model_scale
 
-	var faltan: Array = []
-	for par in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
-		if par[1] == null:
-			faltan.append(par[0])
-	print("ARMA Glock 19 escala=", snappedf(escala, 0.0001),
-		" largo_modelo_m=", snappedf(largo_medido, 0.001),
-		" corredera=", snappedf(CORREDERA * 1000.0, 0.1), "mm",
+	var missing: Array = []
+	for pair in [["Trigger", trigger], ["Barrel", barrel], ["Muzzle", muzzle], ["EjectionPort", ejection_port]]:
+		if pair[1] == null:
+			missing.append(pair[0])
+	print("ARMA Glock 19 escala=", snappedf(model_scale, 0.0001),
+		" largo_modelo_m=", snappedf(measured_length, 0.001),
+		" corredera=", snappedf(SLIDE_TRAVEL * 1000.0, 0.1), "mm",
 		" gatillo=", snappedf(TRIGGER_TRAVEL / _trigger_lever * 57.2958, 0.1), "grados",
-		" sin_pieza=", faltan if not faltan.is_empty() else "nada")
+		" sin_pieza=", missing if not missing.is_empty() else "nada")
 
 
-func _buscar(raiz: Node, nombre: String) -> Node3D:
-	if raiz.name == nombre and raiz is Node3D:
-		return raiz as Node3D
-	for c in raiz.get_children():
-		var r := _buscar(c, nombre)
+func _find_child(root: Node, node_name: String) -> Node3D:
+	if root.name == node_name and root is Node3D:
+		return root as Node3D
+	for c in root.get_children():
+		var r := _find_child(c, node_name)
 		if r != null:
 			return r
 	return null
 
 
-func _largo(raiz: Node) -> float:
-	var caja := _caja_malla(raiz)
-	return maxf(caja.size.x, maxf(caja.size.y, caja.size.z))
+func _model_length(root: Node) -> float:
+	var box := _mesh_aabb(root)
+	return maxf(box.size.x, maxf(box.size.y, box.size.z))
 
 
 ## Caja de todas las mallas del arma, medida en el espacio del ARMA.
@@ -158,20 +158,20 @@ func _largo(raiz: Node) -> float:
 ## el local. Las piezas que traen su propio origen (Trigger, Barrel) tienen
 ## transform local, y con el local la caja salia un 5% mas larga y el arma se
 ## escalaba de menos (176,9 mm en vez de 187).
-func _caja_malla(raiz: Node) -> AABB:
-	var caja := AABB()
-	var primero := true
-	var inversa := (raiz as Node3D).global_transform.affine_inverse()
-	var pila: Array = [raiz]
-	while not pila.is_empty():
-		var n = pila.pop_back()
+func _mesh_aabb(root: Node) -> AABB:
+	var box := AABB()
+	var first := true
+	var inverse := (root as Node3D).global_transform.affine_inverse()
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var n = stack.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-			var local: AABB = (inversa * (n as Node3D).global_transform) * (n as MeshInstance3D).mesh.get_aabb()
-			caja = local if primero else caja.merge(local)
-			primero = false
+			var local_box: AABB = (inverse * (n as Node3D).global_transform) * (n as MeshInstance3D).mesh.get_aabb()
+			box = local_box if first else box.merge(local_box)
+			first = false
 		for c in n.get_children():
-			pila.append(c)
-	return caja
+			stack.append(c)
+	return box
 
 
 ## Corredera: 0 = cerrada, 1 = atras del todo. UNICA autoridad: Glock.gd.
@@ -179,12 +179,12 @@ func _caja_malla(raiz: Node) -> AABB:
 func set_slide(t: float) -> void:
 	if slide == null:
 		return
-	var avance := clampf(t, 0.0, 1.0)
-	slide.position = _slide_rest - adelante * (_slide_travel * avance)
+	var amount := clampf(t, 0.0, 1.0)
+	slide.position = _slide_rest - muzzle_axis * (_slide_travel * amount)
 	## El cañon no viaja con la corredera: cae. Con la corredera atras del todo
 	## la recamara asoma por el puerto de eyeccion y el arma queda "abierta".
 	if barrel != null:
-		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * avance)) * _barrel_rest_basis
+		barrel.transform.basis = Basis(Quaternion(SIDE_AXIS, -BARREL_DROP * amount)) * _barrel_rest_basis
 
 
 ## Brazo de palanca del gatillo EN METROS DE MUNDO: el pasador es el origen de
@@ -192,22 +192,22 @@ func set_slide(t: float) -> void:
 ## "5 mm de recorrido" en radianes. Se mide en mundo (no en unidades del
 ## modelo) porque TRIGGER_TRAVEL esta en metros: mezclar las dos escalas dejaba
 ## el gatillo girando 0,6 grados en vez de 4,5.
-func _lever(pieza: Node3D) -> float:
-	var radio := 0.0
-	var origen: Vector3 = pieza.global_transform.origin
-	var pila: Array = [pieza]
-	while not pila.is_empty():
-		var n = pila.pop_back()
+func _lever(part: Node3D) -> float:
+	var radius := 0.0
+	var pivot: Vector3 = part.global_transform.origin
+	var stack: Array = [part]
+	while not stack.is_empty():
+		var n = stack.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
-			var malla: MeshInstance3D = n as MeshInstance3D
-			var mesh: Mesh = malla.mesh
+			var mesh_instance: MeshInstance3D = n as MeshInstance3D
+			var mesh: Mesh = mesh_instance.mesh
 			for s in range(mesh.get_surface_count()):
 				var vertices: PackedVector3Array = mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
 				for v: Vector3 in vertices:
-					radio = maxf(radio, (malla.global_transform * v).distance_to(origen))
+					radius = maxf(radius, (mesh_instance.global_transform * v).distance_to(pivot))
 		for c in n.get_children():
-			pila.append(c)
-	return radio
+			stack.append(c)
+	return radius
 
 
 ## Gatillo: 0 = suelto, 1 = a fondo. UNICA autoridad: Glock.gd.
@@ -218,14 +218,14 @@ func _lever(pieza: Node3D) -> float:
 func set_trigger(t: float) -> void:
 	if trigger == null:
 		return
-	var angulo := -(TRIGGER_TRAVEL / _trigger_lever) * clampf(t, 0.0, 1.0)
-	trigger.transform.basis = Basis(Quaternion(SIDE_AXIS, angulo)) * _trigger_rest_basis
+	var angle := -(TRIGGER_TRAVEL / _trigger_lever) * clampf(t, 0.0, 1.0)
+	trigger.transform.basis = Basis(Quaternion(SIDE_AXIS, angle)) * _trigger_rest_basis
 
 
 ## Cargador: 0 = asentado en el brocal, 1 = fuera del todo. UNICA autoridad:
 ## Glock.gd, que le pasa su avance en la recarga. El eje de salida es el del
 ## propio modelo (el cargador cuelga por debajo del arma) y el recorrido es el
-## real: MAG_FUERA.
+## real: MAG_TRAVEL.
 func set_magazine_offset(t: float) -> void:
 	if magazine == null:
 		return

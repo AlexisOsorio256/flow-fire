@@ -17,28 +17,28 @@ const POSE := {
 
 
 ## Caja envolvente de todo lo visible bajo un nodo.
-func _caja_visible(raiz: Node) -> AABB:
-	var caja := AABB()
-	var primero := true
-	var pila: Array = [raiz]
-	while not pila.is_empty():
-		var n = pila.pop_back()
+func _visible_aabb(root: Node) -> AABB:
+	var box := AABB()
+	var first := true
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var n = stack.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null and (n as MeshInstance3D).visible:
-			var mundo: AABB = (n as Node3D).global_transform * (n as MeshInstance3D).mesh.get_aabb()
-			caja = mundo if primero else caja.merge(mundo)
-			primero = false
+			var world_box: AABB = (n as Node3D).global_transform * (n as MeshInstance3D).mesh.get_aabb()
+			box = world_box if first else box.merge(world_box)
+			first = false
 		for c in n.get_children():
-			pila.append(c)
-	return caja
+			stack.append(c)
+	return box
 
 
 func _ready() -> void:
-	var salida := "/tmp/vm"
+	var out_dir := "/tmp/vm"
 	for a in OS.get_cmdline_user_args():
 		var kv := (a as String).split("=")
 		if kv.size() == 2 and kv[0] == "--out":
-			salida = kv[1]
-	DirAccess.make_dir_recursive_absolute(salida)
+			out_dir = kv[1]
+	DirAccess.make_dir_recursive_absolute(out_dir)
 
 	var vp := SubViewport.new()
 	vp.size = Vector2i(900, 700)
@@ -47,15 +47,15 @@ func _ready() -> void:
 	vp.msaa_3d = Viewport.MSAA_2X
 	add_child(vp)
 
-	var entorno := WorldEnvironment.new()
+	var world_node := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.22, 0.24, 0.28)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.8, 0.85, 1.0)
 	env.ambient_light_energy = 0.7
-	entorno.environment = env
-	vp.add_child(entorno)
+	world_node.environment = env
+	vp.add_child(world_node)
 
 	var cam := Camera3D.new()
 	cam.fov = 65.0
@@ -70,50 +70,50 @@ func _ready() -> void:
 	vm.setup(cam)
 	vm.mount()
 
-	var arma = vm.get("weapon")
-	print("MONTAJE arma=", "si" if arma != null else "NO")
-	if arma != null:
-		print("  piezas: Frame=", arma.frame != null, " Slide=", arma.slide != null,
-			" Magazine=", arma.magazine != null, " Trigger=", arma.trigger != null,
-			" Barrel=", arma.barrel != null)
-		print("  puntos: boca=", arma.muzzle != null, " puerto=", arma.ejection_port != null,
-			" mira_t=", arma.sight_rear != null, " mira_d=", arma.sight_front != null)
-		print("  eje de salida del cargador ", arma.magazine_out_axis().snapped(Vector3(0.01, 0.01, 0.01)))
+	var weapon = vm.get("weapon")
+	print("MONTAJE arma=", "si" if weapon != null else "NO")
+	if weapon != null:
+		print("  piezas: Frame=", weapon.frame != null, " Slide=", weapon.slide != null,
+			" Magazine=", weapon.magazine != null, " Trigger=", weapon.trigger != null,
+			" Barrel=", weapon.barrel != null)
+		print("  puntos: boca=", weapon.muzzle != null, " puerto=", weapon.ejection_port != null,
+			" mira_t=", weapon.sight_rear != null, " mira_d=", weapon.sight_front != null)
+		print("  eje de salida del cargador ", weapon.magazine_out_axis().snapped(Vector3(0.01, 0.01, 0.01)))
 	# Cuantas mallas quedan visibles y cuantos triangulos suman.
-	var visibles := []
+	var visible_meshes := []
 	var tris := 0
-	var pila: Array = [vm]
-	while not pila.is_empty():
-		var n = pila.pop_back()
+	var stack: Array = [vm]
+	while not stack.is_empty():
+		var n = stack.pop_back()
 		if n is MeshInstance3D and (n as MeshInstance3D).mesh != null and (n as MeshInstance3D).is_visible_in_tree():
-			visibles.append((n as MeshInstance3D).name)
+			visible_meshes.append((n as MeshInstance3D).name)
 			for si in range((n as MeshInstance3D).mesh.get_surface_count()):
 				var arr: Array = (n as MeshInstance3D).mesh.surface_get_arrays(si)
 				if arr.size() > 0 and arr[Mesh.ARRAY_INDEX] != null:
 					tris += (arr[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
 		for c in n.get_children():
-			pila.append(c)
-	print("  mallas visibles=", visibles)
+			stack.append(c)
+	print("  mallas visibles=", visible_meshes)
 	print("  TRIANGULOS visibles=", tris)
 
 	# Poses: la camara se coloca delante del viewmodel en el espacio de Glock.
-	for nombre in POSE:
-		var modo: Array = POSE[nombre]
-		vm.set_pose_inputs(modo[0], 0.0, 0.0, Vector2.ZERO, Vector2.ZERO, modo[2])
+	for pose_name in POSE:
+		var pose: Array = POSE[pose_name]
+		vm.set_pose_inputs(pose[0], 0.0, 0.0, Vector2.ZERO, Vector2.ZERO, pose[2])
 		vm.set_magazine_visible(true)
-		vm.set_magazine_offset(modo[3])
+		vm.set_magazine_offset(pose[3])
 		for i in range(30):
 			vm.update(1.0 / 60.0)
 			await get_tree().process_frame
 		# Encuadre automatico: se mira TODA la caja visible, no un punto fijo.
-		var caja := _caja_visible(vm)
-		var centro := caja.get_center()
-		var radio := maxf(caja.size.length() * 0.5, 0.15)
-		print("  %s: largo visible mm %.1f" % [nombre, maxf(caja.size.x, maxf(caja.size.y, caja.size.z)) * 1000.0])
-		cam.global_position = centro + Vector3(radio * 1.1, radio * 0.35, radio * 1.6)
-		cam.look_at(centro, Vector3.UP)
+		var box := _visible_aabb(vm)
+		var center := box.get_center()
+		var radius := maxf(box.size.length() * 0.5, 0.15)
+		print("  %s: largo visible mm %.1f" % [pose_name, maxf(box.size.x, maxf(box.size.y, box.size.z)) * 1000.0])
+		cam.global_position = center + Vector3(radius * 1.1, radius * 0.35, radius * 1.6)
+		cam.look_at(center, Vector3.UP)
 		for i in range(6):
 			await get_tree().process_frame
-		vp.get_texture().get_image().save_png("%s/%s.png" % [salida, nombre])
-		print("  guardado ", nombre)
+		vp.get_texture().get_image().save_png("%s/%s.png" % [out_dir, pose_name])
+		print("  guardado ", pose_name)
 	get_tree().quit()
