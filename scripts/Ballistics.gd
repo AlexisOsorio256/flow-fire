@@ -226,24 +226,29 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
 
 
 ## UNICA puerta de rebote: rapido (>110 m/s) sobre superficie dura.
-## En macizo pide roce (<0,31 de incidencia, ~72 grados+) y dado 55%: ahi
-## clavarse es real. En chapa fina sin salida (`force`) resbala siempre: una
-## 9 mm no se queda dentro de 1,2 mm de chapa. Maximo 2 por bala.
+## DETERMINISTA: la misma combinacion velocidad/material/espesor/angulo decide
+## siempre lo mismo (penetrar/detenerse/rebotar). El roce (<0,31 de incidencia,
+## ~72 grados+) sobre duro siempre resbala; en chapa fina sin salida (`force`)
+## resbala siempre: una 9 mm no se queda dentro de 1,2 mm de chapa. Maximo 2
+## por bala. La variacion vive en particulas/sonido, no en la decision.
 func _try_ricochet(b: Dictionary, point: Vector3, normal: Vector3, surface: String, speed: float, force := false) -> bool:
     # `force` solo llega de chapa fina sin salida: ahi el roce ya es oblicuo
     # por construccion (>47 grados) y la puerta de incidencia sobra.
     var n := normal.normalized()
     var dir: Vector3 = (b.vel as Vector3).normalized()
     if (force or absf(dir.dot(n)) < 0.31) and speed > 110.0 and int(b.ricochets) < 2 \
-            and (surface == "metal" or surface == "concrete" or surface == "aluminum"):
-        if force or randf() < 0.55:
-            var reflected: Vector3 = b.vel - 2.0 * (b.vel as Vector3).dot(n) * n
-            reflected = reflected.normalized()
-            b.vel = reflected * speed * randf_range(0.42, 0.62)
-            b.pos = point + reflected * 0.012
-            b.ricochets = int(b.ricochets) + 1
-            GameAudio.play_3d("ricochet", point, 0.0, randf_range(0.9, 1.1))
-            return true
+            and (surface == "steel" or surface == "concrete" or surface == "aluminum"):
+        var reflected: Vector3 = b.vel - 2.0 * (b.vel as Vector3).dot(n) * n
+        reflected = reflected.normalized()
+        # Retencion fija (centro del antiguo 0,42-0,62) + microvariacion
+        # DETERMINISTA por punto de impacto (hash de mm): el mismo tiro da lo
+        # mismo, otro punto varia un pelo sin dado.
+        var h := float(absi(int(point.x * 1000.0) * 374761393 + int(point.y * 1000.0) * 668265263 + int(point.z * 1000.0) * 1274126177) % 1000) / 1000.0
+        b.vel = reflected * speed * (0.50 + h * 0.06)
+        b.pos = point + reflected * 0.012
+        b.ricochets = int(b.ricochets) + 1
+        GameAudio.play_3d("ricochet", point, 0.0, randf_range(0.9, 1.1))
+        return true
     return false
 
 

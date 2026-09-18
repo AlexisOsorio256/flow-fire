@@ -14,7 +14,7 @@ func _ready() -> void:
     linear_damp = 0.3
     angular_damp = 0.5
     set_meta("dynamic_decal", true)
-    set_meta("surface", "wood")
+    set_meta("surface", "pine")
     set_meta("penetrable", true)
     # Caja HUECA de 6 paneles: cascara fina de 12 mm, dos paredes por tiro.
     set_meta("thin_shell", true)

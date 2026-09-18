@@ -140,12 +140,12 @@ func _make_barrier(x: float, z: float, rot_y: float) -> void:
     add_child(root)
 
     var board := _static_box(root, "BarrierBoard", Vector3(2.3, 0.72, 0.055), Vector3(0, 1.08, 0), wood_mat)
-    board.set_meta("surface", "wood")
+    board.set_meta("surface", "pine")
     board.set_meta("penetrable", true)
 
     for leg_x in [-1.0, 1.0]:
         var leg := _static_box(root, "BarrierLeg", Vector3(0.08, 1.05, 0.08), Vector3(leg_x, 0.52, 0), wood_mat)
-        leg.set_meta("surface", "wood")
+        leg.set_meta("surface", "pine")
 
 
 ## Muro de tablones con rendijas (45 mm de pino): lo atraviesa una 9 mm
@@ -158,11 +158,11 @@ func _make_plank_wall(x: float, z: float, rot_y: float) -> void:
     add_child(root)
     for i in range(5):
         var plank := _static_box(root, "Plank", Vector3(0.22, 1.9, 0.045), Vector3((i - 2) * 0.25, 0.95, 0), wood_mat)
-        plank.set_meta("surface", "wood")
+        plank.set_meta("surface", "pine")
         plank.set_meta("penetrable", true)
     for rail_y in [0.5, 1.5]:
         var rail := _static_box(root, "PlankRail", Vector3(1.3, 0.09, 0.03), Vector3(0, rail_y, -0.05), wood_mat)
-        rail.set_meta("surface", "wood")
+        rail.set_meta("surface", "pine")
         rail.set_meta("penetrable", true)
 
 
@@ -240,7 +240,7 @@ func _make_drum(x: float, z: float) -> void:
     cyl.radius = 0.29
     shape.shape = cyl
     body.add_child(shape)
-    body.set_meta("surface", "metal")
+    body.set_meta("surface", "steel")
     body.set_meta("penetrable", true)
     body.set_meta("thin_shell", true)
     body.set_meta("wall_thickness", 0.0012)
@@ -301,9 +301,9 @@ func _make_paper_target(x: float, z: float) -> void:
 
     for post_x in [-0.42, 0.42]:
         var post := _static_box(frame, "Post", Vector3(0.05, 1.78, 0.05), Vector3(post_x, 0.89, -0.12), stand_mat)
-        post.set_meta("surface", "metal")
+        post.set_meta("surface", "steel")
     var base := _static_box(frame, "Base", Vector3(1.1, 0.06, 0.5), Vector3(0, 0.03, -0.12), stand_mat)
-    base.set_meta("surface", "metal")
+    base.set_meta("surface", "steel")
 
     var target := Target.new()
     target.kind = "paper"
@@ -321,9 +321,9 @@ func _make_steel_target(x: float, z: float) -> void:
     add_child(frame)
 
     var post := _static_box(frame, "SteelPost", Vector3(0.07, 1.62, 0.07), Vector3(0, 0.81, -0.10), stand_mat)
-    post.set_meta("surface", "metal")
+    post.set_meta("surface", "steel")
     var base := _static_box(frame, "SteelBase", Vector3(0.7, 0.06, 0.5), Vector3(0, 0.03, -0.10), stand_mat)
-    base.set_meta("surface", "metal")
+    base.set_meta("surface", "steel")
 
     var target := Target.new()
     target.kind = "steel"

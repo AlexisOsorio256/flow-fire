@@ -39,7 +39,7 @@ func _ready() -> void:
     else:
         plate_height = 0.62
         plate_width = 0.62
-        set_meta("surface", "metal")
+        set_meta("surface", "steel")
         set_meta("penetrable", false)
 
 

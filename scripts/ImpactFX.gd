@@ -43,8 +43,7 @@ const HOLES_PER_SURFACE := 8
 const HOLE_SIZE := {
     "concrete": 0.070,
     "gypsum": 0.064,
-    "wood": 0.064,
-    "metal": 0.048,
+    "pine": 0.064,
     "steel": 0.048,
     "aluminum": 0.042,
     "paper": 0.040,
@@ -55,8 +54,7 @@ const HOLE_SIZE := {
 const CAVITY_TINT := {
     "concrete": Color(0.024, 0.024, 0.022),
     "gypsum": Color(0.085, 0.080, 0.072),
-    "wood": Color(0.050, 0.031, 0.015),
-    "metal": Color(0.055, 0.058, 0.064),
+    "pine": Color(0.050, 0.031, 0.015),
     "steel": Color(0.035, 0.038, 0.045),
     "aluminum": Color(0.62, 0.63, 0.65),
     "paper": Color(0.075, 0.066, 0.055),
@@ -64,8 +62,7 @@ const CAVITY_TINT := {
 const LIP_TINT := {
     "concrete": Color(0.38, 0.37, 0.34),
     "gypsum": Color(0.74, 0.71, 0.65),
-    "wood": Color(0.46, 0.30, 0.14),
-    "metal": Color(0.32, 0.33, 0.36),
+    "pine": Color(0.46, 0.30, 0.14),
     "steel": Color(0.24, 0.26, 0.30),
     "aluminum": Color(0.78, 0.79, 0.81),
     "paper": Color(0.70, 0.66, 0.56),
@@ -112,8 +109,6 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
     match surface:
         "concrete":
             sound_name = "impact_concrete"
-        "metal":
-            sound_name = "impact_metal"
         "steel":
             sound_name = "impact_metal"
         "aluminum":
@@ -122,7 +117,7 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
             sound_name = "impact_aluminum"
             volume = 0.0
             pitch = randf_range(0.96, 1.08)
-        "wood":
+        "pine":
             sound_name = "impact_wood"
         "paper":
             sound_name = "impact_wood"
@@ -328,17 +323,11 @@ const IMPACT_MATERIALS := {
         "exit_scale": 1.80,
         "crater": 0.0035,
     },
-    "wood": {
+    "pine": {
         "dust": {"amount": 7, "color": Color(0.46, 0.33, 0.18, 0.62), "vel": [0.5, 2.0], "gravity": -2.6, "scale": [0.5, 1.8], "life": 0.70, "size": 0.044, "spread": 60.0},
         "debris": {"amount": 8, "color": Color(0.35, 0.22, 0.10, 0.98), "vel": [3.4, 8.0], "gravity": -12.0, "scale": [0.30, 0.85], "life": 0.60, "size": 0.030, "spread": 52.0, "stretch": 4.0},
         "exit_scale": 1.50,
         "crater": 0.0050,
-    },
-    "metal": {
-        "debris": {"amount": 18, "color": Color(1.0, 0.78, 0.34, 1.0), "vel": [3.0, 8.0], "gravity": -11.0, "scale": [0.30, 1.10], "life": 0.45, "size": 0.026, "spread": 58.0, "spark": true, "stretch": 5.0},
-        "dust": {"amount": 5, "color": Color(0.50, 0.50, 0.52, 0.35), "vel": [0.4, 1.4], "gravity": -2.0, "scale": [0.40, 1.20], "life": 0.40, "size": 0.030, "spread": 50.0},
-        "exit_scale": 1.15,
-        "crater": 0.0,
     },
     "steel": {
         "debris": {"amount": 22, "color": Color(1.0, 0.72, 0.26, 1.0), "vel": [3.4, 9.0], "gravity": -12.0, "scale": [0.30, 1.20], "life": 0.42, "size": 0.026, "spread": 56.0, "spark": true, "stretch": 5.5},
@@ -373,7 +362,7 @@ func _spawn_particles(point: Vector3, normal: Vector3, surface: String, is_exit:
         match surface:
             "gypsum":
                 strength = 1.35
-            "wood":
+            "pine":
                 strength = 1.15
             "paper":
                 strength = 0.75
@@ -423,7 +412,7 @@ func _burst(point: Vector3, normal: Vector3, spec: Dictionary, strength: float) 
 
 
 func _spawn_light(point: Vector3, surface: String) -> void:
-    if surface != "metal" and surface != "steel" and surface != "aluminum":
+    if surface != "steel" and surface != "aluminum":
         return
     var light := OmniLight3D.new()
     light.omni_range = 0.85
