@@ -29,7 +29,9 @@ func _setup_environment() -> void:
     var sky_mat := ProceduralSkyMaterial.new()
     sky_mat.sky_top_color = Color(0.25, 0.32, 0.44)
     sky_mat.sky_horizon_color = Color(0.42, 0.38, 0.34)
-    sky_mat.ground_bottom_color = Color(0.025, 0.027, 0.032)
+    # Rebote del suelo: las normales hacia abajo (techo) muestrean este lado
+    # del cielo; en negro el techo no se leia nunca.
+    sky_mat.ground_bottom_color = Color(0.10, 0.10, 0.11)
     sky_mat.ground_horizon_color = Color(0.28, 0.27, 0.26)
     sky.sky_material = sky_mat
     env.sky = sky

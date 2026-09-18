@@ -226,6 +226,10 @@ func _build_lights() -> void:
     # Estacion bidon/latas (6.6, -11): el bidon quedaba en silueta pura y los
     # agujeros no se leian. Misma luminaria, un punto mas (14 -> 15 omnis).
     _make_lamp(6.6, -11.0)
+    # Puesto de tiro (0, 0.5): la fila mas cercana quedaba a 6 m y el suelo bajo
+    # el tirador no se leia. Pendiente bajo con su cable: la luz cae a 2,75 m
+    # sobre el puesto en vez de rozar el suelo desde el techo.
+    _make_pendant(0.0, 0.5)
 
 
 func _make_lamp(x: float, z: float) -> void:
@@ -247,6 +251,36 @@ func _make_lamp(x: float, z: float) -> void:
     light.omni_range = 12.0
     light.shadow_enabled = false
     add_child(light)
+
+
+func _make_pendant(x: float, z: float) -> void:
+    var cord := MeshInstance3D.new()
+    var cord_mesh := CylinderMesh.new()
+    cord_mesh.top_radius = 0.012
+    cord_mesh.bottom_radius = 0.012
+    cord_mesh.height = 1.15
+    cord_mesh.material = stand_mat
+    cord.mesh = cord_mesh
+    cord.position = Vector3(x, 3.47, z)
+    add_child(cord)
+    var shade := _static_box(self, "Pendant", Vector3(0.5, 0.07, 0.24), Vector3(x, 2.9, z), lamp_mat)
+    shade.set_meta("surface", "metal")
+    var shade_mesh := shade.get_child(0) as MeshInstance3D
+    if shade_mesh != null:
+        shade_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    # Foco hacia abajo (la pantalla dirige, como un pendiente real): el suelo
+    # del puesto se lee sin freir el techo (con omni, 25 daba 190 abajo pero
+    # lavaba el techo en blanco). Sin sombras por rendimiento, como el resto.
+    var spot := SpotLight3D.new()
+    spot.position = Vector3(x, 2.85, z)
+    spot.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+    spot.light_color = Color(1.0, 0.96, 0.88)
+    spot.light_energy = 30.0
+    spot.spot_range = 9.0
+    spot.spot_angle = 55.0
+    spot.spot_attenuation = 1.0
+    spot.shadow_enabled = false
+    add_child(spot)
 
 
 func _static_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3, mat: Material) -> StaticBody3D:
