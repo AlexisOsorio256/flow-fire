@@ -41,6 +41,12 @@ const SLIDE_CLOSED_AT := 0.026    # cerrada del todo
 ## 9x19 de la Glock 19: punta de 115 granos a ~372 m/s. El proyectil no deja
 ## estela: una Glock normal no dispara trazadoras.
 const MUZZLE_SPEED := 372.0
+## Dispersion mecanica del arma, no del tirador: cono gaussiano de 1σ = 1,6
+## mrad por eje (~70 mm a 25 m), lo que tira una G19 de serie con municion
+## de servicio desde apoyo. Media cero: el cero no se mueve y a 4 m (latas)
+## abre 6 mm, muy dentro de la chapa. Medido en juego a 10 m en ADS, 3 tiros
+## a cadencia lenta: residuo RMS de 28 mm contra el anima tiro a tiro.
+const SHOT_DISPERSION_SIGMA := 0.0016
 
 ## LINEA DE TIEMPO DE LA RECARGA (segundos reales, no instantes de un clip).
 ## El cargador sale, cae fuera de cuadro, entra el lleno y asienta. `_MAG_IN`
@@ -308,13 +314,26 @@ func _fire() -> void:
 	recoil.kick_shot()
 	GameAudio.play_shot()
 
-	# Bala por el anima: nace en la boca, sale por el anima, dispersion cero.
+	# Bala por el anima: nace en la boca y sale con la dispersion mecanica
+	# del arma (el humo sigue la misma direccion real).
 	var origin := viewmodel.muzzle.global_position
 	var bore: Vector3 = (-viewmodel.muzzle.global_transform.basis.z).normalized()
+	bore = _apply_dispersion(bore)
 	Ballistics.fire(origin, bore, MUZZLE_SPEED)
 	fx.fire(origin, bore)
 	emit_signal("shot_fired")
 	_emit_ammo()
+
+
+func _apply_dispersion(bore: Vector3) -> Vector3:
+	var side := bore.cross(Vector3.UP)
+	if side.length() < 0.001:
+		side = Vector3.RIGHT
+	else:
+		side = side.normalized()
+	var up := side.cross(bore).normalized()
+	var cone := side * randfn(0.0, SHOT_DISPERSION_SIGMA) + up * randfn(0.0, SHOT_DISPERSION_SIGMA)
+	return (bore + cone).normalized()
 
 
 func _update_slide(delta: float) -> void:

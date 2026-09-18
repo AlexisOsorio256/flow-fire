@@ -166,7 +166,9 @@ func _process(_delta: float) -> void:
 				# A 4 m de las latas del suelo (x=-1.6/-1.4, z=-13.6): las
 				# miras van a la chapa de x=-1.4 (medido: a yaw 0.0/0.05 las
 				# dos fallan, a 0.075 la lata vuela 3,4 m; 0.025 la centra).
-				# La de x=-1.6 queda de testigo.
+				# La de x=-1.6 queda de testigo. Desde cadera no vale: el
+				# anima va ~5° alta por GRIP_ROT (el ADS lo compensa) y a 4 m
+				# pasa 35 cm por encima; por eso se apunta con las miras.
 				(player as Node3D).global_position = Vector3(-1.3, 0.05, -9.6)
 				player.set("pitch", -0.37)
 				player.set("pitch_target", -0.37)
