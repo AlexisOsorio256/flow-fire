@@ -133,9 +133,9 @@ func update(delta: float) -> void:
 
 
 ## Evento de disparo completo: fogonazo + humo de boca.
-func fire(origin: Vector3, cam_fwd: Vector3) -> void:
+func fire(origin: Vector3, bore_dir: Vector3) -> void:
 	pop_flash()
-	ImpactFX.spawn_muzzle_smoke(origin, cam_fwd)
+	ImpactFX.spawn_muzzle_smoke(origin, bore_dir)
 
 
 ## Muestra el fogonazo con tamaño y desviación leves irregulares. Un roll de
