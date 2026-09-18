@@ -15,17 +15,31 @@ extends Node3D
 ## tenga debajo (funciona en el renderer Mobile), asi que el agujero se adapta a
 ## una pared, a un bidon curvado o a una lata sin fabricar geometria por impacto:
 ## antes eran ~90 lineas de malla procedural por agujero y el borde tenia que
-## inventarse el relieve. Lo unico que se genera aqui son las DOS siluetas
-## (disco y anillo) UNA vez al arrancar; el color lo pone el material del impacto
-## con `modulate`, y el desgaste de la superficie se lee del propio mundo porque
-## `albedo_mix` deja pasar la textura de debajo.
+## inventarse el relieve. Lo unico que se genera aqui son CINCO siluetas (una por
+## material) UNA vez al arrancar, con el hundimiento, el labio y el color ya
+## cocidos dentro.
+##
+## DOS TRAMPAS DEL MOTOR QUE COSTARON SANGRE, no repetirlas:
+##   1. La caja de proyeccion es [0,1]x[-1,1]x[0,1] en local y el shader
+##      DESCARTA el fragmento que cae justo en el borde. Si la superficie
+##      coincide con el limite de la caja, el agujero no sale (o sale a rayas):
+##      de ahi `PROJECTION_MARGIN`.
+##   2. Godot solo aplica OCHO decales por malla (`sc_decals(8)`), asi que dos
+##      decales por agujero dejaban una pared con cuatro agujeros y el motor
+##      elegia cuales. Un decal por agujero + `HOLES_PER_SURFACE` para que los
+##      que se vean sean siempre los ultimos.
 ##
 ## Las particulas (polvo, astillas, chispas) siguen siendo `GPUParticles3D`.
 
 const SOFT_TEXTURE: Texture2D = preload("res://assets/textures/particle_soft.png")
 const SPARK_TEXTURE: Texture2D = preload("res://assets/textures/particle_spark.png")
 
+## Tope de agujeros vivos en toda la escena. Tambien hay tope POR OBJETO: ver
+## `HOLES_PER_SURFACE`.
 const MAX_HOLES := 128
+## El motor solo proyecta 8 decales por malla; de aqui para arriba el agujero
+## mas viejo de esa superficie se borra para que el ultimo disparo se vea.
+const HOLES_PER_SURFACE := 8
 const HOLE_SIZE := {
     "concrete": 0.070,
     "drywall": 0.064,
@@ -34,8 +48,8 @@ const HOLE_SIZE := {
     "paper": 0.040,
 }
 
-## Color de la cavidad y del labio, por material. Antes eran dos funciones de
-## materiales; ahora es el tinte que se le pasa al `Decal` por `modulate`.
+## Color de la cavidad y del labio, por material. Se cuecen dentro de la
+## silueta: el `Decal` va con `modulate` blanco para no gastar dos decales.
 const CAVITY_TINT := {
     "concrete": Color(0.024, 0.024, 0.022),
     "drywall": Color(0.085, 0.080, 0.072),
@@ -55,16 +69,22 @@ const MASK_SIZE := 96
 ## Caja de proyeccion del decal: fondo suficiente para atravesar la chapa de una
 ## lata (0,12 mm) y quedarse corto para no manchar lo de mas atras.
 const DECAL_DEPTH := 0.03
+## Holgura entre la superficie y el borde de la caja de proyeccion. Godot
+## descarta el fragmento que caiga EN el borde de la caja, asi que con la
+## superficie justo en el limite el agujero no se dibuja (o sale a rayas).
+const PROJECTION_MARGIN := 0.003
 
-var _holes: Array[Node] = []
-var _mask_cavity: ImageTexture
-var _mask_lip: ImageTexture
+## Agujeros vivos: cada entrada lleva el nodo y la superficie (objeto) sobre la
+## que esta proyectado. El objeto se guarda aqui y no en `meta` del nodo porque
+## `set_meta` con valor nulo no guarda nada y luego `get_meta` suelta un error.
+var _holes: Array[Dictionary] = []
+var _masks := {}
 
 
 func _ready() -> void:
     process_mode = Node.PROCESS_MODE_ALWAYS
-    _mask_cavity = _make_mask(true)
-    _mask_lip = _make_mask(false)
+    for surface in IMPACT_MATERIALS:
+        _masks[surface] = _make_hole_texture(surface)
 
 
 func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool = false) -> void:
@@ -124,14 +144,14 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     get_tree().create_timer(1.5).timeout.connect(particles.queue_free)
 
 
-## Agujero de bala: DOS `Decal` anclados a la superficie —cavidad hundida y
-## labio de material roto—. El que proyecta es Godot; aqui solo se eligen
-## tamano, tinte y cuanto se mezclan con la textura de debajo.
+## Agujero de bala: UN `Decal` anclado a la superficie, con la cavidad hundida
+## y el labio de material roto en la misma silueta. El que proyecta es Godot;
+## aqui solo se eligen tamano y colocacion de la caja de proyeccion.
 func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: String, is_exit: bool) -> void:
-    var perfil: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
+    var profile: Dictionary = IMPACT_MATERIALS.get(surface, IMPACT_MATERIALS["concrete"])
     var size := float(HOLE_SIZE.get(surface, 0.030))
     if is_exit:
-        size *= float(perfil.get("exit_scale", 1.35))
+        size *= float(profile.get("exit_scale", 1.35))
 
     var n := normal.normalized()
     if n.length_squared() < 0.01:
@@ -140,41 +160,28 @@ func _spawn_decal(point: Vector3, normal: Vector3, collider: Object, surface: St
     var holder := Node3D.new()
     holder.name = "BulletExit" if is_exit else "BulletEntry"
     add_child(holder)
-    ## La caja de proyeccion empieza EN la superficie y entra hacia dentro: si
-    ## se centrara en el punto, la mitad del decal quedaria en el aire.
+    ## La caja de proyeccion tiene que CONTENER la superficie con holgura: se
+    ## deja casi toda dentro del material y solo los 3 mm de fuera que evitan
+    ## que el borde de la caja coincida con la cara (ver PROJECTION_MARGIN).
     var basis := _decal_basis(n).rotated(n, randf_range(0.0, TAU))
-    holder.global_transform = Transform3D(basis, point - n * (DECAL_DEPTH * 0.5))
+    holder.global_transform = Transform3D(basis,
+        point - n * (DECAL_DEPTH * 0.5 - PROJECTION_MARGIN))
 
-    ## En metal la mezcla se deja mas baja: el agujero tiene que seguir leyendose
-    ## como metal pulido, no como un disco pintado encima.
-    var mezcla_cavidad := 0.85 if surface == "metal" else 1.0
-    _add_decal(holder, _mask_cavity, size * 0.5, CAVITY_TINT.get(surface, CAVITY_TINT["concrete"]),
-        mezcla_cavidad, is_exit)
-    _add_decal(holder, _mask_lip, size, LIP_TINT.get(surface, LIP_TINT["concrete"]), 0.55, is_exit)
+    _add_decal(holder, _masks.get(surface, _masks["concrete"]), size)
 
     if collider is Node3D and collider.get_meta("dynamic_decal", false):
         holder.reparent(collider, true)
 
-    _holes.append(holder)
-    if _holes.size() > MAX_HOLES:
-        var old: Node = _holes.pop_front()
-        if is_instance_valid(old):
-            old.queue_free()
+    _holes.append({"holder": holder, "surface": collider})
+    _evict(collider)
 
 
-## Un `Decal` con su silueta, su tinte y su tamano. El decal proyecta por su -Y,
+## Un `Decal` con su silueta y su tamano. El decal proyecta a lo largo de su Y,
 ## asi que la base que le llega ya tiene la normal en la Y.
-func _add_decal(padre: Node3D, mascara: ImageTexture, huella: float, tinte: Color,
-        mezcla: float, is_exit: bool) -> void:
+func _add_decal(parent: Node3D, mask: Texture2D, footprint: float) -> void:
     var decal := Decal.new()
-    decal.texture_albedo = mascara
-    var color := tinte
-    if is_exit:
-        ## Cara de salida: material arrancado, un poco mas claro, sin blanquear.
-        color = Color(minf(color.r * 1.12, 1.0), minf(color.g * 1.12, 1.0), minf(color.b * 1.12, 1.0))
-    decal.modulate = color
-    decal.albedo_mix = mezcla
-    decal.size = Vector3(huella, DECAL_DEPTH, huella)
+    decal.texture_albedo = mask
+    decal.size = Vector3(footprint, DECAL_DEPTH, footprint)
     decal.upper_fade = 0.0
     decal.lower_fade = 0.35
     ## 0,45 de normal_fade: en una pared perpendicular el decal se apaga en vez
@@ -183,47 +190,74 @@ func _add_decal(padre: Node3D, mascara: ImageTexture, huella: float, tinte: Colo
     decal.distance_fade_enabled = true
     decal.distance_fade_begin = 9.0
     decal.distance_fade_length = 5.0
-    padre.add_child(decal)
+    parent.add_child(decal)
+
+
+## Godot elige por su cuenta los 8 decales que aplica a una malla, y no siempre
+## son los ultimos. Aqui se mantiene el cupo por objeto para que lo que se vea
+## sea siempre el disparo reciente: el agujero viejo se borra al llegar al tope.
+func _evict(collider: Object) -> void:
+    var same: Array[Dictionary] = []
+    for hole in _holes:
+        if is_instance_valid(hole["holder"]) and hole["surface"] == collider:
+            same.append(hole)
+    while same.size() > HOLES_PER_SURFACE:
+        _drop(same.pop_front())
+    while _holes.size() > MAX_HOLES:
+        _drop(_holes.pop_front())
+
+
+func _drop(hole: Dictionary) -> void:
+    _holes.erase(hole)
+    var node: Node = hole["holder"]
+    if is_instance_valid(node):
+        node.queue_free()
 
 
 ## Base para proyectar sobre una superficie plana o curva.
 func _decal_basis(n: Vector3) -> Basis:
-    var arriba := Vector3.UP
-    if absf(n.dot(arriba)) > 0.94:
-        arriba = Vector3.RIGHT
-    var x_axis := arriba.cross(n).normalized()
+    var up := Vector3.UP
+    if absf(n.dot(up)) > 0.94:
+        up = Vector3.RIGHT
+    var x_axis := up.cross(n).normalized()
     if x_axis.length_squared() < 0.01:
         x_axis = Vector3.RIGHT
     var z_axis := x_axis.cross(n).normalized()
     return Basis(x_axis, n, z_axis)
 
 
-## Silueta del agujero, generada UNA vez al arrancar. `cavidad` = disco hundido
-## de borde irregular y centro mas oscuro; si no, el anillo de material roto.
-func _make_mask(cavidad: bool) -> ImageTexture:
+## Silueta del agujero, generada UNA vez al arrancar por material: en el mismo
+## RGBA va el hundimiento oscuro del centro, el labio de material roto pegado al
+## canto y el color de cada zona ya cocido (el decal va sin `modulate`). Un solo
+## decal por agujero porque el motor solo proyecta ocho por malla.
+func _make_hole_texture(surface: String) -> ImageTexture:
+    var cavity: Color = CAVITY_TINT.get(surface, CAVITY_TINT["concrete"])
+    var lip: Color = LIP_TINT.get(surface, LIP_TINT["concrete"])
     var img := Image.create(MASK_SIZE, MASK_SIZE, false, Image.FORMAT_RGBA8)
     for y in range(MASK_SIZE):
         for x in range(MASK_SIZE):
             var u := (float(x) + 0.5) / float(MASK_SIZE) * 2.0 - 1.0
             var v := (float(y) + 0.5) / float(MASK_SIZE) * 2.0 - 1.0
             var r := sqrt(u * u + v * v)
-            var ang := atan2(v, u)
+            var angle := atan2(v, u)
             ## Ruido atado al ANGULO: el borde se rompe, no se ensucia el centro.
-            var ruido := _fbm(cos(ang) * 3.1 + 5.0, sin(ang) * 3.1 + 5.0)
-            var alfa := 0.0
-            var tono := 1.0
-            if cavidad:
-                var borde := 0.47 * (1.0 + 0.26 * (ruido - 0.5))
-                alfa = smoothstep(borde, borde - 0.30, r)
-                tono = 0.42 + 0.58 * smoothstep(0.0, maxf(borde, 0.01), r)
-            else:
-                var medio := 0.60 * (1.0 + 0.18 * (ruido - 0.5))
-                var ancho := 0.30 * (1.0 + 0.35 * (ruido - 0.5))
-                var dentro := smoothstep(medio - ancho, medio - ancho * 0.4, r)
-                var fuera := 1.0 - smoothstep(medio + ancho * 0.5, medio + ancho, r)
-                alfa = dentro * fuera
-                tono = 0.70 + 0.30 * ruido
-            img.set_pixel(x, y, Color(tono, tono, tono, clampf(alfa, 0.0, 1.0)))
+            var noise := _fbm(cos(angle) * 3.1 + 5.0, sin(angle) * 3.1 + 5.0)
+            ## Canto del agujero: corto (0,10 de radio). Con un desvanecido ancho
+            ## el disco entero se apagaba y el impacto se leia como una mancha.
+            var edge := 0.36 * (1.0 + 0.18 * (noise - 0.5))
+            var hole := smoothstep(edge, edge - 0.10, r)
+            ## El centro se hunde: casi negro en el fondo, color del material en
+            ## el canto.
+            var depth := 0.24 + 0.76 * smoothstep(0.0, maxf(edge, 0.01), r)
+            ## Labio: pegado al canto y medio transparente, para que la textura
+            ## de debajo (madera, metal) siga leyendose a traves del material
+            ## arrancado. Sin anillo de pared limpia en medio.
+            var outer := 0.62 * (1.0 + 0.16 * (noise - 0.5))
+            var chipped := smoothstep(edge - 0.05, edge + 0.02, r) \
+                * (1.0 - smoothstep(outer - 0.07, outer, r))
+            var alpha := maxf(hole, chipped * 0.62)
+            var color := (lip * (0.72 + 0.28 * noise)).lerp(cavity * depth, hole)
+            img.set_pixel(x, y, Color(color.r, color.g, color.b, clampf(alpha, 0.0, 1.0)))
     return ImageTexture.create_from_image(img)
 
 
