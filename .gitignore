@@ -10,11 +10,9 @@ Thumbs.db
 .idea/
 *.swp
 
-# Capturas de pantalla: no aportan nada al repo. Solo se versiona la evidencia
-# de revision de captures/review/, una hoja por accion revisada (idle, ads,
-# fire, burst, reload, reload_empty, inspect, pen, crate, steel).
-captures/*
-!captures/review/
-!captures/review/**
-# ...pero sus .import no: los regenera Godot al importar el proyecto.
-captures/review/*.import
+# Capturas: se generan para mirar y se borran. Git no las guarda.
+captures/
+
+# Texturas extraídas de un .glb por el importador (derivadas del propio .glb).
+assets/models/*_Image_*.jpg
+assets/models/*_Image_*.png
