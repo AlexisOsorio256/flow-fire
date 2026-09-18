@@ -54,6 +54,14 @@ const SOUNDS := {
     "slide_hand": {"stream": preload("res://assets/audio/slide_hand.wav"), "db": -16.0, "bus": BUS_WEAPONS},
     "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
+    # Recarga completa: la ropa al moverse, el cargador vacio rebotando en el
+    # suelo, la palma en la culata al asentar y el reten de la corredera. Sin
+    # estos cuatro la recarga eran dos clics flotando en silencio.
+    "reload_rustle": {"stream": preload("res://assets/audio/reload_rustle.wav"), "db": -16.0, "bus": BUS_WEAPONS},
+    "mag_slap": {"stream": preload("res://assets/audio/mag_slap.wav"), "db": -11.0, "bus": BUS_WEAPONS},
+    "slide_release": {"stream": preload("res://assets/audio/slide_release.wav"), "db": -18.0, "bus": BUS_WEAPONS},
+    # El cargador cae al mundo, no al arma: bus de mundo y 3D en el suelo.
+    "mag_drop": {"stream": preload("res://assets/audio/mag_drop.wav"), "db": -13.0, "bus": BUS_WORLD},
     "handling": {"stream": preload("res://assets/audio/handling.wav"), "db": -10.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
     # Impactos: grabaciones reales de impacto de bala (Gamemaster Audio, Bullet

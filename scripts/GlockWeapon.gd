@@ -82,6 +82,7 @@ var _mag_travel := 0.0
 ## Sitio exacto del cargador dentro del arma. Lo usa el viewmodel para
 ## devolverlo al brocal cuando la mano lo suelta.
 var magazine_rest := Vector3.ZERO
+var _magazine_rest_basis := Basis()
 
 
 func build() -> void:
@@ -107,6 +108,7 @@ func build() -> void:
 
 	_slide_rest = slide.position
 	magazine_rest = magazine.position
+	_magazine_rest_basis = magazine.transform.basis
 	if trigger != null:
 		_trigger_rest_basis = trigger.transform.basis
 	if barrel != null:
@@ -226,10 +228,24 @@ func set_trigger(t: float) -> void:
 ## Glock.gd, que le pasa su avance en la recarga. El eje de salida es el del
 ## propio modelo (el cargador cuelga por debajo del arma) y el recorrido es el
 ## real: MAG_TRAVEL.
-func set_magazine_offset(t: float) -> void:
+##
+## `extra` es recorrido de mas, en unidades del modelo, SOLO para la caida: el
+## cargador vacio no se queda a 7 cm del brocal, sigue cayendo. Se pasa como
+## parametro en vez de alargar MAG_TRAVEL porque MAG_TRAVEL es una medida del
+## arma (cuanto asoma el cargador) y esto es coreografia.
+func set_magazine_offset(t: float, extra: float = 0.0) -> void:
 	if magazine == null:
 		return
-	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * (_mag_travel * clampf(t, 0.0, 1.0))
+	var travel := _mag_travel * clampf(t, 0.0, 1.0) + maxf(extra, 0.0)
+	magazine.position = magazine_rest + MAGAZINE_OUT_AXIS * travel
+
+
+## Tumba del cargador (radianes sobre el eje lateral del arma): el vacio cae
+## girando, el lleno entra inclinado y se endereza. UNICA autoridad: Glock.gd.
+func set_magazine_tumble(angle: float) -> void:
+	if magazine == null:
+		return
+	magazine.transform.basis = Basis(Quaternion(SIDE_AXIS, angle)) * _magazine_rest_basis
 
 
 ## Cargador: dentro del arma o fuera. UNICA autoridad: Glock.gd.

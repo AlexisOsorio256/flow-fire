@@ -43,16 +43,30 @@ const MUZZLE_SPEED := 372.0
 ## LINEA DE TIEMPO DE LA RECARGA (segundos reales, no instantes de un clip).
 ## El cargador sale, cae fuera de cuadro, entra el lleno y asienta. `_MAG_IN`
 ## marca cuando el cargador empieza a subir; `_MAG_SEAT` cuando asienta.
-const RELOAD_TOTAL := 2.30
-const RELOAD_EMPTY_TOTAL := 2.55
-const RELOAD_MAG_OUT_T := 0.30    # el cargador empieza a salir del brocal
-const RELOAD_MAG_EMPTY_T := 0.58  # ya salio del todo (y se oculta)
-const RELOAD_MAG_IN_T := 1.10     # el cargador lleno empieza a entrar
-const RELOAD_MAG_SEAT_T := 1.45   # asienta en el brocal (clack)
+##
+## Los tiempos no son un reparto bonito del total: son los de una recarga de
+## verdad, y por eso el cargador NO se desliza. Se le da el reten (0,28) y el
+## muelle lo escupe mientras empieza a caer; a los 0,86 ya toco el suelo, que es
+## lo que se oye; el lleno entra rapido (0,46 s) porque la mano ya lo tiene y
+## asienta de golpe. El hueco 0,62-1,02 es el que antes sobraba: 0,52 s de
+## pistola quieta en mitad de la recarga.
+const RELOAD_TOTAL := 2.10
+const RELOAD_EMPTY_TOTAL := 2.35
+const RELOAD_MAG_OUT_T := 0.28    # se pulsa el reten y el cargador sale
+const RELOAD_MAG_EMPTY_T := 0.62  # ya salio del brocal (y se oculta)
+const RELOAD_MAG_DROP_T := 0.86   # el cargador vacio toca el suelo
+const RELOAD_MAG_IN_T := 1.02     # el cargador lleno empieza a subir
+const RELOAD_MAG_SEAT_T := 1.40   # asienta en el brocal (clack)
 ## El clack de `magin.wav` cae ~60 ms dentro de la muestra: el sonido se dispara
 ## ese pelo antes del asiento para que el golpe coincida con el contacto.
 const MAGIN_SOUND_LEAD := 0.06
-const RELOAD_SLIDE_T := 1.90      # recarga en seco: se suelta la corredera
+const RELOAD_SLIDE_T := 1.72      # recarga en seco: se suelta la corredera
+## El reten de corredera suena ANTES de que la corredera se suelte: es el clic
+## de la palanca, no el golpe de la corredera volviendo a bateria.
+const SLIDE_RELEASE_LEAD := 0.05
+## Vuelta de la pistola a la pose de tiro: con esto la recarga no acaba de
+## golpe, se acaba de asentar.
+const RELOAD_SETTLE := 0.38
 
 ## INSPECCION: se bloquea la corredera, se ensena la recamara y se suelta.
 const INSPECT_TOTAL := 2.00
@@ -91,6 +105,7 @@ var reload_slide_released := false
 var reload_mag_seated := false
 var reload_pose_blend := 0.0
 var mag_offset := 0.0
+var mag_tumble := 0.0
 
 var inspecting := false
 var inspect_elapsed := 0.0
@@ -114,6 +129,8 @@ var shot_pulse := 0.0
 var _mag_left := false
 var _mag_seated := false
 var _magin_sounded := false
+var _mag_drop_landed := false
+var _slide_release_sounded := false
 
 
 func _ready() -> void:
@@ -213,12 +230,17 @@ func start_reload() -> bool:
 	reload_mag_seated = false
 	reload_pose_blend = 0.0
 	mag_offset = 0.0
+	mag_tumble = 0.0
 	_mag_left = false
 	_mag_seated = false
 	_magin_sounded = false
+	_mag_drop_landed = false
+	_slide_release_sounded = false
 	aim = false
 	trigger_held = false
+	GameAudio.play_2d("reload_rustle", 0.0, randf_range(0.97, 1.04))
 	viewmodel.set_magazine_visible(true)
+	viewmodel.set_magazine_tumble(0.0)
 	_emit_ammo()
 	return true
 
@@ -346,11 +368,28 @@ func _update_reload(delta: float) -> void:
 	if not _magin_sounded and reload_elapsed >= RELOAD_MAG_SEAT_T - MAGIN_SOUND_LEAD:
 		_magin_sounded = true
 		GameAudio.play_2d("magin", 1.0, randf_range(0.96, 1.03))
-	# 5. Asiento: municion + golpe de masa.
+	# 4b. El cargador vacio toca el suelo: el golpe llega desde abajo y es lo
+	# que hace que la recarga suene a que el cargador SE HA IDO.
+	if not _mag_drop_landed and reload_elapsed >= RELOAD_MAG_DROP_T:
+		_mag_drop_landed = true
+		## Donde cae: delante del tirador y a la altura del suelo. `basis.z` mira
+		## hacia atras, asi que el cargador va en -z (delante) y abajo.
+		var drop_point := camera.global_position - camera.global_transform.basis.z * 0.32 \
+			+ Vector3.DOWN * 1.28
+		GameAudio.play_3d("mag_drop", drop_point, -2.0, randf_range(0.94, 1.06))
+
+	# 4c. El reten de la corredera: clic de palanca, medio pelo antes del golpe.
+	if reload_empty and not _slide_release_sounded \
+			and reload_elapsed >= RELOAD_SLIDE_T - SLIDE_RELEASE_LEAD:
+		_slide_release_sounded = true
+		GameAudio.play_2d("slide_release", 0.0, randf_range(0.98, 1.03))
+
+	# 5. Asiento: municion + golpe de masa + la palma en la culata.
 	if not _mag_seated and reload_elapsed >= RELOAD_MAG_SEAT_T:
 		_mag_seated = true
 		_seat_reload_mag()
 		recoil.kick_mag_seat()
+		GameAudio.play_2d("mag_slap", -4.0, randf_range(0.97, 1.04))
 
 	# Recarga en seco: se suelta la corredera.
 	if reload_empty and not reload_slide_released and reload_elapsed >= RELOAD_SLIDE_T:
@@ -363,12 +402,19 @@ func _update_reload(delta: float) -> void:
 
 	# El cargador se mueve con la mecanica, no con una animacion importada.
 	mag_offset = _mag_offset_at(reload_elapsed)
-	viewmodel.set_magazine_offset(mag_offset)
+	mag_tumble = _mag_tumble_at(reload_elapsed)
+	viewmodel.set_magazine_offset(mag_offset, _mag_drop_extra_at(reload_elapsed))
+	viewmodel.set_magazine_tumble(mag_tumble)
 
-	var up_t := clampf((reload_elapsed - (RELOAD_MAG_OUT_T + 0.05)) / 0.35, 0.0, 1.0)
-	var down_t := clampf((reload_elapsed - (RELOAD_MAG_SEAT_T + 0.05)) / 0.35, 0.0, 1.0)
+	## La pistola se abre para ensenar el brocal ANTES de que el cargador salga
+	## (lleva el reten y el codo), y solo vuelve cuando el cargador ya asento: la
+	## vuelta empieza en SEAT, no despues, y su cola es la mas larga.
+	var up_t := clampf((reload_elapsed - (RELOAD_MAG_OUT_T - 0.14)) / 0.34, 0.0, 1.0)
+	var down_t := clampf((reload_elapsed - RELOAD_MAG_SEAT_T) / RELOAD_SETTLE, 0.0, 1.0)
 	reload_pose_blend = _smooth(up_t) * (1.0 - _smooth(down_t))
 	if reload_elapsed >= reload_total:
+		mag_tumble = 0.0
+		viewmodel.set_magazine_tumble(0.0)
 		_finish_reload()
 
 
@@ -378,11 +424,43 @@ func _mag_offset_at(t: float) -> float:
 	if t < RELOAD_MAG_OUT_T:
 		return 0.0
 	if t < RELOAD_MAG_EMPTY_T:
-		return _smooth((t - RELOAD_MAG_OUT_T) / (RELOAD_MAG_EMPTY_T - RELOAD_MAG_OUT_T))
+		## Sale acelerando: se suelta de golpe y cae. Con `_smooth` (arranque
+		## lento) el cargador parecia salir empujado por una mano invisible.
+		var k := (t - RELOAD_MAG_OUT_T) / (RELOAD_MAG_EMPTY_T - RELOAD_MAG_OUT_T)
+		return 1.0 - (1.0 - k) * (1.0 - k)
 	if t < RELOAD_MAG_IN_T:
 		return 1.0
 	if t < RELOAD_MAG_SEAT_T:
-		return 1.0 - _smooth((t - RELOAD_MAG_IN_T) / (RELOAD_MAG_SEAT_T - RELOAD_MAG_IN_T))
+		## Entra rapido (curva de llegada, no de salida) y se clava en el brocal.
+		var k := (t - RELOAD_MAG_IN_T) / (RELOAD_MAG_SEAT_T - RELOAD_MAG_IN_T)
+		return 1.0 - pow(1.0 - k, 2.6)
+	return 0.0
+
+
+## Caida de mas del cargador vacio, en unidades del modelo. Pasado el brocal no
+## se queda flotando: sigue bajando hasta el suelo, que es donde suena el golpe.
+func _mag_drop_extra_at(t: float) -> float:
+	if t <= RELOAD_MAG_EMPTY_T or t >= RELOAD_MAG_IN_T:
+		return 0.0
+	var k := (t - RELOAD_MAG_EMPTY_T) / (RELOAD_MAG_IN_T - RELOAD_MAG_EMPTY_T)
+	return 0.11 * k * k
+
+
+## Giro del cargador durante la recarga (radianes sobre el eje lateral del arma).
+## El vacio sale recto y se tumba al caer; el lleno entra inclinado y se endereza
+## justo al asentar. Sin este giro los dos cargadores parecian deslizarse por un
+## carril.
+func _mag_tumble_at(t: float) -> float:
+	if t < RELOAD_MAG_OUT_T:
+		return 0.0
+	if t < RELOAD_MAG_EMPTY_T:
+		var k := (t - RELOAD_MAG_OUT_T) / (RELOAD_MAG_EMPTY_T - RELOAD_MAG_OUT_T)
+		return k * k * 0.50
+	if t < RELOAD_MAG_IN_T:
+		return 0.0
+	if t < RELOAD_MAG_SEAT_T:
+		var k := (t - RELOAD_MAG_IN_T) / (RELOAD_MAG_SEAT_T - RELOAD_MAG_IN_T)
+		return -0.22 * (1.0 - k)
 	return 0.0
 
 

@@ -45,13 +45,16 @@ const GRIP_ROT := Vector3(0.086880, 0.039442, -0.020152)
 const HIP_POS := Vector3(0.110, -0.011, -0.308)
 ## Ojo -> mira trasera en ADS.
 const ADS_SIGHT_DISTANCE := 0.44
-## Pose de recarga: el arma sube al centro-bajo y se inclina para ensenar el
-## brocal; el objetivo queda libre (verificado en :0).
-const RELOAD_POSE_UP := 0.10
-const RELOAD_POSE_RIGHT := 0.0
-const RELOAD_POSE_FWD := 0.03
-const RELOAD_POSE_PITCH := 0.22
-const RELOAD_POSE_ROLL := -0.15
+## Pose de recarga: el arma sube al centro-bajo, se canta hacia dentro para
+## ensenar el brocal y se acerca al cuerpo, que es como se recarga de verdad.
+## Antes eran 10 cm de subida y 8 grados de cante: el arma practicamente no se
+## movia y la recarga se leia como un cargador deslizandose solo. El brocal
+## tiene que quedar mirando al suelo, delante del tirador.
+const RELOAD_POSE_UP := 0.14
+const RELOAD_POSE_RIGHT := -0.035
+const RELOAD_POSE_FWD := 0.085
+const RELOAD_POSE_PITCH := 0.30
+const RELOAD_POSE_ROLL := -0.42
 
 const VIEWMODEL_LAYER := 13
 const VIEWMODEL_LAYER_BIT := 1 << (VIEWMODEL_LAYER - 1)
@@ -128,14 +131,20 @@ func mount() -> void:
 
 
 ## Avance del cargador en la recarga (0 asentado, 1 fuera). Lo decide Glock.gd.
-func set_magazine_offset(t: float) -> void:
+func set_magazine_offset(t: float, extra: float = 0.0) -> void:
 	if weapon != null:
-		weapon.set_magazine_offset(t)
+		weapon.set_magazine_offset(t, extra)
 
 
 func set_magazine_visible(v: bool) -> void:
 	if weapon != null:
 		weapon.set_magazine_attached(v)
+
+
+## Tumba del cargador durante la recarga (radianes). Lo decide Glock.gd.
+func set_magazine_tumble(angle: float) -> void:
+	if weapon != null:
+		weapon.set_magazine_tumble(angle)
 
 
 # ---------------------------------------------------------------------------
