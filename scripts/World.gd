@@ -239,7 +239,11 @@ func _make_lamp(x: float, z: float, shadow := false) -> void:
     # La luminaria visible tambien existe para la bala: antes era solo una
     # malla y los tiros la atravesaban como si no hubiese objeto. Reutilizamos
     # la misma caja para render + colision y la declaramos metal.
-    var lamp := _static_box(self, "Lamp", Vector3(1.6, 0.07, 0.26), Vector3(x, 4.05, z), lamp_mat)
+    # Carcasa oscura + tira emisiva: sin carcasa la tira blanca se lee como
+    # agujero en el techo, no como luminaria.
+    var housing := _static_box(self, "LampHousing", Vector3(1.7, 0.06, 0.34), Vector3(x, 4.10, z), stand_mat)
+    housing.set_meta("surface", "metal")
+    var lamp := _static_box(self, "Lamp", Vector3(1.6, 0.05, 0.26), Vector3(x, 4.05, z), lamp_mat)
     lamp.set_meta("surface", "metal")
     var lamp_mesh := lamp.get_child(0) as MeshInstance3D
     if lamp_mesh != null:

@@ -112,11 +112,13 @@ func _ready() -> void:
 ## layout binario que nadie revisa. Sin efectos: los one-shots ya llegan
 ## normalizados de `tools/process_audio.sh`.
 func _setup_buses() -> void:
+    # Todo suena al DOBLE (+6 dB = doble amplitud) sin saturar: el techo lo
+    # pone el HardLimiter del Master (-1 dB). El balance entre buses no cambia.
     var weapons := _ensure_bus(BUS_WEAPONS)
-    AudioServer.set_bus_volume_db(weapons, 0.0)
+    AudioServer.set_bus_volume_db(weapons, 6.0)
 
     var world := _ensure_bus(BUS_WORLD)
-    AudioServer.set_bus_volume_db(world, -3.0)
+    AudioServer.set_bus_volume_db(world, 3.0)
     # Sala del rango como BUS con Reverb (no IR horneada por tiro): al agrandar
     # el recinto cambia una configuracion, no cinco WAV. Los disparos actuales
     # Los WAV son DRY; la sala la pone esta Reverb (corta y baja).
