@@ -95,10 +95,13 @@ const SHOT_STREAMS: Array[AudioStream] = [
 
 const SHOT_DB := -6.0        # disparo (los 5 WAV comparten loudness de ataque)
 
-# Voces simultáneas del arma: cada disparo son 3 voces (blast + tope + bateria)
-# con colas de 95-190 ms; con 4 voces al disparar seguido se cortaban las colas
-# con un fade y el tiro adelgazaba. 8 cubre ~2.5 tiros rapidos + recarga.
-const MAX_WEAPON_VOICES := 8
+# Voces simultáneas del arma: cada disparo son 3 voces (blast + tope + bateria).
+# El blast dura ahora 450 ms (cuerpo y cola de sala: ver `tools/build_shot.py`),
+# así que a la cadencia máxima de la pistola (~13 tiros/s con el gatillo
+# mantenido) viven a la vez ~6 blasts y ~3 golpes de mecánica. Con 8 voces se
+# cortaban las colas más viejas justo a esa cadencia; 16 las deja enteras y
+# sigue siendo un puñado de reproductores.
+const MAX_WEAPON_VOICES := 16
 const VOICE_FADE := 0.06
 
 var _weapon_voices: Array[AudioStreamPlayer] = []

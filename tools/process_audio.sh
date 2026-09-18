@@ -5,8 +5,9 @@
 #   2. Iguala la loudness del ataque (primeros 250 ms) dentro de cada familia:
 #      antes había hasta 27 dB entre variantes de disparo, así que cada disparo
 #      sonaba a una distancia distinta.
-#   3. Recorta la cola con fade: las colas largas se apilaban al disparar rápido
-#      y enfangaban el mix.
+#   3. Monta el disparo en capas (crack real + cuerpo grave + cola de sala) y
+#      lo deja en 450 ms: un tiro de 160 ms sin reflexiones se oye como un
+#      petardo aunque su espectro sea correcto. Ver `tools/build_shot.py`.
 #   4. Deja el pico por debajo del techo para que la suma de capas no sature.
 #
 # LOS 5 DISPAROS SE CORTAN DE LA GRABACIÓN ORIGINAL, no de recortes heredados.
@@ -49,27 +50,13 @@ SOFT_ATTACK_TARGET=-16.0
 SHOT_PEAK_CEILING=-1.2
 PEAK_CEILING=-1.5          # dBFS
 
-# --- Reparto entre el estampido y el mecánico DENTRO del disparo ---
+# --- Forma del corte del disparo ---
 #
-# Medido en los 5 disparos de la grabación (energía integrada de la muestra):
-# el estampido (0-20 ms) se llevaba 35-54% y el mecánico (20-110 ms) 46-52%,
-# porque el mecánico dura 90 ms contra 20 y su PICO es el mismo (~-1.20 dBFS).
-# O sea: dos golpes del mismo tamaño, que es exactamente lo que se percibe como
-# "el disparo suena dos veces".
-#
-# Se hunde el mecánico a SHOT_TAIL_DB desde SHOT_TAIL_FULL_S con una rampa hasta
-# SHOT_TAIL_RAMP_S. El ataque NO se toca (la ganancia es 1.0 hasta 25 ms), así
-# que el disparo que gusta queda intacto en pico y en RMS; sólo deja de competir
-# el mecánico. Medido después: energía del estampido 47% -> 76%, y la relación
-# estampido/mecánico pasa de +4,8..+7,3 dB a +10,4..+12,5 dB.
-#
-# Por qué NO se resuelve con un compresor: probado (thr -12 dB, 3:1 y -10 dB,
-# 2:1, attack 1 ms, release 35-40 ms) y EMPEORA — la energía se mueve HACIA el
-# mecánico (49% -> 56%) y la cola sube (3,7% -> 6,4%), porque el release devuelve
-# ganancia antes de que acabe. Es un problema de reparto, no de dinámica.
-SHOT_TAIL_DB=-7.0
-SHOT_TAIL_FULL_S=0.025
-SHOT_TAIL_RAMP_S=0.045
+# Aquí se hundía a -7 dB todo lo que venía después del estampido, desde los
+# 25 ms, y luego a -3 dB. Las dos rampas sobraban: el corte ya termina dentro
+# del hueco entre disparos (ver SHOT_CUTS), y el peso y la cola los pone el
+# montaje al final (`tools/build_shot.py`), que es donde se miden. Lo único que
+# queda aquí es un fade corto para que el corte no acabe en un escalón.
 
 mkdir -p "$BACKUP_DIR"
 
@@ -310,13 +297,10 @@ process_shot() {
         return
     fi
 
-    # Cadena: ganancia de familia -> recorte -> REPARTO estampido/mecanico ->
-    # recorte de cola -> fade. El volumen del mecanico va aqui y no en el motor
-    # para que el pico de la muestra siga siendo el del estampido.
-    local tail_lin
-    tail_lin="$(awk -v d="$SHOT_TAIL_DB" 'BEGIN { printf "%.6f", 10^(d/20) }')"
-    local vexpr="if(lt(t,${SHOT_TAIL_FULL_S}),1,if(lt(t,${SHOT_TAIL_RAMP_S}),1-(1-${tail_lin})*(t-${SHOT_TAIL_FULL_S})/(${SHOT_TAIL_RAMP_S}-${SHOT_TAIL_FULL_S}),${tail_lin}))"
-    local chain="volume=${gain}dB,atrim=0:${keep},volume=volume='${vexpr}':eval=frame"
+    # Cadena: ganancia de familia -> recorte -> fade. El volumen del mecanico va
+    # aqui y no en el motor para que el pico de la muestra siga siendo el del
+    # estampido.
+    local chain="volume=${gain}dB,atrim=0:${keep}"
     if awk -v f="$fade" 'BEGIN { exit !(f > 0) }'; then
         chain="$chain,afade=t=out:st=${fade_start}:d=${fade}"
     fi
@@ -348,17 +332,21 @@ process_shot() {
 # hueco mete el disparo vecino dentro de la muestra y un clic del jugador suena a
 # dos disparos (era justo el defecto de los shot_N.wav anteriores).
 #   n  t_ataque  hueco_al_siguiente  tope  fade
-#   1  0.1190    222 ms              160   0.06
-#   2  0.3410    439 ms              340   0.12
-#   3  0.7800    206 ms              160   0.06
-#   4  0.9860    178 ms              135   0.05
-#   5  1.1640    183 ms              140   0.05
+#   1  0.1190    222 ms              160   0.04
+#   2  0.3410    439 ms              340   0.05
+#   3  0.7800    206 ms              160   0.04
+#   4  0.9860    178 ms              135   0.04
+#   5  1.1640    183 ms              140   0.04
+#
+# El fade es corto y solo cierra el corte: alargarlo se comia la mitad del
+# estampido en los tiros de 135-160 ms, y eso es la mitad de lo que el montaje
+# tiene que reconstruir despues.
 SHOT_CUTS=(
-    "1 0.1190 160 0.06"
-    "2 0.3410 340 0.12"
-    "3 0.7800 160 0.06"
-    "4 0.9860 135 0.05"
-    "5 1.1640 140 0.05"
+    "1 0.1190 160 0.04"
+    "2 0.3410 340 0.05"
+    "3 0.7800 160 0.04"
+    "4 0.9860 135 0.04"
+    "5 1.1640 140 0.04"
 )
 
 # process_mag <nombre> <inicio> <fin> <pico_objetivo> <fade>
@@ -427,20 +415,30 @@ process_mag magin 0.210 0.400 -1.5 0.05
 echo "== Disparos (cortados de la grabacion original en su ataque real) =="
 for cut in "${SHOT_CUTS[@]}"; do process_shot $cut; done
 
-echo "== Cuerpo grave bajo el blast (UNA percepcion, no dos capas) =="
-# El blast es la Glock 18c (crack); el cuerpo, el tiro limpio de una Beretta
-# 93R 9 mm a 1 m (mismo bundle, micro al frente). Se alinean por pico de
-# muestra (<1 ms: fusionan en un solo evento) con el cuerpo 4 dB bajo el pico
-# del blast: medido, el sube grave de 6,9% a 10,8% sin ensuciar el crack
-# (60%) ni el ataque (crest sube) y sin recortes. Mas cuerpo taparia el crack
-# con un segundo transitorio; aislar el grave con filtro retrasaba el cuerpo
-# y se oia tarde (probado y descartado con medicion).
+echo "== Montaje del disparo (crack real + cuerpo grave + cola de sala) =="
+# El crack es la Glock 18c; el cuerpo, el tiro limpio de una Beretta 93R 9 mm a
+# 1 m (mismo bundle, mismo tipo de micro), en PASO BAJO para que aporte solo el
+# empuje del fogonazo y no un segundo estampido. Se alinea por ATAQUE para que
+# los dos golpes caigan en el mismo milisegundo y el oido los funda en uno
+# (Haas). El montaje y la cola de sala los hace `tools/build_shot.py`, que
+# imprime las medidas de cada variante.
+#
+# CALIBRADO a -4 dB sobre los cinco. La referencia NO es un numero inventado: es
+# el propio maestro (Glock 18c a 1 m) medido con la misma transformada por
+# tramos. Con esa medida, el corte suelto ya iguala al maestro en grave (9-10%)
+# pero no en duracion (160 ms) ni en cresta (11 contra 20): lo que faltaba no
+# era mas grave, era el cuerpo y la cola. A -4 dB el disparo queda en ~450 ms,
+# 16-17% de grave y cresta ~17, con el centroide todavia en 1,3 kHz (el crack
+# manda). A -2 dB el grave se come el ataque (centroide 1,1 kHz) y empieza a
+# sonar a trueno de juguete: es el error contrario al que se arregla aqui.
 BODY_SRC="$AUDIO_DIR/source/beretta93r_body_excerpt.wav"
 BODY_WIN="$BACKUP_DIR/shot_body.win.wav"
-ffmpeg -v error -y -ss 0.040 -t 0.220 -i "$BODY_SRC" -ac 1 -ar 44100 -c:a pcm_s16le "$BODY_WIN"
+SHOT_BODY_DB=-4.0
+ffmpeg -v error -y -ss 0.008 -t 0.360 -i "$BODY_SRC" -af "lowpass=f=900:poles=2" \
+    -ac 1 -ar 44100 -c:a pcm_s16le "$BODY_WIN"
 for n in 1 2 3 4 5; do
-    python3 "$(dirname "$0")/fuse_shot_body.py" "$AUDIO_DIR/shot_$n.wav" "$BODY_WIN" -4.0 "$AUDIO_DIR/shot_$n.fused.wav"
-    mv "$AUDIO_DIR/shot_$n.fused.wav" "$AUDIO_DIR/shot_$n.wav"
+    python3 "$(dirname "$0")/build_shot.py" "$AUDIO_DIR/shot_$n.wav" "$BODY_WIN" "$SHOT_BODY_DB" "$BACKUP_DIR/shot_$n.mix.wav"
+    mv "$BACKUP_DIR/shot_$n.mix.wav" "$AUDIO_DIR/shot_$n.wav"
 done
 
 echo "== Impactos =="
