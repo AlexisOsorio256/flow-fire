@@ -180,9 +180,13 @@ func _build_cartridge() -> void:
 	cartridge = Node3D.new()
 	cartridge.name = "Cartridge"
 	barrel.add_child(cartridge)
+	# Eje del anima MEDIDO: del origen del canon a su corona (~100 mm en la
+	# malla). Si algun GLB futuro lo trae degenerado, se avisa en vez de
+	# inventar un eje en el marco equivocado.
 	var bore: Vector3 = (muzzle.position - Vector3.ZERO)
 	if bore.length() < 0.01:
-		bore = -muzzle_axis
+		push_warning("Barrel sin eje medible: Muzzle degenerado en el GLB")
+		bore = muzzle_axis
 	bore = bore.normalized()
 	var right: Vector3 = bore.cross(Vector3.UP)
 	if right.length() < 0.01:
