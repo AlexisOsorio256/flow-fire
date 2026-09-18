@@ -18,7 +18,7 @@ var mag_prop_mat: StandardMaterial3D
 ## El arma no tiene `reserve`; la recarga consume uno de aqui al acercarse.
 const TABLE_MAGS_MAX := 4
 const TABLE_MAG_ROUNDS := 15
-const TABLE_POS := Vector3(1.2, 0.0, -1.0)
+const TABLE_POS := Vector3(1.8, 0.0, -1.4)
 const TABLE_REACH := 1.6
 var table_mags := TABLE_MAGS_MAX
 var _mag_props: Array[Node3D] = []

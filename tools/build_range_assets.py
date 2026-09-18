@@ -1,17 +1,15 @@
-"""Build the two small, source-controlled Blender assets used by FlowFire.
+"""Build the static range shell of FlowFire (mano vive en build_hand_rig.py).
 
 The script deliberately owns only presentation geometry:
 
 * ``range_shell.glb`` is the fixed architecture and its visual luminaires.
-* ``right_hand.glb`` is a single, baked, bone-free right hand that shares the
-  weapon coordinate space.  It is not allowed to contain weapon geometry.
 
 Run from the repository root with Blender 4.x::
 
-    blender --background --python tools/build_range_assets.py
+    blender --background --python tools/build_range_assets.py  # shell
+    blender --background --python tools/build_hand_rig.py      # mano riggeada
 
-The shell reuses the repository's CC0 PBR textures and embeds them in the GLB;
-the hand uses one small procedural glove material and no texture.
+The shell reuses the repository's CC0 PBR textures and embeds them in the GLB.
 """
 
 from __future__ import annotations
@@ -134,22 +132,6 @@ def add_box(name: str, location, size, material, bevel=0.018, rotation=(0.0, 0.0
         bpy.ops.object.modifier_apply(modifier=modifier.name)
     return obj
 
-
-def add_ellipsoid(name: str, location, scale, material):
-    bpy.ops.mesh.primitive_uv_sphere_add(
-        segments=24,
-        ring_count=12,
-        radius=1.0,
-        location=location,
-    )
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    obj.data.materials.append(material)
-    for polygon in obj.data.polygons:
-        polygon.use_smooth = True
-    return obj
 
 
 def join_objects(name: str, objects, root):
