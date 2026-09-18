@@ -29,16 +29,21 @@ extends Node3D
 
 const MODEL := "res://assets/models/g19_pistol.glb"
 ## Largo real de la pistola, extremo a extremo. De aqui sale la escala del
-## modelo: no hay que calibrarla a mano. 174 mm es la Glock 19 de verdad, y el
-## asset ya viene a esa medida; si algun dia se cambia, la escala lo corrige.
+## modelo: no hay que calibrarla a mano. El asset de Rotuma ya viene a esa
+## medida (174 mm de largo y 127 mm de alto medidos en su malla); si algun dia
+## se cambia, la escala lo corrige.
 const REAL_LENGTH := 0.174
 ## Recorrido real de la corredera. Es la unica autoridad del recorrido: la
 ## mecanica de Glock.gd y el dibujo la leen de aqui.
 const SLIDE_TRAVEL := 0.039
 ## Cartuchos que entran en el cargador. El 9x19 de la Glock 19 son 17.
 const MAG_CAPACITY := 17
-## La boca del arma en la malla. La corredera retrocede al reves.
-const MUZZLE_AXIS := Vector3(0.0, 0.0, -1.0)
+## Hacia donde mira la boca de la malla, en el espacio del arma. En este asset
+## el morro esta a +Z (lo confirman la boca, la mira delantera y el corredor del
+## cañon, que son los tres hacia +Z). La corredera retrocede al reves de la boca:
+## con el signo cambiado recorria 39 mm HACIA ADELANTE y el arma se veia abierta.
+## Lo vigila `tools/check_weapon.gd`.
+const MUZZLE_AXIS := Vector3(0.0, 0.0, 1.0)
 ## Recorrido real del cargador fuera del brocal, de asentado a libre.
 const MAG_TRAVEL := 0.07
 ## Eje de salida del cargador en espacio del arma (abajo del armazon).
@@ -158,8 +163,8 @@ func _model_length(root: Node) -> float:
 ##
 ## Ojo: la AABB de cada malla hay que llevarla con su transform de MUNDO, no con
 ## el local. Las piezas que traen su propio origen (Trigger, Barrel) tienen
-## transform local, y con el local la caja salia un 5% mas larga y el arma se
-## escalaba de menos (176,9 mm en vez de 187).
+## transform local, y con el local la caja mide de mas y el arma se escala de
+## menos.
 func _mesh_aabb(root: Node) -> AABB:
 	var box := AABB()
 	var first := true
@@ -177,7 +182,7 @@ func _mesh_aabb(root: Node) -> AABB:
 
 
 ## Corredera: 0 = cerrada, 1 = atras del todo. UNICA autoridad: Glock.gd.
-## El sentido lo da `adelante`: la corredera retrocede al reves de la boca.
+## El sentido lo da MUZZLE_AXIS: la corredera retrocede al reves de la boca.
 func set_slide(t: float) -> void:
 	if slide == null:
 		return

@@ -14,8 +14,8 @@ veces dentro de la misma malla:
 Aqui se queda solo la copia armada, se reparte en piezas por islas de malla y
 se reasientan los origenes: el gatillo gira sobre su pasador, el cargador sale
 por el brocal y el cañon bascula sobre su recamara. Se endereza al convenio del
-motor (morro a -Z, arriba +Y, cargador cayendo a -Y) y se escala al largo REAL
-de una Glock 19, 174 mm.
+motor (morro a +Z, arriba +Y, cargador cayendo a -Y) y se escala al largo de la
+malla del autor, 174 mm.
 """
 
 import bpy
@@ -24,7 +24,7 @@ import math
 import sys
 from mathutils import Vector, Matrix
 
-LARGO_REAL = 0.174          # Glock 19 extremo a extremo, en metros
+LARGO_REAL = 0.174          # largo de la malla del autor, en metros
 ALTO_REAL = 0.127           # Glock 19 con miras
 LINEA_CORREDERA = 0.043     # z del plano corredera/armazon
 Y_ARMADA = (-0.140, 0.140)  # la copia armada vive aqui
@@ -180,7 +180,9 @@ def main():
         m = o.matrix_world.copy()
         o.parent = raiz
         o.matrix_world = m
-    # el morro mira a +Y; el exportador lo deja en -Z, que es lo que espera el juego
+    # el morro del autor mira a +Y; con el giro queda a -Y en Blender y el
+    # exportador lo deja mirando a +Z en el motor, que es el eje que declara
+    # GlockWeapon.MUZZLE_AXIS (la corredera retrocede al reves de ese eje).
     raiz.rotation_euler = (0.0, 0.0, math.pi)
     raiz.scale = (escala, escala, escala)
     bpy.context.view_layer.update()

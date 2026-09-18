@@ -71,10 +71,13 @@ rendimiento → calidad audiovisual → features.
 Autoloads: `GameAudio`, `ImpactFX`, `Ballistics`. Escena: `scenes/Main.tscn`.
 Señales del arma: `shot_fired`, `ammo_changed(mag, chamber, reserve, reloading)`.
 
-**La pistola va en metros reales: 187 mm medidos en el mundo.** La escala sale de
-medir la malla, no de un número escrito a mano, y nadie la multiplica después
-para que quepa en un encuadre: el encuadre se calibra alrededor. Lo comprueba
-`tools/check_weapon.gd`.
+**La pistola va en metros reales.** La escala sale de medir la malla, no de un
+número escrito a mano, y nadie la multiplica después para que quepa en un
+encuadre: el encuadre se calibra alrededor. La malla de Rotuma mide 174 mm de
+largo y 127 mm de alto; una G19 real mide 187 × 128, así que el arma se dibuja
+a la medida de su malla y no se estira para cuadrar la ficha del fabricante. Lo
+que sí es de la pistola de verdad son las mecánicas: 39 mm de corredera y 5 mm
+de gatillo, medidos en el mundo. Lo comprueba `tools/check_weapon.gd`.
 
 **El arma no está en ningún esqueleto.** Es un árbol de piezas rígidas: `Frame`,
 `Slide`, `Magazine`, `Trigger`, `Barrel`, los herrajes y los puntos de boca,

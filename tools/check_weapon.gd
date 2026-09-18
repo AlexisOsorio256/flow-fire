@@ -4,8 +4,9 @@ extends Node
 ##   godot --headless --path . tools/check_weapon.tscn
 ##
 ## Comprueba lo que el ojo no mide: que la pistola este en METROS REALES en el
-## mundo (174 mm de largo), que existan las piezas que el juego mueve y que el
-## cargador viaje hacia abajo en el espacio del arma. Si algo falla, imprime
+## mundo (174 mm de largo), que existan las piezas que el juego mueve, que la
+## corredera retroceda de verdad (alejandose de la boca) y que el cargador viaje
+## hacia abajo en el espacio del arma. Si algo falla, imprime
 ## FALLO y sale con codigo 1.
 
 const REAL_LENGTH := 0.174
@@ -55,6 +56,22 @@ func _ready() -> void:
 	var mag_axis: Vector3 = weapon.magazine_out_axis()
 	print("mira trasera->delantera mm ",
 		snappedf(weapon.sight_rear.global_position.distance_to(weapon.sight_front.global_position) * 1000.0, 0.1))
+	# La corredera RETROCEDE: tiene que alejarse de la boca al abrirse. Con el
+	# eje de la boca invertido el arma recorria sus 39 mm hacia DELANTE y se
+	# veia abierta (la corredera salida del armazon). Esta es la comprobacion
+	# que caza ese fallo sin abrir el juego.
+	weapon.set_slide(0.0)
+	var slide_closed: Vector3 = weapon.slide.global_position
+	weapon.set_slide(1.0)
+	var slide_open: Vector3 = weapon.slide.global_position
+	weapon.set_slide(0.0)
+	var recoil_dir: Vector3 = (slide_open - slide_closed).normalized()
+	print("la corredera al abrir va hacia la boca ", snappedf(recoil_dir.dot(sight_axis), 0.01),
+		"  (tiene que ser NEGATIVO)")
+	if recoil_dir.dot(sight_axis) > -0.9:
+		failures += 1
+		print("FALLO: la corredera no retrocede (va hacia la boca)")
+
 	print("eje de salida del cargador ", mag_axis.snapped(Vector3(0.01, 0.01, 0.01)),
 		"  abajo=", snappedf(mag_axis.dot(up), 0.01), "  avance=", snappedf(absf(mag_axis.dot(sight_axis)), 0.01))
 	if mag_axis.dot(up) > -0.8 or absf(mag_axis.dot(sight_axis)) > 0.4:

@@ -20,11 +20,14 @@
   solo paso de Blender, se queda con la copia armada, la reparte por islas de
   malla, recorta el gatillo del armazón, reasienta los orígenes (el gatillo
   sobre su pasador, el cargador sobre el brocal, el cañón sobre la recámara),
-  endereza el arma al convenio del motor (morro a -Z, arriba +Y) y la escala al
-  largo real. El cañón es del autor: no hay geometría inventada.
+  endereza el arma al convenio del motor (morro a +Z, arriba +Y, cargador
+  cayendo a -Y) y la escala al largo de la malla. El cañón es del autor: no hay
+  geometría inventada.
 - Medidas del resultado, comprobadas con `tools/check_weapon.gd`: 174,0 mm de
-  largo, 126,8 mm de alto, 30,8 mm de ancho y 146,3 mm entre miras. La Glock 19
-  real mide 174 × 127 × 30 y ~146 de radio de miras.
+  largo, 127,0 mm de alto, 31,0 mm de ancho y 146,3 mm entre miras. El asset no
+  es exacto al milímetro: una Glock 19 real mide 187 × 128 × 30 con ~152 mm de
+  radio de miras. El arma se dibuja a la medida de la malla, en metros, y no se
+  estira para cuadrar la ficha del fabricante.
 - El resultado son mallas rígidas —`Frame`, `Slide`, `Magazine`, `Trigger`,
   `Barrel`— sin esqueleto y sin animaciones.
 
