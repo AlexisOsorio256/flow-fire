@@ -82,6 +82,12 @@ const PROJECTION_MARGIN := 0.003
 ## `set_meta` con valor nulo no guarda nada y luego `get_meta` suelta un error.
 var _holes: Array[Dictionary] = []
 var _masks := {}
+## Proyectiles incrustados (solo pine): pool de 8 jackets a medio hundir.
+## No es sistema universal: gypsum/concrete usan polvo/spall, steel splash,
+## aluminum perfora, paper corta limpio. Solo donde clavarse es real.
+const MAX_EMBEDDED := 8
+var _embedded: Array[Node3D] = []
+var _jacket_mat: StandardMaterial3D
 
 
 func _ready() -> void:
@@ -163,6 +169,46 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     add_child(particles)
     particles.global_position = point
     get_tree().create_timer(2.0).timeout.connect(particles.queue_free)
+
+
+## Proyectil incrustado en pino: jacket cobriza a medio hundir, parentada al
+## objeto (viaja con la caja si es dinamica). Pool de 8; el noveno borra el
+## mas viejo. Solo pine: en chapa fina clavarse seria mentira (resbala) y en
+## acero/hormigon la 9 mm no se queda dentro.
+func spawn_embedded(point: Vector3, direction: Vector3, collider: Object) -> void:
+    if _jacket_mat == null:
+        _jacket_mat = StandardMaterial3D.new()
+        _jacket_mat.albedo_color = Color(0.55, 0.32, 0.18)
+        _jacket_mat.metallic = 0.9
+        _jacket_mat.roughness = 0.4
+    var holder := Node3D.new()
+    holder.name = "EmbeddedRound"
+    add_child(holder)
+    var dir := direction.normalized()
+    # Eje Y del cilindro sobre la direccion de llegada: la punta mira adentro.
+    var up := Vector3.UP
+    if absf(dir.dot(up)) > 0.94:
+        up = Vector3.RIGHT
+    var x_axis := up.cross(dir).normalized()
+    var z_axis := x_axis.cross(dir).normalized()
+    holder.global_transform = Transform3D(Basis(x_axis, dir, z_axis), point - dir * 0.004)
+    var nose := MeshInstance3D.new()
+    var cm := CylinderMesh.new()
+    cm.top_radius = 0.0028
+    cm.bottom_radius = 0.0045
+    cm.height = 0.009
+    cm.radial_segments = 10
+    cm.material = _jacket_mat
+    nose.mesh = cm
+    nose.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    holder.add_child(nose)
+    if collider is Node3D and collider.get_meta("dynamic_decal", false):
+        holder.reparent(collider, true)
+    _embedded.append(holder)
+    while _embedded.size() > MAX_EMBEDDED:
+        var old_node: Node3D = _embedded.pop_front()
+        if is_instance_valid(old_node):
+            old_node.queue_free()
 
 
 ## Agujero de bala: UN `Decal` anclado a la superficie, con la cavidad hundida

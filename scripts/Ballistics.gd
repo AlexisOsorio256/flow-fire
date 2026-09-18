@@ -185,6 +185,8 @@ func _step_bullet(b: Dictionary, h: float, space: PhysicsDirectSpaceState3D) -> 
         if exit_speed < EXIT_SPEED_MIN:
             if not already_charged:
                 ImpactFX.spawn_impact(point, normal, collider, surface, false)
+                if surface == "pine":
+                    ImpactFX.spawn_embedded(point, dir, collider)
                 _push_body(collider, point, dir, p_in)
             # Chapa fina sin salida: la 9 mm no se queda dentro de 1,2 mm
             # de chapa. O la rompe (arriba) o resbala: SEGURO, sin dado y sin
