@@ -322,15 +322,20 @@ calentamiento, en la máquina de prueba (Intel HD 520), dos pasadas del MISMO
 build para poder atribuirle un coste a los brazos:
 
 ```text
-con brazos    51,06 ms/frame  p50 51,39  draws 179  prims 108.948
-sin brazos    51,28 ms/frame  p50 51,39  draws 177  prims  94.836  (--skin=0)
+brazos de BAMEN   55,49 ms/frame  p50 55,56  draws 181  prims 125.420
+sin brazos        51,91 ms/frame  p50 51,39  draws 177  prims  97.964  (--skin=0)
 ```
 
-Los brazos son **+14.112 primitivas y +2 draw calls**, y el frame time no se
-mueve fuera del ruido entre pasadas. Un asset de 7.056 triángulos no justifica
-tocar la calidad de la mano: si algún día hay regresión, se mide antes de
-sacrificar nada. Los números y el comando están aquí para poder repetirlos, no
-para citarlos de memoria.
+Los brazos actuales (13.728 triángulos, 2 materiales, 6 texturas de 1K) cuestan
+**+3,6 ms por frame (~7%)**, +27.456 primitivas y +4 draw calls, medidos como dos
+pasadas del MISMO build. Con el asset anterior (7.056 triángulos, 1 material,
+textura de 512²) la diferencia caía dentro del ruido entre pasadas. Es el precio
+de que la mano se lea como una mano, y se paga: en una Intel HD 520 supone pasar
+de 19,3 a 18,0 FPS, y el encargo es explícito en que la fidelidad perceptual
+manda sobre el coste mientras el coste esté medido. **Está medido y declarado, no
+supuesto**; si algún día molesta, lo primero que hay que tocar es la resolución de
+las texturas (1K → 512 en brazos, que ocupan menos del 15% del alto de cuadro),
+no la geometría de la mano.
 
 Para regenerar los assets Blender:
 
