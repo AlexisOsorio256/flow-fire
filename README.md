@@ -111,10 +111,12 @@ comprobado por `tools/check_weapon.tscn`:
 | clips | `Idle` 3,00 s · `Fire` 0,26 s · `Reload` 2,10 s · `ReloadEmpty` 2,35 s · `Inspect` 2,00 s |
 | tamaño | 8,0 MB |
 
-Su origen, licencia y builder están en `CREDITS_MODELS.md`; el builder
-reproducible es `tools/build_arms.py` (necesita el donante de BAMEN, que **no**
-está en el repo y es **CC-BY-4.0**, o sea que **exige atribución**: la cadena de
-crédito que pide el autor está literal en `CREDITS_MODELS.md`).
+Su origen y licencia están en `CREDITS_MODELS.md`. **El GLB actual de BAMEN
+es el asset canónico de producción, pero hoy NO tiene un builder reproducible
+vigente.** `tools/build_arms.py` quedó como experimento de reemplazo apuntando al
+donante "animated pistol" de DJMaesen y actualmente aborta su verificación de
+bind antes de exportar; no debe presentarse como constructor de los brazos que
+están en producción ni sobrescribir `fps_arms.glb` hasta pasar revisión visual.
 
 **El asset se autora en el espacio del arma** (el mismo sistema que
 `g19_pistol.glb`: +Y arriba, −Z al morro, origen en la raíz del arma) con la mano
@@ -276,7 +278,10 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
   glTF mete los assets en `(x, -z, y)`), pero queda un desplazamiento vertical
   residual de ~0,3 de cuadro respecto al juego, así que para juzgar el encuadre
   final manda la captura real (`tools/captura.sh`).
-- `tools/build_arms.py`: reconstruye `assets/models/fps_arms.glb` en Blender.
+- `tools/build_arms.py`: experimento de reemplazo de brazos con el donante
+  "animated pistol" de DJMaesen. Actualmente **no reconstruye** el BAMEN de
+  producción y aborta si el bind normalizado no reproduce la pose; no es una
+  ruta de producción hasta que una captura real la valide.
 - `tools/build_range_shell.py`: reconstruye la arquitectura del rango (geometría
   con UV a densidad física, sin texturas dentro del GLB).
 - `tools/medir.sh` + `tools/bench_render.gd`: frame time REAL del render (delta
