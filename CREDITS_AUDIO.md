@@ -121,6 +121,16 @@ pitch-shift ni EQ de otro del mismo set: eso es exactamente lo que había antes
 derivado de `impact_metal`) y ya no existe. Estado real de cada uno, sin
 adornos:
 
+**Una reutilización que se declara en vez de esconderse:** el material `paper`
+(blancos de papel a 18 m) NO tiene muestra propia; `ImpactFX.gd` reproduce
+`impact_wood` a −10 dB. El papel queda fuera de los seis materiales que el
+encargo pide diferenciar (acero, aluminio, pino, pladur, hormigón y ricochet), y
+a 18 m lo que domina es la llegada del proyectil, no el material. Existe una
+grabación real de impactos sobre papel en `downloads/audio/`
+(`impact_paper_impacts_indoor_pushkin.mp3`) que **no se ha añadido** para no
+engordar la familia con una séptima muestra que nadie ha pedido. Si algún día
+molesta, el camino es una receta más en `tools/build_impacts.py`, no un pitch.
+
 | archivo | qué es REALMENTE | fuente exacta (URL descargada) | autor | licencia (texto exacto) | transformación |
 |---|---|---|---|---|---|
 | `impact_metal.wav` | **Impacto de BALA REAL** sobre placa de metal pesada (nivel 1 de preferencia) | `http://ftpmirror.your.org/pub/misc/sonniss2017/individual/Gamemaster%20Audio%20-%20%20Bullet%20Impact%20Sounds/bullet_impact_metal_heavy_08.wav` (`bullet_impact_metal_heavy_08.wav`) | Gamemaster Audio | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`**: *"a worldwide, nonexclusive, royaltyfree license to use all or any of the sound effects"*; *"Licensee may use the licensed sound effects for personal and commercial projects without attribution to the original creator."* Texto completo: `http://ftpmirror.your.org/pub/misc/sonniss2017/Licensing.pdf` | corte en `tools/build_impacts.py`: ataque re-anclado (la toma traía ~68 ms de riser antes del golpe), 550 ms de cola, fade 90 ms, DC fuera, pico a −1,2 dBFS. 876 Hz de centroide, 86,1 % de energía <800 Hz |
