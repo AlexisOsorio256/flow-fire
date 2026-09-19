@@ -37,8 +37,15 @@ extends Node3D
 
 ## El arma dentro del pivote. CALIBRADO mirando en :0: el GLB canonicalizado
 ## viene recentrado y el encuadre se calibra moviendo el pivote. Radianes.
-const GRIP_POS := Vector3(0.010168, -0.114451, 0.095923)
-const GRIP_ROT := Vector3(0.086880, 0.039442, -0.020152)
+## El arma y la mano comparten este pivote dentro del viewmodel.
+##
+## SON CASI IDENTIDAD A PROPOSITO. La mano se orienta en Blender
+## (`tools/build_hand_rig.py`) para que el puño caiga en el ORIGEN del GLB con
+## la empuñadura hacia +Y y los dedos hacia -Z, que es exactamente el espacio
+## del nodo `Grip` del arma. Antes estos numeros eran una calibracion a ojo
+## sobre un rig de capsulas; al cambiar la malla habrian dejado de valer.
+const GRIP_POS := Vector3(0.0, 0.0, 0.0)
+const GRIP_ROT := Vector3(0.0, 0.0, 0.0)
 const HAND_MODEL := "res://assets/models/right_hand.glb"
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.

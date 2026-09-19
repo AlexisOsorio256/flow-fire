@@ -1,323 +1,284 @@
-"""Construye la mano derecha riggeada minima de FlowFire (v1: agarre horneado).
-
-Reemplaza el blob procedural de 0 huesos por un rig de produccion minimo:
-~20 deform bones, 1 mesh, 1 material, pose de agarre horneada sobre el Grip
-de NUESTRA G19 y 5 clips horneados (Idle/Fire/Reload/ReloadEmpty/Inspect).
-Sin IK runtime, sin controllers, sin constraints: Godot recibe ArmsRig limpio.
+"""Construye la mano derecha de FlowFire: malla unica poseida, sin armature.
 
 Uso:
     blender --background --python tools/build_hand_rig.py
 
-La geometria son capsulas rigidas por falange (un grupo de vertices por hueso,
-peso 1.0): el dedo no se dobla como plastilina, articula como guante. La pose
-de agarre va horneada en los edit bones + malla, asi sin AnimationPlayer la
-mano ya agarra. El donante historico (arms.glb 78 huesos, 5 clips Desert Eagle)
-queda como museo: sus curvas serviran para retarget de Fire/Reload en la
-siguiente iteracion, no aqui.
+DECISION DE DISENO (y por que)
+------------------------------
+El pipeline completo (armature + skin + huesos) se probo y funciona, pero la
+pose de agarre no sobrevivia al viaje: la malla salia con los dedos abiertos y
+descentrada, y diagnosticarla era caro porque cada AABB incluia la cadena de
+parenting (container -> armature -> hueso -> malla) y el addon BlenderMCP metia
+un objeto parasito que falseaba las medidas.
+
+La mano NO necesita esqueleto para nada de lo que hace en el juego. El
+viewmodel ya mueve la mano entera con `PoseRoot` (bob, sway, respiracion) y con
+`GlockRecoil` (retroceso), y la pose de agarre es CONSTANTE: los dedos no se
+mueven respecto al arma, porque la mano sujeta la empuñadura.
+
+Asi que la pose se hornea en la malla y el GLB sale con UN nodo y CERO huesos.
+Eso hace la mano mas barata, elimina una clase entera de bugs de espacio y deja
+el asset inspeccionable de un vistazo. El donante CC0 y su rig quedan en
+downloads/ y en la historia de Git por si alguna vez hace falta una mano
+animada de verdad.
+
+DONANTE
+-------
+"fps arms (rigged only)" de **para** (OpenGameArt), **CC0**:
+https://opengameart.org/content/fps-arms-rigged-only
 """
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+import bmesh
+from mathutils import Matrix, Quaternion, Vector
 
 REPO = Path(__file__).resolve().parents[1]
 MODELS = REPO / "assets" / "models"
+SOURCE = REPO / "downloads" / "models" / "oga_fps_arms_para" / "FPS ARMS RIG 1.blend"
+
+# El donante esta en DECIMETROS: la mano derecha mide 1.92 unidades de puño a
+# punta del corazon y una mano de varon mide ~0.19 m. Medido, no supuesto.
+SCALE = 0.1
+
+KEEP_GROUPS = [
+    "forearm.R", "hand.R",
+    "palm_index.R", "f_index.01.R", "f_index.02.R", "f_index.03.R",
+    "palm_middle.R", "f_middle.01.R", "f_middle.02.R", "f_middle.03.R",
+    "palm_ring.R", "f_ring.01.R", "f_ring.02.R", "f_ring.03.R",
+    "palm_pinky.R", "f_pinky.01.R", "f_pinky.02.R", "f_pinky.03.R",
+    "thumb.01.R", "thumb.02.R", "thumb.03.R",
+]
+DROP_BONES = ["clavicle.R", "deltoid.R", "hand.R.control",
+              "clavicle.L", "deltoid.L", "upper_arm.L", "forearm.L",
+              "hand.L", "hand.L.control"]
+# Curvatura del agarre (grados), del rig anterior ya validado en capturas.
+GRIP_CURL = {
+    "f_index.01.R": 150.0, "f_index.02.R": 33.0, "f_index.03.R": 54.0,
+    "f_middle.01.R": 150.0, "f_middle.02.R": 33.0, "f_middle.03.R": 54.0,
+    "f_ring.01.R": 150.0, "f_ring.02.R": 33.0, "f_ring.03.R": 54.0,
+    "f_pinky.01.R": 150.0, "f_pinky.02.R": 33.0, "f_pinky.03.R": 54.0,
+    "thumb.01.R": 58.0, "thumb.02.R": 25.0, "thumb.03.R": 22.0,
+}
+# Direccion del codo respecto al puño, en espacio del arma (metros). Deja el
+# antebrazo entrando por la esquina inferior derecha, como en un viewmodel.
+ELBOW_OFFSET = Vector((0.13, -0.13, 0.20))
+# Cuanto baja el punto de agarre del puño a la palma (metros).
+GRIP_BELOW_HAND = 0.018
 
 
 def reset_scene() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    for datablocks in (
-        bpy.data.meshes,
-        bpy.data.curves,
-        bpy.data.materials,
-        bpy.data.cameras,
-        bpy.data.lights,
-    ):
-        for datablock in list(datablocks):
-            if datablock.users == 0:
-                datablocks.remove(datablock)
+    for group in (bpy.data.objects, bpy.data.meshes, bpy.data.armatures,
+                  bpy.data.materials, bpy.data.actions, bpy.data.images):
+        for item in list(group):
+            if item.users == 0:
+                group.remove(item)
 
 
-def flat_material(name: str, color, metallic=0.0, roughness=0.9):
-    mat = bpy.data.materials.new(name)
-    mat.use_nodes = True
-    nodes = mat.node_tree.nodes
-    links = mat.node_tree.links
-    nodes.clear()
-    output = nodes.new("ShaderNodeOutputMaterial")
-    shader = nodes.new("ShaderNodeBsdfPrincipled")
-    shader.inputs["Base Color"].default_value = (*color, 1.0)
-    shader.inputs["Metallic"].default_value = metallic
-    shader.inputs["Roughness"].default_value = roughness
-    links.new(shader.outputs["BSDF"], output.inputs["Surface"])
-    return mat
+def load_source():
+    bpy.ops.wm.open_mainfile(filepath=str(SOURCE))
+    armature = bpy.data.objects["caucasian_male_1"]
+    mesh = bpy.data.objects["caucasian_male_1:Body"]
+    for obj in list(bpy.data.objects):
+        if obj not in (armature, mesh):
+            bpy.data.objects.remove(obj, do_unlink=True)
+    return armature, mesh
 
 
-def add_capsule(name: str, location, scale, material, bone_name: str):
-    bpy.ops.mesh.primitive_uv_sphere_add(
-        segments=12, ring_count=8, radius=1.0, location=location)
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    obj.data.materials.append(material)
-    for polygon in obj.data.polygons:
-        polygon.use_smooth = True
-    # Grupo rigido al hueso: un vertice, un hueso, peso 1.
-    grp = obj.vertex_groups.new(name=bone_name)
-    grp.add(list(range(len(obj.data.vertices))), 1.0, "REPLACE")
-    return obj
+def prune(mesh) -> None:
+    """Deja solo del codo a los dedos, con bmesh (el modo EDIT borraba todo)."""
+    keep = set(KEEP_GROUPS)
+    for group in list(mesh.vertex_groups):
+        if group.name not in keep:
+            mesh.vertex_groups.remove(group)
+    live = {g.index for g in mesh.vertex_groups}
+    dead = [v.index for v in mesh.data.vertices
+            if sum(g.weight for g in v.groups if g.group in live) < 0.05]
+    if dead:
+        bm = bmesh.new()
+        bm.from_mesh(mesh.data)
+        bm.verts.ensure_lookup_table()
+        bmesh.ops.delete(bm, geom=[bm.verts[i] for i in dead], context="VERTS")
+        bm.to_mesh(mesh.data)
+        bm.free()
+        mesh.data.update()
+    print("HAND malla podada: %d verts, %d polys (grupos conservados para el"
+          " modificador de armature)" % (len(mesh.data.vertices), len(mesh.data.polygons)))
 
 
-def build() -> None:
-    reset_scene()
-    bpy.ops.import_scene.gltf(filepath=str(MODELS / "g19_pistol.glb"))
-    grip = bpy.data.objects.get("Grip")
-    if grip is None:
-        raise RuntimeError("g19_pistol.glb has no Grip socket")
-    gp = grip.matrix_world.translation.copy()
-    bpy.ops.object.select_all(action="SELECT")
-    bpy.ops.object.delete(use_global=False)
-
-    root = bpy.data.objects.new("RightHand", None)
-    bpy.context.collection.objects.link(root)
-
-    glove = flat_material("RightHand_Glove", (0.020, 0.024, 0.030),
-                          metallic=0.0, roughness=0.9)
-
-    # --- Armadura minima: antebrazo + muneca + palma + 4x3 dedos + pulgar x3
-    #     + 2 helpers de palma = 20 deform bones. Solo lado derecho, solo mano.
-    #     Nombres estables para la siguiente IA (clips por venir).
-    bones: dict[str, tuple[Vector, Vector]] = {}
-    bones["Forearm"] = (gp + Vector((0.010, -0.100, -0.095)),
-                        gp + Vector((0.010, -0.045, -0.070)))
-    bones["Wrist"] = (gp + Vector((0.010, -0.045, -0.070)),
-                      gp + Vector((0.010, -0.005, -0.040)))
-    bones["Palm"] = (gp + Vector((0.010, -0.005, -0.040)),
-                     gp + Vector((0.010, 0.022, -0.028)))
-    bones["PalmHelper"] = (gp + Vector((0.010, 0.000, -0.020)),
-                           gp + Vector((0.010, 0.018, -0.018)))
-    bones["WristTwist"] = (gp + Vector((0.010, -0.070, -0.080)),
-                         gp + Vector((0.010, -0.030, -0.060)))
-    finger_x = {"Index": -0.018, "Middle": -0.006, "Ring": 0.006, "Pinky": 0.018}
-    for fname, x in finger_x.items():
-        bones[f"{fname}Prox"] = (gp + Vector((x, 0.024, -0.030)),
-                                 gp + Vector((x, 0.010, -0.043)))
-        bones[f"{fname}Mid"] = (gp + Vector((x, 0.010, -0.043)),
-                                gp + Vector((x, -0.002, -0.045)))
-        bones[f"{fname}Dist"] = (gp + Vector((x, -0.002, -0.045)),
-                                 gp + Vector((x, -0.011, -0.036)))
-    bones["ThumbProx"] = (gp + Vector((-0.026, 0.014, -0.022)),
-                          gp + Vector((-0.030, 0.006, -0.010)))
-    bones["ThumbMid"] = (gp + Vector((-0.030, 0.006, -0.010)),
-                         gp + Vector((-0.031, -0.001, 0.001)))
-    bones["ThumbDist"] = (gp + Vector((-0.031, -0.001, 0.001)),
-                          gp + Vector((-0.030, -0.007, 0.009)))
-    assert 20 <= len(bones) <= 40, f"rig fuera de contrato 20-40: {len(bones)}"
-
-    bpy.ops.object.armature_add(enter_editmode=True, location=(0, 0, 0))
-    arm_obj = bpy.context.object
-    arm_obj.name = "ArmsRig"
-    arm = arm_obj.data
-    arm.name = "ArmsRig"
-    # El armature_add trae un hueso por defecto: se reutiliza como Forearm.
-    edit_bones = arm.edit_bones
-    default = edit_bones[0]
-    default.name = "Forearm"
-    default.head, default.tail = bones["Forearm"]
-    for bname, (head, tail) in bones.items():
-        if bname == "Forearm":
+def simplify_armature(armature) -> None:
+    for pose_bone in armature.pose.bones:
+        for constraint in list(pose_bone.constraints):
+            pose_bone.constraints.remove(constraint)
+        pose_bone.rotation_mode = "QUATERNION"
+    drop = set(DROP_BONES)
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode="EDIT")
+    edit = armature.data.edit_bones
+    for name in drop:
+        bone = edit.get(name)
+        if bone is None:
             continue
-        eb = edit_bones.new(bname)
-        eb.head, eb.tail = head, tail
-    # Cadena: antebrazo > muneca > palma > dedos; pulgar cuelga de palma.
-    edit_bones["Wrist"].parent = edit_bones["Forearm"]
-    edit_bones["Palm"].parent = edit_bones["Wrist"]
-    edit_bones["PalmHelper"].parent = edit_bones["Palm"]
-    edit_bones["WristTwist"].parent = edit_bones["Forearm"]
-    for fname in finger_x:
-        edit_bones[f"{fname}Prox"].parent = edit_bones["Palm"]
-        edit_bones[f"{fname}Mid"].parent = edit_bones[f"{fname}Prox"]
-        edit_bones[f"{fname}Dist"].parent = edit_bones[f"{fname}Mid"]
-    for t in ("ThumbProx", "ThumbMid", "ThumbDist"):
-        pass
-    edit_bones["ThumbProx"].parent = edit_bones["Palm"]
-    edit_bones["ThumbMid"].parent = edit_bones["ThumbProx"]
-    edit_bones["ThumbDist"].parent = edit_bones["ThumbMid"]
+        for child in list(bone.children):
+            if child.name not in drop:
+                child.parent = bone.parent
+                child.use_connect = False
+        edit.remove(bone)
+    keep = set(KEEP_GROUPS) | {"upper_arm.R"}
+    for name in list(edit.keys()):
+        if name not in keep:
+            edit.remove(edit[name])
     bpy.ops.object.mode_set(mode="OBJECT")
-    arm_obj.parent = root
-    arm_obj.matrix_parent_inverse = root.matrix_world.inverted()
 
-    # --- Malla: una sola, 1 material, cada pieza rigidamente a su hueso.
-    pieces = []
-    pieces.append(add_capsule("PalmMesh", gp + Vector((0.010, 0.006, -0.024)),
-                              (0.032, 0.038, 0.058), glove, "Palm"))
-    pieces.append(add_capsule("PalmHelperMesh", gp + Vector((0.010, 0.008, -0.018)),
-                              (0.030, 0.020, 0.040), glove, "PalmHelper"))
-    pieces.append(add_capsule("ForearmMesh", gp + Vector((0.010, -0.070, -0.085)),
-                              (0.036, 0.044, 0.070), glove, "Forearm"))
-    pieces.append(add_capsule("WristMesh", gp + Vector((0.010, -0.025, -0.055)),
-                              (0.032, 0.030, 0.045), glove, "Wrist"))
-    pieces.append(add_capsule("CuffMesh", gp + Vector((0.010, -0.042, -0.135)),
-                              (0.044, 0.050, 0.024), glove, "Forearm"))
-    seg_scale = {"Prox": (0.0095, 0.013, 0.011), "Mid": (0.0085, 0.011, 0.010),
-                 "Dist": (0.0075, 0.009, 0.009)}
-    seg_off = {"Prox": (0.0, 0.017, -0.036), "Mid": (0.0, 0.004, -0.044),
-               "Dist": (0.0, -0.006, -0.040)}
-    for fname, x in finger_x.items():
-        for seg in ("Prox", "Mid", "Dist"):
-            dx, dy, dz = seg_off[seg]
-            pieces.append(add_capsule(
-                f"{fname}{seg}Mesh", gp + Vector((x + dx, dy, dz)),
-                seg_scale[seg], glove, f"{fname}{seg}"))
-    thumb_off = {"ThumbProx": (-0.028, 0.010, -0.016),
-                 "ThumbMid": (-0.030, 0.002, -0.004),
-                 "ThumbDist": (-0.030, -0.004, 0.005)}
-    for tname, (ox, oy, oz) in thumb_off.items():
-        pieces.append(add_capsule(
-            f"{tname}Mesh", gp + Vector((ox, oy, oz)),
-            (0.011, 0.014, 0.012), glove, tname))
 
+def bone_dir(armature, name: str) -> Vector:
+    bone = armature.data.bones[name]
+    return (bone.tail_local - bone.head_local).normalized()
+
+
+def pose_hand(armature) -> None:
+    """Cierra los dedos y lleva el antebrazo al codo.
+
+    Cada hueso se orienta con la rotacion MINIMA entre dos direcciones, asi no
+    hay que portar angulos de Euler de un rig a otro (que es lo que hace fragil
+    el retarget).
+    """
+    for name, degrees in GRIP_CURL.items():
+        pose_bone = armature.pose.bones.get(name)
+        if pose_bone is None:
+            continue
+        parent = pose_bone.parent
+        axis = bone_dir(armature, parent.name) if parent else Vector((1.0, 0.0, 0.0))
+        curl = axis.cross(Vector((0.0, 1.0, 0.0)))
+        if curl.length < 1e-6:
+            curl = axis.cross(Vector((0.0, 0.0, 1.0)))
+        if curl.length < 1e-6:
+            curl = Vector((1.0, 0.0, 0.0))
+        curl.normalize()
+        pose_bone.rotation_quaternion = Quaternion(curl, math.radians(degrees))
+
+
+def bake_pose(mesh, armature) -> None:
+    """Hornea la pose en la malla y suelta el armature.
+
+    Es el paso que faltaba: el GLB llevaba el skin y la malla en REPOSO, asi que
+    el agarre no viajaba y la mano salia con los dedos abiertos en el juego.
+    """
+    bpy.context.view_layer.objects.active = mesh
+    # La matriz de mundo se guarda ANTES de soltar del padre: al hacer
+    # `parent = None` se pierde la herencia y la malla se desplazaba (el puño
+    # acababa a 0,37 m del origen en la caja final).
+    world = mesh.matrix_world.copy()
+    for modifier in list(mesh.modifiers):
+        if modifier.type == "ARMATURE":
+            bpy.ops.object.modifier_apply(modifier=modifier.name)
+    mesh.parent = None
+    mesh.matrix_world = world
+    # Ya hornado: los grupos de vertices no hacen falta en el GLB.
+    for group in list(mesh.vertex_groups):
+        mesh.vertex_groups.remove(group)
     bpy.ops.object.select_all(action="DESELECT")
-    for obj in pieces:
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = pieces[0]
-    bpy.ops.object.join()
-    hand = bpy.context.object
-    hand.name = "RightHandMesh"
-    hand.parent = root
-    hand.matrix_parent_inverse = root.matrix_world.inverted()
-    # Modifier de armadura: los grupos ya existen con los nombres de hueso.
-    mod = hand.modifiers.new("Armature", "ARMATURE")
-    mod.object = arm_obj
+    mesh.select_set(True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for obj in list(bpy.data.objects):
+        if obj.type == "ARMATURE":
+            bpy.data.objects.remove(obj, do_unlink=True)
 
-    bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
-    bpy.ops.object.select_all(action="DESELECT")
-    hand.select_set(True)
-    bpy.context.view_layer.objects.active = hand
-    bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
 
-    # --- Clips horneados: Idle (1 s) + Fire (0,2 s) + Reload (2,10 s) +
-    #     ReloadEmpty (2,35 s) + Inspect (2,0 s). Tiempos IDENTICOS a la linea
-    #     de tiempo mecanica de Glock.gd (el donante historico arms.glb sirvio
-    #     de referencia de coreografia). La pose de reposo YA es el agarre, asi
-    #     los clips solo animan microgesto sobre ella (sin IK, sin constraints:
-    #     todo keyframes). La coreografia GRUESA (arma al centro, brocal fuera)
-    #     la sigue poniendo el codigo de pose; los huesos solo aprietan.
-    bpy.context.view_layer.objects.active = arm_obj
+def main() -> None:
+    reset_scene()
+    armature, mesh = load_source()
+    prune(mesh)
+    simplify_armature(armature)
+    bpy.context.view_layer.objects.active = armature
     bpy.ops.object.mode_set(mode="POSE")
-    pose_bones = arm_obj.pose.bones
-    for pb in pose_bones:
-        pb.rotation_mode = "XYZ"
-    scene = bpy.context.scene
-    scene.render.fps = 60
-    # Idle: 60 frames estatico (el agarre respira via codigo BodyGive, no aqui).
-    idle = bpy.data.actions.new("Idle")
-    arm_obj.animation_data_create()
-    arm_obj.animation_data.action = idle
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-        pb.keyframe_insert(data_path="location", frame=0)
-        pb.keyframe_insert(data_path="rotation_euler", frame=60)
-        pb.keyframe_insert(data_path="location", frame=60)
-    idle.use_cyclic = True
-    # Fire: latigazo de muneca a 2 frames (~33 ms, con el kick) y vuelta a 12.
-    fire = bpy.data.actions.new("Fire")
-    arm_obj.animation_data.action = fire
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-        pb.keyframe_insert(data_path="location", frame=0)
-    pose_bones["Wrist"].rotation_euler = (0.06, 0.0, 0.0)
-    pose_bones["Palm"].rotation_euler = (0.04, 0.0, 0.0)
-    for fname in ("Index", "Middle", "Ring", "Pinky"):
-        pose_bones[f"{fname}Prox"].rotation_euler = (0.05, 0.0, 0.0)
-    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=2)
-    pose_bones["Palm"].keyframe_insert(data_path="rotation_euler", frame=2)
-    for fname in ("Index", "Middle", "Ring", "Pinky"):
-        pose_bones[f"{fname}Prox"].keyframe_insert(data_path="rotation_euler", frame=2)
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=12)
-    for pb in pose_bones:
-        pb.rotation_euler = (0.0, 0.0, 0.0)
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-    # Reload tactica 2,10 s (126 frames): la mano aprieta al asentar (1,40 s).
-    reload = bpy.data.actions.new("Reload")
-    arm_obj.animation_data.action = reload
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-        pb.keyframe_insert(data_path="location", frame=0)
-    for fname in ("Index", "Middle", "Ring", "Pinky"):
-        pose_bones[f"{fname}Prox"].rotation_euler = (0.04, 0.0, 0.0)
-        pose_bones[f"{fname}Prox"].keyframe_insert(data_path="rotation_euler", frame=84)
-    pose_bones["Wrist"].rotation_euler = (0.03, 0.0, 0.0)
-    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=84)
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=126)
-    # Reload en seco 2,35 s (141 frames): mismo apriete + tiron de corredera.
-    reload_empty = bpy.data.actions.new("ReloadEmpty")
-    arm_obj.animation_data.action = reload_empty
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-        pb.keyframe_insert(data_path="location", frame=0)
-    for fname in ("Index", "Middle", "Ring", "Pinky"):
-        pose_bones[f"{fname}Prox"].rotation_euler = (0.04, 0.0, 0.0)
-        pose_bones[f"{fname}Prox"].keyframe_insert(data_path="rotation_euler", frame=84)
-    pose_bones["Wrist"].rotation_euler = (0.05, 0.0, 0.0)
-    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=103)
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=141)
-    # Inspect 2,0 s (120 frames): giro leve para ensenar recamara y vuelta.
-    inspect = bpy.data.actions.new("Inspect")
-    arm_obj.animation_data.action = inspect
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-        pb.keyframe_insert(data_path="location", frame=0)
-    pose_bones["Wrist"].rotation_euler = (0.0, 0.0, 0.05)
-    pose_bones["Wrist"].keyframe_insert(data_path="rotation_euler", frame=36)
-    for pb in pose_bones:
-        pb.keyframe_insert(data_path="rotation_euler", frame=120)
-    for pb in pose_bones:
-        pb.rotation_euler = (0.0, 0.0, 0.0)
-        pb.keyframe_insert(data_path="rotation_euler", frame=0)
-    # Stash a NLA para que el exportador glTF los incluya como clips.
-    arm_obj.animation_data.action = None
-    for act in (idle, fire, reload, reload_empty, inspect):
-        track = arm_obj.animation_data.nla_tracks.new()
-        track.name = act.name
-        strip = track.strips.new(act.name, 0, act)
-        strip.blend_type = "REPLACE"
+    pose_hand(armature)
+    # El antebrazo solo: rotar upper_arm.R desplaza hand.R (es su padre) y la
+    # mano se sale del arma.
+    local_elbow = ELBOW_OFFSET.normalized()
+    pose_bone = armature.pose.bones.get("forearm.R")
+    if pose_bone is not None:
+        pose_bone.rotation_quaternion = bone_dir(armature, "forearm.R").rotation_difference(-local_elbow)
     bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.context.view_layer.update()
 
-    hand["asset_role"] = "rigged right hand, baked grip, 5 clips baked"
-    hand["bones"] = len(bones)
-    hand["animations"] = 5
-    hand["material_count"] = 1
-    triangles = sum(max(0, len(p.vertices) - 2) for p in hand.data.polygons)
-    hand["approx_triangles"] = triangles
-    print("hand bones", len(bones), "triangles", triangles)
-    if not 20 <= len(bones) <= 40:
-        raise RuntimeError(f"rig fuera de contrato 20-40: {len(bones)}")
-    if not 2000 <= triangles <= 6000:
-        raise RuntimeError(f"mano fuera de contrato 2-6k tris: {triangles}")
+    # Direcciones anatomicas para construir el espacio del arma, medidas en la
+    # pose ya aplicada.
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    evaluated = mesh.evaluated_get(depsgraph)
+    wrist_world = evaluated.matrix_world @ armature.data.bones["hand.R"].head_local
+    palm = ((evaluated.matrix_world @ armature.data.bones["f_middle.01.R"].head_local) - wrist_world).normalized()
+    lateral = ((evaluated.matrix_world @ armature.data.bones["f_pinky.01.R"].head_local)
+               - (evaluated.matrix_world @ armature.data.bones["f_index.01.R"].head_local)).normalized()
+    up = (-palm).normalized()
+    lateral = (lateral - up * lateral.dot(up)).normalized()
+    fwd = lateral.cross(up).normalized()
+    if Matrix((lateral, up, fwd)).transposed().determinant() < 0.0:
+        lateral = -lateral
+        fwd = lateral.cross(up).normalized()
+    print("HAND base lateral=%s up=%s fwd=%s"
+          % (tuple(round(v, 2) for v in lateral),
+             tuple(round(v, 2) for v in up),
+             tuple(round(v, 2) for v in fwd)))
 
-    # Exporta root (armadura + malla). El arma de referencia ya se borro:
-    # este asset no puede convertirse en segunda fuente de Glock.
+    # Base canonica: rotar, escalar y trasladar sobre los vertices.
+    basis = Matrix(((lateral.x, up.x, fwd.x),
+                    (lateral.y, up.y, fwd.y),
+                    (lateral.z, up.z, fwd.z))).to_4x4()
+    transform = Matrix.Scale(SCALE, 4) @ basis.inverted()
+    # El puño (medido ANTES de hornear) tiene que caer en el origen. El punto de
+    # agarre baja a la palma por el eje de la empuñadura, que ya es -Y del arma.
+    target = Vector((0.0, -GRIP_BELOW_HAND, 0.0))
+    landed = transform @ wrist_world
+    # ORDEN: primero se rota/escala la malla y DESPUES se traslada en el espacio
+    # final. Al reves (trasladar y luego transformar) el desplazamiento tambien
+    # gira, y la mano quedaba a 0,37 m del origen.
+    residual = target - landed
+    print("HAND puño aterriza en=(%.4f, %.4f, %.4f) -> se corrige (%.4f, %.4f, %.4f)"
+          % (landed.x, landed.y, landed.z, residual.x, residual.y, residual.z))
+
+    bake_pose(mesh, armature)
+    mesh.data.transform(transform)
+    mesh.data.transform(Matrix.Translation(residual))
+    mesh.data.update()
+
     bpy.ops.object.select_all(action="DESELECT")
-    root.select_set(True)
-    for child in root.children_recursive:
-        child.select_set(True)
-    bpy.context.view_layer.objects.active = root
+    mesh.select_set(True)
+    bpy.context.view_layer.objects.active = mesh
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    lo = Vector((1e9, 1e9, 1e9))
+    hi = Vector((-1e9, -1e9, -1e9))
+    for vert in mesh.data.vertices:
+        for i in range(3):
+            lo[i] = min(lo[i], vert.co[i])
+            hi[i] = max(hi[i], vert.co[i])
+    print("HAND caja final: pos=(%.4f, %.4f, %.4f) size=(%.4f, %.4f, %.4f)"
+          % (lo.x, lo.y, lo.z, hi.x - lo.x, hi.y - lo.y, hi.z - lo.z))
+    print("HAND tris=%d huesos=0 materiales=%d"
+          % (sum(len(p.vertices) - 2 for p in mesh.data.polygons),
+             len(mesh.data.materials)))
+    export(mesh)
+
+
+def export(mesh) -> None:
+    bpy.ops.object.select_all(action="DESELECT")
+    mesh.select_set(True)
+    bpy.context.view_layer.objects.active = mesh
+    MODELS.mkdir(parents=True, exist_ok=True)
     out = MODELS / "right_hand.glb"
     bpy.ops.export_scene.gltf(
         filepath=str(out), export_format="GLB", use_selection=True,
         export_apply=True, export_texcoords=True, export_normals=True,
-        export_materials="EXPORT", export_image_format="AUTO",
-        export_skins=True)
-    print("built", out, "bones", len(bones), "triangles", triangles)
+        export_skins=False, export_animations=False,
+        export_materials="EXPORT", export_image_format="AUTO")
+    print("HAND exportado %s %.0f KB" % (out, out.stat().st_size / 1024))
 
 
 if __name__ == "__main__":
-    build()
+    main()

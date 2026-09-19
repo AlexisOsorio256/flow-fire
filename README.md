@@ -79,26 +79,35 @@ cargador sale por su eje medido.
 
 ## Mano y viewmodel
 
-El rig es deliberadamente mínimo (5 clips horneados):
+El viewmodel es deliberadamente mínimo:
 
 ```text
 BodyGive
-├── RightHand       right_hand.glb: ArmsRig 20 huesos, 1 mesh 3.360 tris, 1 material
+├── RightHand       right_hand.glb: 1 malla, 3.756 tris, 1 material, 0 huesos
 └── WeaponGrip
     └── WeaponSocket
         └── Glock
 ```
 
-`right_hand.glb` es mano derecha + antebrazo/manga con 20 deform bones, pose
-de agarre horneada sobre el `Grip` de NUESTRA Glock (falanges rígidas, un hueso
-por segmento) y 5 clips horneados Idle/Fire/Reload/ReloadEmpty/Inspect (tiempos =
-linea mecanica; la pose gruesa la pone el codigo, los huesos el microgesto). La mano no escribe ningún transform del arma; `WeaponSocket`
-aplica el retroceso rápido y `BodyGive` la cesión lenta (la mano RESISTE: el
-arma cabecea rápido dentro del agarre y el conjunto cede después). No hay mano
-izquierda, IK ni retarget en runtime: los 5 clips van horneados en el GLB y
-`GlockViewmodel` los dispara (Fire al tiro, Reload/Empty al recargar, Inspect
-a F). Durante la recarga el cargador puede moverse solo:
-la mecánica visible sigue siendo coherente y no se inventan Foley de manos
+`right_hand.glb` es mano derecha + antebrazo. Viene del rig CC0 "fps arms
+(rigged only)" de **para** (OpenGameArt), limpiado en Blender: se le quitan IK,
+constraints, helpers y el lado izquierdo, se le da la pose de agarre sobre
+NUESTRA Glock y se HORNEA en la malla. El GLB sale con **un nodo y cero huesos**:
+la pose de agarre es constante (los dedos no se mueven respecto al arma, porque
+la sujetan), y el movimiento de la mano entera ya lo ponen `PoseRoot` (bob,
+sway, respiración) y `GlockRecoil`. Menos huesos aqui es menos superficie de bug
+y no se pierde nada visible.
+
+El rig se orienta en Blender para que el puño caiga en el ORIGEN con la
+empuñadura hacia +Y y los dedos hacia -Z, que es el espacio del nodo `Grip` del
+arma: por eso `GlockViewmodel.GRIP_POS` y `GRIP_ROT` son (0,0,0) y no una
+calibración a ojo. Cambiar la malla no obliga a recalibrar el encuadre.
+
+La mano no escribe ningún transform del arma; `WeaponSocket` aplica el retroceso
+rápido y `BodyGive` la cesión lenta (la mano RESISTE: el arma cabecea rápido
+dentro del agarre y el conjunto cede después). No hay mano izquierda, IK ni
+retarget en runtime. Durante la recarga el cargador puede moverse solo: la
+mecánica visible sigue siendo coherente y no se inventan Foley de manos
 inexistentes.
 
 ## Rango de medición
@@ -174,8 +183,19 @@ eje; se puede poner en cero para una comprobación.
 
 Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
 
-- `tools/build_range_assets.py`: reconstruye en Blender el shell.
-- `tools/build_hand_rig.py`: reconstruye en Blender la mano riggeada (20 huesos, 5 clips).
+- `tools/build_range_shell.py`: reconstruye en Blender la arquitectura del
+  rango (geometría con UV a densidad física, sin texturas dentro del GLB).
+- `tools/build_hand_rig.py`: reconstruye en Blender la mano desde el donante
+  CC0 (poda, pose de agarre, horneado).
+- `tools/strip_glb_textures.py`: quita las imágenes embebidas de un `.glb`
+  remapeando los índices de `bufferView` de los accessors.
+- `tools/medir.sh` + `tools/bench_render.gd`: frame time REAL del render (delta
+  entre frames con vsync off), con `--view=WxH` para medir a 1080p en un
+  viewport interno. `check_fps.gd` mide CPU de script y no sirve para gráficos.
+- `tools/captura.sh` + `tools/shot.gd`: captura frames de una acción concreta
+  para mirarlos.
+- `tools/render_hand.py`: renderiza el asset de la mano en Blender para
+  verificarlo sin abrir el juego.
 - `tools/check_weapon.tscn`: piezas obligatorias, contratos de escala y
   referencia mecánica de la Glock, incluida la mano.
 - `tools/check_range_shell.tscn`: pocas mallas/materiales, dimensiones del
@@ -184,8 +204,10 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
 - `tools/review_contact_sheet.py`: ejecuta acciones reales (`fire`, `ads`,
   `reload`, `inspect`, `pen`, `steel`, `can`, etc.) y cuenta la señal
   `shot_fired`; las capturas sólo son evidencia local y no se versionan.
-- `tools/process_audio.sh` y `tools/build_shot.py`: procesamiento offline y
-  medición de duración, peak, RMS, cresta y clipping.
+- `tools/process_audio.sh`: procesamiento offline y medición de duración, peak,
+  RMS, cresta y clipping.
+- `tools/build_shot_real.py`: corta los disparos de una grabación real y separa
+  disparos de clics mecánicos por factor de cresta.
 
 Los checks estructurales se pueden ejecutar con `godot --headless --path .`.
 La revisión visual se hace en una ventana real de Godot; un PNG vacío o un
@@ -194,7 +216,7 @@ inspector headless no certifica un viewmodel.
 Para regenerar los dos assets Blender:
 
 ```text
-blender --background --python tools/build_range_assets.py  # shell
+blender --background --python tools/build_range_shell.py   # shell
 blender --background --python tools/build_hand_rig.py      # mano riggeada
 ```
 

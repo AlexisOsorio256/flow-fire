@@ -5,14 +5,11 @@
 #   2. Iguala la loudness del ataque (primeros 250 ms) dentro de cada familia:
 #      antes había hasta 27 dB entre variantes de disparo, así que cada disparo
 #      sonaba a una distancia distinta.
-#   3. Monta el disparo en capas (crack real + cuerpo grave + cola de sala) y
-#      lo deja en 450 ms: un tiro de 160 ms sin reflexiones se oye como un
-#      petardo aunque su espectro sea correcto. Ver `tools/build_shot.py`.
-#   4. Deja el pico por debajo del techo para que la suma de capas no sature.
+#   3. Deja el pico por debajo del techo.
 #
-# LOS 5 DISPAROS SE CORTAN DE LA GRABACIÓN ORIGINAL, no de recortes heredados.
-# Ver `process_shot` y la tabla SHOT_CUTS: es la única forma de garantizar que
-# cada variante empiece en su propio ataque y no contenga el disparo siguiente.
+# OJO: los cinco `shot_*.wav` NO pasan por aquí. Los corta
+# `tools/build_shot_real.py` de una grabación real y ya fija su pico; volver a
+# normalizarlos los desharía.
 #
 # Uso: tools/process_audio.sh [--dry-run]
 # Requiere ffmpeg/ffprobe.
@@ -54,9 +51,9 @@ PEAK_CEILING=-1.5          # dBFS
 #
 # Aquí se hundía a -7 dB todo lo que venía después del estampido, desde los
 # 25 ms, y luego a -3 dB. Las dos rampas sobraban: el corte ya termina dentro
-# del hueco entre disparos (ver SHOT_CUTS), y el peso y la cola los pone el
-# montaje al final (`tools/build_shot.py`), que es donde se miden. Lo único que
-# queda aquí es un fade corto para que el corte no acabe en un escalón.
+# del hueco entre disparos, y el peso y la cola los pone la grabación original
+# (que trae el estampido entero, no un recorte de 160 ms). Lo único que queda
+# aquí es un fade corto para que el corte no acabe en un escalón.
 
 mkdir -p "$BACKUP_DIR"
 
@@ -410,35 +407,17 @@ echo "== Cargador (extracto G36C close-up, misma toma) =="
 process_mag magout 0.105 0.210 -8.0 0.03
 process_mag magin 0.210 0.400 -1.5 0.05
 
-echo "== Disparos (cortados de la grabacion original en su ataque real) =="
-for cut in "${SHOT_CUTS[@]}"; do process_shot $cut; done
-
-echo "== Montaje del disparo DRY (crack real + cuerpo grave, sin sala) =="
-# El crack es la Glock 18c; el cuerpo, el tiro limpio de una Beretta 93R 9 mm a
-# 1 m (mismo bundle, mismo tipo de micro), en PASO BAJO para que aporte solo el
-# empuje del fogonazo y no un segundo estampido. Se alinea por ATAQUE para que
-# los dos golpes caigan en el mismo milisegundo y el oido los funda en uno
-# (Haas). La sala la pone el bus Range (Reverb); hornearla en el WAV impedia
-# cambiar el recinto sin reconstruir los cinco. `tools/build_shot.py --dry`,
-# que imprime las medidas de cada variante.
+echo "== Disparos =="
+# Los cinco disparos NO los toca este script. No son WAV de partida grabados
+# aparte que haya que normalizar por familia: son CORTES de una grabacion real,
+# y quien los corta es `tools/build_shot_real.py`, que ademas elige que
+# transitorios son disparos y cuales son clics de mecanica (por factor de
+# cresta) y les fija el pico a -1 dBFS. Volver a pasarlos por aqui los
+# normalizaria dos veces y desharia esa seleccion.
 #
-# CALIBRADO a -4 dB sobre los cinco. La referencia NO es un numero inventado: es
-# el propio maestro (Glock 18c a 1 m) medido con la misma transformada por
-# tramos. Con esa medida, el corte suelto ya iguala al maestro en grave (9-10%)
-# pero no en duracion (160 ms) ni en cresta (11 contra 20): lo que faltaba no
-# era mas grave, era el cuerpo y la cola. A -4 dB el disparo queda en ~450 ms,
-# 16-17% de grave y cresta ~17, con el centroide todavia en 1,3 kHz (el crack
-# manda). A -2 dB el grave se come el ataque (centroide 1,1 kHz) y empieza a
-# sonar a trueno de juguete: es el error contrario al que se arregla aqui.
-BODY_SRC="$AUDIO_DIR/source/beretta93r_body_excerpt.wav"
-BODY_WIN="$BACKUP_DIR/shot_body.win.wav"
-SHOT_BODY_DB=-4.0
-ffmpeg -v error -y -ss 0.008 -t 0.360 -i "$BODY_SRC" -af "lowpass=f=900:poles=2" \
-    -ac 1 -ar 44100 -c:a pcm_s16le "$BODY_WIN"
-for n in 1 2 3 4 5; do
-    python3 "$(dirname "$0")/build_shot.py" "$AUDIO_DIR/shot_$n.wav" "$BODY_WIN" "$SHOT_BODY_DB" "$BACKUP_DIR/shot_$n.mix.wav" --dry
-    mv "$BACKUP_DIR/shot_$n.mix.wav" "$AUDIO_DIR/shot_$n.wav"
-done
+# El montaje por sintesis sobre un corte prestado (`tools/build_shot.py`) se
+# retiro: los cinco WAV que producia eran el mismo archivo copiado cinco veces.
+echo "   (los cinco shot_*.wav los genera tools/build_shot_real.py; no se tocan)"
 
 echo "== Impactos =="
 for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 transient; done
