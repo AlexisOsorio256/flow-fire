@@ -143,7 +143,10 @@ mismos instantes en que la mecánica llega allí.
 ## Rango de medición
 
 `range_shell.glb` es sólo presentación estática: suelo, paredes, techo,
-columnas, vigas, separadores, canaletas, luminarias, marcaciones y bullet trap.
+columnas, vigas, canaletas, luminarias, marcaciones y bullet trap. **No tiene
+separadores de calle ni mamparas**: se quitaron a petición del dueño del repo
+("no quiero que estén los fierros, debe estar sin eso para moverme por donde yo
+quiero"). El rango es un pasillo abierto que se recorre entero.
 Tiene pocas mallas y siete materiales PBR **sin una sola imagen dentro**: el GLB
 es geometría con ranuras de material con nombre
 (`Range_Concrete_Brushed`, `Range_Concrete_Floor`, `Range_Concrete_Wall`,
@@ -171,7 +174,9 @@ Distancias medidas sobre `World.gd` (la línea de tiro es z = 0):
 - **35 m**: 3 blancos de papel (agrupación);
 - **50 m**: 1 placa de acero (caída y cero).
 
-La sala es interior. Las luminarias de `RangeShell.tscn` son la fuente directa,
+La sala es interior. Las once luminarias de `RangeShell.tscn` llegan hasta los
+57 m, de modo que las estaciones de 35 y 50 m están iluminadas (antes la luz
+terminaba en 22 m y esas dos quedaban a oscuras). Las luminarias son la fuente directa,
 el ambiente está controlado y no hay sol atravesando el techo. La iluminación
 privada del viewmodel es tenue y sólo evita que la Glock y los brazos
 desaparezcan; las luces del mundo también alcanzan la capa del viewmodel.
@@ -322,9 +327,27 @@ calentamiento, en la máquina de prueba (Intel HD 520), dos pasadas del MISMO
 build para poder atribuirle un coste a los brazos:
 
 ```text
+build actual      46,47 ms/frame  p50 46,67  draws 166  prims 114.768
+sin brazos        47,88 ms/frame  p50 48,17  draws 162  prims  87.312  (--skin=0)
+
+antes de limpiar el rango
 brazos de BAMEN   55,49 ms/frame  p50 55,56  draws 181  prims 125.420
-sin brazos        51,91 ms/frame  p50 51,39  draws 177  prims  97.964  (--skin=0)
+sin brazos        51,91 ms/frame  p50 51,39  draws 177  prims  97.964
 ```
+
+Dos lecturas, y la primera es la que importa: **quitar los separadores de acero
+del rango bajó el frame time de 55,5 a 46,5 ms (−14%)**, y eso paga de sobra las
+once luminarias (antes eran siete y solo llegaban a 22 m) y los brazos nuevos. La
+segunda: con los brazos y sin ellos la diferencia es de 1,4 ms **y de signo
+contrario al esperado**, o sea que hoy el coste de los brazos está por debajo del
+ruido entre pasadas. La cifra de +3,6 ms que se midió con el rango sucio era real
+entonces; con el rango limpio ya no se puede reproducir, y decirlo es más honesto
+que seguir citándola.
+
+Lo que sí es sólido: los brazos añaden **+27.456 primitivas y +4 draw calls**
+(13.728 triángulos, 2 materiales, 6 texturas de 1K). Si algún día hay que
+recortar, lo primero es la resolución de las texturas (1K → 512 en brazos, que
+ocupan menos del 15% del alto de cuadro), no la geometría de la mano.
 
 Los brazos actuales (13.728 triángulos, 2 materiales, 6 texturas de 1K) cuestan
 **+3,6 ms por frame (~7%)**, +27.456 primitivas y +4 draw calls, medidos como dos
