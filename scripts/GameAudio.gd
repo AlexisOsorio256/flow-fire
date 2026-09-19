@@ -44,39 +44,77 @@ const BUS_RANGE := "Range"
 # queda ~10 dB por debajo, presente sin competir). La bateria sube 3 dB porque
 # quedaba 27 dB bajo la cola del disparo: inaudible, y el tiro perdia su peso.
 const SOUNDS := {
-    "empty": {"stream": preload("res://assets/audio/empty_b.wav"), "db": -8.0, "bus": BUS_WEAPONS},
+    # Disparo en seco / gatillo. Antes -8,0: su pico en el mix quedaba a -9,5
+    # dBFS, solo 2,5 dB bajo el pico del estampido (-7,0) y con MAS RMS que el
+    # disparo (-20,8 de muestra contra -27,4). Un clic de gatillo no puede
+    # competir con el disparo; a -14,0 queda 8,5 dB bajo su pico.
+    "empty": {"stream": preload("res://assets/audio/empty_b.wav"), "db": -14.0, "bus": BUS_WEAPONS},
     "slide_rear": {"stream": preload("res://assets/audio/slide_rear.wav"), "db": -17.0, "bus": BUS_WEAPONS},
     "slide_battery": {"stream": preload("res://assets/audio/slide_battery.wav"), "db": -15.0, "bus": BUS_WEAPONS},
     # Mano sobre la corredera: no es un disparo mecanico, es un golpe de acero
     # seco y corto (SoundHolder, Metal Contact). Antes no existia y el gesto de
     # agarrar la corredera era mudo hasta que volvia a bateria.
     "slide_hand": {"stream": preload("res://assets/audio/slide_hand.wav"), "db": -16.0, "bus": BUS_WEAPONS},
-    "trigger_reset": {"stream": preload("res://assets/audio/trigger_reset.wav"), "db": -18.0, "bus": BUS_WEAPONS},
-    "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -10.0, "bus": BUS_WEAPONS},
-    "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -10.0, "bus": BUS_WEAPONS},
+    "trigger_reset": {"stream": preload("res://assets/audio/trigger_reset.wav"), "db": -14.0, "bus": BUS_WEAPONS},
+    # Asiento del cargador (el clack). Antes -10,0: pico -11,5 en el mix, a 4,5
+    # dB del estampido. Es el golpe mas fuerte de la recarga y tiene que oirse,
+    # pero no a la altura del disparo: -14,0 lo deja 8,5 dB por debajo.
+    "magin": {"stream": preload("res://assets/audio/magin.wav"), "db": -14.0, "bus": BUS_WEAPONS},
+    # Extraccion del cargador (reten + friccion): -12,0.
+    "magout": {"stream": preload("res://assets/audio/magout.wav"), "db": -12.0, "bus": BUS_WEAPONS},
     # Mecanica de recarga: reten, insercion, asiento y reten de corredera.
     # Sin Foley de manos/ropa/palma mientras no haya mano (ver Glock.gd).
-    "slide_release": {"stream": preload("res://assets/audio/slide_release.wav"), "db": -18.0, "bus": BUS_WEAPONS},
-    # El cargador cae al mundo, no al arma: bus de mundo y 3D en el suelo.
-    "mag_drop": {"stream": preload("res://assets/audio/mag_drop.wav"), "db": -13.0, "bus": BUS_WORLD},
+    "slide_release": {"stream": preload("res://assets/audio/slide_release.wav"), "db": -15.0, "bus": BUS_WEAPONS},
+    # El cargador cae al mundo, no al arma: bus de mundo y 3D en el suelo. Un
+    # cargador pesa mas que una vaina, asi que su pico en el mix (-20,2) queda
+    # por encima del de la vaina (-21,5) aunque el WAV tenga menos pico.
+    "mag_drop": {"stream": preload("res://assets/audio/mag_drop.wav"), "db": -16.0, "bus": BUS_WORLD},
     # El roce del cargador contra el brocal mientras sube: es el tramo que iba
     # mudo entre que el lleno entra en cuadro y asienta. Suena al entrar y su
     # cola muere justo en el clack del asiento.
-    "mag_insert": {"stream": preload("res://assets/audio/mag_insert.wav"), "db": -13.0, "bus": BUS_WEAPONS},
+    "mag_insert": {"stream": preload("res://assets/audio/mag_insert.wav"), "db": -14.0, "bus": BUS_WEAPONS},
     "footstep": {"stream": preload("res://assets/audio/footstep.wav"), "db": -14.0, "bus": BUS_WORLD},
-    # Impactos: grabaciones reales de impacto de bala (Gamemaster Audio, Bullet
-    # Impact Sounds). Cada material tiene su propia grabacion; antes hormigon,
-    # pladur y papel compartian el mismo WAV "generico".
-    "impact_concrete": {"stream": preload("res://assets/audio/impact_concrete.wav"), "db": -6.0, "bus": BUS_WORLD},
-    "impact_drywall": {"stream": preload("res://assets/audio/impact_drywall.wav"), "db": -7.0, "bus": BUS_WORLD},
-    "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -6.0, "bus": BUS_WORLD},
-    "impact_aluminum": {"stream": preload("res://assets/audio/impact_aluminum.wav"), "db": -8.0, "bus": BUS_WORLD},
-    "impact_wood": {"stream": preload("res://assets/audio/impact_wood.wav"), "db": -6.0, "bus": BUS_WORLD},
-    "ricochet": {"stream": preload("res://assets/audio/ricochet.wav"), "db": -8.0, "bus": BUS_WORLD},
+    # Impactos: cada material es una grabacion DISTINTA (Sonniss #GameAudioGDC
+    # 2017/2019 y Freesound CC0; procedencia exacta en CREDITS_AUDIO.md). No hay
+    # pitch-shift ni EQ de un material para fingir otro.
+    #
+    # Los seis WAV vienen normalizados a PICO -1,2 dBFS por
+    # `tools/build_impacts.py`, pero NO comparten media: su factor de cresta va de
+    # 14,2 (chapa fina) a 29,2 dB (ricochet), asi que a igual pico el ataque del
+    # acero queda 10,3 dB por encima del estampido y el del ricochet 0,4 dB por
+    # encima. Los `db` de abajo igualan el ATAQUE medido (RMS de los primeros
+    # 40 ms) de la familia dentro de 4,1 dB y lo dejan 4,1-8,1 dB por debajo del
+    # estampido, que es lo que hace que el disparo domine:
+    #
+    #   sonido             ataque 40 ms (WAV)   db    ataque en el mix
+    #   shot_* (media)          -18,94         -6,0       -24,94
+    #   impact_concrete         -11,98        -17,0       -28,98
+    #   ricochet                -18,53        -10,5       -29,03
+    #   impact_metal             -8,63        -20,5       -29,13
+    #   impact_drywall          -13,71        -17,0       -30,71
+    #   impact_wood             -15,99        -15,0       -30,99
+    #   impact_aluminum         -14,06        -19,0       -33,06
+    #
+    # Aluminio, madera y pladur no los ata el ataque sino el RMS de la muestra:
+    # a igual ataque su RMS en el mix quedaba por encima del estampido (-34,5),
+    # porque son cortos y densos (cresta 16,5-14,2) frente a la cola larga del
+    # disparo. El pico mas alto de la familia en el mix es el del ricochet, -11,7,
+    # 4,7 dB por debajo del pico del disparo (-7,0).
+    "impact_concrete": {"stream": preload("res://assets/audio/impact_concrete.wav"), "db": -17.0, "bus": BUS_WORLD},
+    "impact_drywall": {"stream": preload("res://assets/audio/impact_drywall.wav"), "db": -17.0, "bus": BUS_WORLD},
+    "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -20.5, "bus": BUS_WORLD},
+    "impact_aluminum": {"stream": preload("res://assets/audio/impact_aluminum.wav"), "db": -19.0, "bus": BUS_WORLD},
+    "impact_wood": {"stream": preload("res://assets/audio/impact_wood.wav"), "db": -15.0, "bus": BUS_WORLD},
+    "ricochet": {"stream": preload("res://assets/audio/ricochet.wav"), "db": -10.5, "bus": BUS_WORLD},
     # Silbido de paso de bala: solo cuando el proyectil cruza cerca del oido
     # (ver Ballistics.gd), nunca por disparar.
     "bullet_flyby": {"stream": preload("res://assets/audio/bullet_flyby.wav"), "db": -12.0, "bus": BUS_WORLD},
-    "shell_drop": {"stream": preload("res://assets/audio/shell_drop.wav"), "db": -14.0, "bus": BUS_WORLD},
+    # Vaina al tocar el suelo. Antes -14,0: su ataque (RMS de 40 ms) en el mix
+    # era -26,1, practicamente el del estampido (-24,9), asi que la vaina sonaba
+    # como un segundo disparo. A -20,0 el ataque queda 7,1 dB por debajo y el
+    # pico 14,5: se lee DESPUES y aparte, que es lo que pide el diseno. El
+    # "despues" lo pone Glock.gd; aqui solo se le da el nivel.
+    "shell_drop": {"stream": preload("res://assets/audio/shell_drop.wav"), "db": -20.0, "bus": BUS_WORLD},
 }
 
 const SHOT_STREAMS: Array[AudioStream] = [
@@ -87,7 +125,31 @@ const SHOT_STREAMS: Array[AudioStream] = [
     preload("res://assets/audio/shot_5.wav"),
 ]
 
-const SHOT_DB := -6.0        # disparo (los 5 WAV comparten loudness de ataque)
+# Nivel del disparo. Los cinco WAV comparten loudness de ataque por
+# construccion (`tools/build_shot_real.py` les fija el RMS de los primeros 40 ms
+# al mismo valor), asi que este numero es el nivel de la familia entera.
+#
+# Por que -6,5 y no -6,0: los disparos nuevos tienen pico -0,50 dBFS (antes
+# -1,00), asi que con -6,5 el pico en el mix vuelve a ser exactamente -7,0 dBFS,
+# el mismo que habia. La ganancia de loudness de esta pasada (+10,2 dB de ataque,
+# +12 dB de RMS) viene entera del CUERPO que se recupero, no de gastar headroom
+# de pico: no se le quita margen al master. Con el randf de play_shot (+-1 dB) el
+# pico llega a -6,0 dBFS, igual que antes.
+#
+# Ataque (RMS de 40 ms) en el mix y margen sobre el resto:
+#   disparo          -8,76 + -6,5 = -15,26
+#   impacto mas alto  impact_concrete  -11,98 + -17,0 = -28,98  ->  13,7 dB por debajo
+#   mecanica mas alta mag_drop         -15,12 + -16,0 = -31,12  ->  15,9 dB por debajo
+#   paso (mundo)      footstep         -12,13 + -14,0 = -26,13  ->  10,9 dB por debajo
+# El pico mas alto del proyecto es el del disparo (-7,0); el siguiente es el del
+# ricochet (-11,7).
+#
+# OJO, headroom en rafaga: a ~13 tiros/s conviven ~5 blasts de 382 ms. Sus picos
+# no suman coherentemente (el pitch varia +-3,5 %), pero el RMS conjunto sube
+# ~7 dB. El layout de buses (`default_bus_layout.tres`) NO tiene limitador en
+# Master y esta pasada no lo ha tocado: si en captura se oye recorte a cadencia
+# maxima, el sitio para arreglarlo es el bus, no estos WAV.
+const SHOT_DB := -6.5
 
 # Voces simultáneas del arma: cada disparo son 3 voces (blast + tope + bateria).
 # El blast DRY dura 360 ms (crack+cuerpo, ver `tools/build_shot.py --dry`),

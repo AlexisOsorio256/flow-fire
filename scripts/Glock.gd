@@ -89,7 +89,10 @@ const RELOAD_SETTLE := 0.38
 const INSPECT_TOTAL := 2.00
 const INSPECT_LOCK_T := 0.30
 const INSPECT_RELEASE_T := 1.20
-const INSPECT_POSE := 0.55
+## Amplitud de la pose de inspeccion. La FORMA del gesto (entrada y salida
+## suaves) es la de `_update_inspect`; la POSE que se alcanza vive en
+## `GlockViewmodel` (INSPECT_POSE_*), que es quien la dibuja.
+const INSPECT_POSE := 1.0
 
 # --- Estado mecanico -------------------------------------------------------
 var camera: Camera3D
@@ -203,8 +206,13 @@ func _process(delta: float) -> void:
 	recoil.update(delta)
 	## La pose de recarga puede ser NEGATIVA: el asiento del cargador hunde el
 	## arma por debajo de su pose de cadera antes de volver.
-	var pose := clampf(reload_pose_blend + inspect_pose_blend, -0.3, 1.0)
-	viewmodel.set_pose_inputs(aim_blend, sprint_blend, player_speed, look_delta, _last_local_move, pose)
+	## Las dos poses son DISTINTAS y se pasan por separado: la recarga canta el
+	## arma hacia dentro para ensenar el brocal; la inspeccion la gira en guiñada
+	## para ensenar la ventana de expulsion. Sumarlas daba una pose que no hacia
+	## ninguna de las dos cosas.
+	viewmodel.set_pose_inputs(aim_blend, sprint_blend, player_speed, look_delta,
+		_last_local_move, clampf(reload_pose_blend, -0.3, 1.0),
+		clampf(inspect_pose_blend, -0.3, 1.0))
 	viewmodel.update(delta)
 	# El arma dibuja el estado ya decidido: una sola direccion, sin correcciones
 	# posteriores sobre el esqueleto ni sobre los huesos de nadie.
@@ -276,9 +284,12 @@ func start_reload(incoming_rounds: int = 0) -> bool:
 	_slide_release_sounded = false
 	aim = false
 	trigger_held = false
-	# Sin mano no hay microgesto que disparar: la mecanica visible es la del
-	# arma (corredera, cargador, gatillo). Si algun dia vuelve un brazo que
-	# aguante una captura, aqui es donde se le pide el clip de recarga.
+	# Los brazos entran en la recarga: la mano izquierda tiene que estar en el
+	# brocal cuando la mecanica llega al brocal. El clip dura EXACTAMENTE
+	# `reload_total`, asi que los dos relojes son el mismo sin ningun timer
+	# paralelo. En seco el clip es el de la corredera (2,35 s).
+	viewmodel.play_clip(GlockViewmodel.CLIP_RELOAD_EMPTY if reload_empty
+		else GlockViewmodel.CLIP_RELOAD, true)
 	viewmodel.set_magazine_visible(true)
 	viewmodel.set_magazine_tumble(0.0)
 	_emit_ammo()
@@ -327,6 +338,11 @@ func _fire() -> void:
 	slide_rear_sound_emitted = false
 	slide_battery_emitted = false
 	slide_vel += SLIDE_IMPULSE
+	# LA MECANICA PIDE EL GESTO, NO AL REVES. Los brazos solo tienen clips de
+	# huesos humanos; quien decide cuando se reproduce cada uno es este archivo,
+	# en el mismo hito que ya mueve el arma. Un disparo detras de otro reinicia el
+	# latigazo (`restart`), que es lo que hace una muñeca de verdad.
+	viewmodel.play_clip(GlockViewmodel.CLIP_FIRE, true)
 	shot_pulse = 1.0
 	recoil.kick_shot()
 	GameAudio.play_shot()
@@ -529,7 +545,7 @@ func _mag_tumble_at(t: float) -> float:
 
 
 ## INSPECCION. Bloquea la corredera, ensena la recamara y la suelta. Es la
-## mecanica de la pistola sola; no hay brazos que la abracen.
+## mecanica de la pistola; los brazos solo la acompanan con el clip Inspect.
 func inspect_weapon() -> void:
 	if reloading or inspecting:
 		return
@@ -537,7 +553,8 @@ func inspect_weapon() -> void:
 	inspect_elapsed = 0.0
 	inspect_locked = false
 	inspect_released = false
-	# Sin manos que suenen ni que gesticulen: la inspeccion es solo corredera.
+	# Gesto corto de inspeccion real: presentar la recamara, no un floreo.
+	viewmodel.play_clip(GlockViewmodel.CLIP_INSPECT, true)
 
 
 func _update_inspect(delta: float) -> void:
@@ -562,6 +579,7 @@ func _update_inspect(delta: float) -> void:
 	if inspect_elapsed >= INSPECT_TOTAL:
 		inspecting = false
 		inspect_pose_blend = 0.0
+		viewmodel.play_clip(GlockViewmodel.CLIP_IDLE, true)
 
 
 func _seat_reload_mag() -> void:
@@ -587,6 +605,8 @@ func _finish_reload() -> void:
 	mag_offset = 0.0
 	viewmodel.set_magazine_offset(0.0)
 	viewmodel.set_magazine_visible(true)
+	# La recarga acaba de asentar: los brazos vuelven al agarre de tiro.
+	viewmodel.play_clip(GlockViewmodel.CLIP_IDLE, true)
 	_emit_ammo()
 
 

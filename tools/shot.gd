@@ -24,6 +24,11 @@ var frame_stride := 1
 var advance := 0
 
 var _frame := 0
+## Tiempo de JUEGO acumulado (ms) y el instante de la accion. Las capturas se
+## nombran por su offset real desde la accion, no por su indice: con camara lenta
+## `Engine.time_scale` cambia cuanto juego cabe en un frame, y el indice miente.
+var _game_ms := 0.0
+var _action_ms := -1.0
 var _game: Node = null
 var _player: Node = null
 var _weapon: Node = null
@@ -81,8 +86,15 @@ func _place() -> void:
 			p.global_position = Vector3(8.6, 0.05, -16.0)
 			_aim(0.0, -0.18)
 		"aluminum":
-			p.global_position = Vector3(-1.3, 0.05, -9.6)
-			_aim(0.025, -0.37)
+			# Las latas de pie (World las pone en 6,6 / 0,98 / -11,0). El preset
+			# apuntaba a (-1,3, -9,6) hacia las latas del SUELO, pero el muro de
+			# tablones esta en (-2,5, -12) y las tapa: la captura "aluminum"
+			# ensenaba un impacto en MADERA. La prueba de `thin_shell` se hace
+			# contra las latas de pie, que tienen linea de tiro limpia.
+			# A 1,5 m de las latas: a 4,5 m la lata son 19 px y el agujero no se
+			# lee en la captura, que es justo lo que hay que poder juzgar.
+			p.global_position = Vector3(6.6, 0.05, -9.5)
+			_aim(0.0, -0.40)
 		"crate":
 			p.global_position = Vector3(4.7, 0.05, -8.3)
 			_aim(0.0, -0.10)
@@ -109,8 +121,9 @@ func _aim(yaw: float, pitch: float) -> void:
 	_player.set("pitch_target", pitch)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_frame += 1
+	_game_ms += delta * 1000.0
 	if _frame == warmup - 2:
 		if advance > 0 and _weapon != null:
 			for _i in range(advance):
@@ -118,8 +131,9 @@ func _process(_delta: float) -> void:
 		_trigger()
 	if _frame >= warmup and _frame < warmup + total:
 		if (_frame - warmup) % frame_stride == 0:
+			var offset := _game_ms - (_action_ms if _action_ms >= 0.0 else _game_ms)
 			_view.get_texture().get_image().save_png(
-				"%s/f_%02d.png" % [out_dir, _frame - warmup])
+				"%s/f_%05dms.png" % [out_dir, int(round(offset))])
 	elif _frame >= warmup + total:
 		print("SHOT action=%s frames=%d disparos=%d dir=%s" % [action, total, _shots, out_dir])
 		get_tree().quit()
@@ -128,6 +142,7 @@ func _process(_delta: float) -> void:
 func _trigger() -> void:
 	if _weapon == null:
 		return
+	_action_ms = _game_ms
 	match action:
 		"fire", "ads_fire", "steel", "wood", "drywall", "aluminum", "crate":
 			if action.begins_with("ads"):

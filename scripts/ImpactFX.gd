@@ -141,18 +141,24 @@ func spawn_impact(point: Vector3, normal: Vector3, collider: Object, surface: St
 ## El fogonazo dura milisegundos; el humo persiste: deriva, expansion, fade y
 ## ligera turbulencia con variacion contenida. Sale del bore (misma direccion
 ## del proyectil), no de la camara.
-## CALIBRADO: el gris 0.55 a alfa 0.24 no se veia en juego; 0.72/0.42 si, sin
-## parecer humo de pelicula (12 particulas, 1,4 s, a la deriva).
+## CALIBRADO DOS VECES, y la segunda con los brazos montados y captura delante.
+## El alfa que se ve NO es el que se escribe: `vertex_color_use_as_albedo` hace
+## que el alfa final sea el PRODUCTO del color de particula y el del quad, o sea
+## 0,38 * 0,42 = 0,16. Sobre el hormigon gris de la sala eso es invisible: en
+## `captures/shot/fire` a +150 ms y +345 ms no habia ni rastro de humo. Ahora el
+## producto da ~0,5, la voluta sube (gravedad 0,55) para que asome por encima de
+## la corredera en vez de quedarse detras del arma, y son 18 particulas de 0,09 m.
+## El fogonazo no se toca: ya se lee.
 func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     var pm := ParticleProcessMaterial.new()
     pm.direction = direction.normalized()
     pm.spread = 28.0
     pm.initial_velocity_min = 0.3
     pm.initial_velocity_max = 0.9
-    pm.gravity = Vector3(0, 0.18, 0)
+    pm.gravity = Vector3(0, 0.55, 0)
     pm.scale_min = 0.5
     pm.scale_max = 2.0
-    pm.color = Color(0.72, 0.72, 0.70, 0.38)
+    pm.color = Color(0.72, 0.72, 0.70, 0.62)
     pm.damping_min = 1.2
     pm.damping_max = 2.0
     # Sin turbulencia runtime: en Mobile/Mesa colgaba el readback y pintaba
@@ -166,19 +172,19 @@ func spawn_muzzle_smoke(point: Vector3, direction: Vector3) -> void:
     pm.scale_curve = scale_tex
     # Fade: nace visible y muere transparente (sin pop al liberar).
     var grad := Gradient.new()
-    grad.set_color(0, Color(0.72, 0.72, 0.70, 0.38))
+    grad.set_color(0, Color(0.72, 0.72, 0.70, 0.62))
     grad.set_color(1, Color(0.72, 0.72, 0.70, 0.0))
     var grad_tex := GradientTexture1D.new()
     grad_tex.gradient = grad
     pm.color_ramp = grad_tex
 
     var particles := GPUParticles3D.new()
-    particles.amount = 12
+    particles.amount = 18
     particles.lifetime = 1.4
     particles.one_shot = true
     particles.explosiveness = 0.92
     particles.process_material = pm
-    particles.draw_pass_1 = _particle_quad(SOFT_TEXTURE, Color(0.75, 0.75, 0.73, 0.42), false, Vector2(0.075, 0.075))
+    particles.draw_pass_1 = _particle_quad(SOFT_TEXTURE, Color(0.75, 0.75, 0.73, 0.85), false, Vector2(0.090, 0.090))
     particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     add_child(particles)
     particles.global_position = point

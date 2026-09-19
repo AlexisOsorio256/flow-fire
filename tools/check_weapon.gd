@@ -70,14 +70,16 @@ func _ready() -> void:
 		failures += 1
 		print("FALLO: falta una pieza obligatoria o un punto del GLB canonico")
 	print("piezas obligatorias: Frame/Slide/Barrel/Trigger/Magazine + Muzzle/EjectionPort/SightRear/SightFront/Grip/Magwell")
-	# El viewmodel va SIN MANO, y es una decision: el brazo que montaba tapaba
-	# el arma y el fogonazo, o sea que era peor que no tener mano. Este check
-	# comprueba lo que SI tiene que cumplir (el arma sola, que es la que vende
-	# el producto) y deja constancia de que no hay mano, para que nadie la
-	# busque donde no esta.
-	if vm.get("right_hand") != null:
+	# CONTRATO DE LOS BRAZOS. Un brazo que no aguanta una captura es peor que no
+	# tener brazo, asi que el asset es obligatorio y se le exige lo que el runtime
+	# da por hecho: los cinco clips con los nombres exactos que pide `Glock.gd`,
+	# un esqueleto que solo deforma, y la raiz del brazo COINCIDIENDO con la del
+	# arma (si no coincide, el encuadre se cae en la primera captura).
+	if vm.get("arms_rig") == null:
 		failures += 1
-		print("FALLO: el viewmodel no debe montar mano (se retiro por mediocre)")
+		print("FALLO: el viewmodel debe montar el asset de brazos")
+	else:
+		failures += _check_arms(vm)
 	var weapon_meshes := _mesh_nodes(weapon)
 	var weapon_tris := 0
 	for mesh_instance: MeshInstance3D in weapon_meshes:
@@ -86,8 +88,7 @@ func _ready() -> void:
 		for surface in range(mesh_instance.mesh.get_surface_count()):
 			var indices: PackedInt32Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
 			weapon_tris += indices.size() / 3
-	print("arma sola: mallas=", weapon_meshes.size(), " triangulos=", weapon_tris,
-		" mano=no")
+	print("arma sola: mallas=", weapon_meshes.size(), " triangulos=", weapon_tris)
 	if weapon_meshes.is_empty() or weapon_tris < 3000:
 		failures += 1
 		print("FALLO: el arma debe traer su geometria (>=3k tris)")
@@ -238,6 +239,95 @@ func _ready() -> void:
 	else:
 		print("FALLOS: ", failures)
 	get_tree().quit(1 if failures > 0 else 0)
+
+
+## CONTRATO DE LOS BRAZOS, medido sobre el asset montado.
+##
+##   - existe un Skeleton3D y no trae huesos de mas (el exportador no debe
+##     arrastrar IK, constraints ni helpers: la complejidad de autoria se queda
+##     en Blender);
+##   - estan los cinco clips, con el nombre exacto que pide `Glock.gd`;
+##   - cada clip dura lo que dura su hito mecanico, porque comparten reloj;
+##   - la raiz del brazo coincide con la del arma (si no, el agarre se sale del
+##     encuadre en la primera captura);
+##   - el presupuesto de geometria es el del contrato de produccion.
+func _check_arms(vm: Node3D) -> int:
+	var bad := 0
+	var rig: Node3D = vm.get("arms_rig")
+	var player: AnimationPlayer = vm.get("arms_player")
+	var skeleton: Skeleton3D = null
+	var meshes: Array[MeshInstance3D] = []
+	var stack: Array = [rig]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is Skeleton3D and skeleton == null:
+			skeleton = node as Skeleton3D
+		if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+			meshes.append(node as MeshInstance3D)
+		for child in node.get_children():
+			stack.append(child)
+	var tris := 0
+	for mesh_instance in meshes:
+		for surface in range(mesh_instance.mesh.get_surface_count()):
+			var indices: PackedInt32Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
+			tris += indices.size() / 3
+	if skeleton == null:
+		bad += 1
+		print("FALLO: los brazos no traen Skeleton3D")
+	if meshes.size() > 2:
+		bad += 1
+		print("FALLO: los brazos traen ", meshes.size(), " mallas (contrato: 1-2)")
+	if tris < 4000 or tris > 24000:
+		bad += 1
+		print("FALLO: los brazos estan fuera del presupuesto de triangulos: ", tris)
+	var bones := 0 if skeleton == null else skeleton.get_bone_count()
+	if bones < 30 or bones > 60:
+		bad += 1
+		print("FALLO: huesos de brazo fuera de contrato (30-60): ", bones)
+	# Nombres que delatan autoria filtrada al runtime.
+	if skeleton != null:
+		for i in range(skeleton.get_bone_count()):
+			var bone := skeleton.get_bone_name(i).to_lower()
+			for marker in ["ik", "ctrl", "control", "helper", "target", "_end", "pole"]:
+				if bone.contains(marker):
+					bad += 1
+					print("FALLO: hueso de autoria exportado: ", bone)
+					break
+	if player == null:
+		bad += 1
+		print("FALLO: los brazos no traen AnimationPlayer")
+	else:
+		var expected := {
+			"Idle": 3.0, "Fire": 0.26, "Reload": 2.10,
+			"ReloadEmpty": 2.35, "Inspect": 2.00,
+		}
+		for clip in expected:
+			var found: String = vm.call("_clip_name", clip)
+			if found == "":
+				bad += 1
+				print("FALLO: falta el clip ", clip)
+				continue
+			var anim := player.get_animation(found)
+			var duration: float = anim.length if anim != null else 0.0
+			var want: float = expected[clip]
+			print("clip %-12s %.3f s (mecanica %.2f s) pistas=%d" % [
+				clip, duration, want, 0 if anim == null else anim.get_track_count()])
+			if absf(duration - want) > 0.08:
+				bad += 1
+				print("FALLO: ", clip, " no dura lo que su hito mecanico")
+	# La raiz del brazo tiene que caer sobre la del arma: es lo que hace que
+	# GRIP_POS/GRIP_ROT puedan ser cero.
+	(vm as Node3D).force_update_transform()
+	rig.force_update_transform()
+	var weapon: GlockWeapon = vm.get("weapon")
+	weapon.force_update_transform()
+	var delta: float = rig.global_position.distance_to(weapon.global_position)
+	print("brazo mallas=%d tris=%d huesos=%d  raiz/arma mm=%.2f" % [
+		meshes.size(), tris, bones, delta * 1000.0])
+	if delta > 0.002:
+		bad += 1
+		print("FALLO: la raiz del brazo no coincide con la del arma")
+	return bad
 
 
 ## Vertice testigo de la pieza: el mas lejano a su origen (la punta del

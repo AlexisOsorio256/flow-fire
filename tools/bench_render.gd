@@ -1,9 +1,9 @@
 extends Node
 ## BenchRender: mide el RENDER real del juego.
 ##
-## `check_fps.gd` mide TIME_PROCESS de script y por eso no dice nada de la GPU.
-## Aqui el reloj es el DELTA REAL entre frames con vsync apagado y max_fps=0: si
-## la GPU tarda mas, el delta sube.
+## Mide el DELTA REAL entre frames con vsync apagado y max_fps=0: si la GPU
+## tarda mas, el delta sube. (La sonda vieja `check_fps.gd`, ya retirada, medía
+## TIME_PROCESS de script y por eso no decía nada de la GPU.)
 ##
 ## DOS MODOS, Y NO VALEN LO MISMO
 ## ------------------------------
@@ -28,6 +28,11 @@ var frames := 120
 var tag := "bench"
 var out_path := ""
 var view_size := Vector2i.ZERO
+## `--skin=0` apaga la PIEL del viewmodel (los brazos) sin tocar nada mas. Es la
+## unica forma de atribuirle un coste a los brazos: dos pasadas del mismo build,
+## misma escena, misma luz, mismo mundo. Comparar contra un numero de otra
+## maquina no atribuye nada.
+var skin := true
 
 var _samples: Array[float] = []
 var _frame := 0
@@ -51,6 +56,8 @@ func _ready() -> void:
 			"--view":
 				var parts := kv[1].split("x")
 				view_size = Vector2i(int(parts[0]), int(parts[1]))
+			"--skin":
+				skin = kv[1] != "0"
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 0
 	DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, true)
@@ -70,6 +77,24 @@ func _ready() -> void:
 	else:
 		add_child(_game)
 	await get_tree().process_frame
+	if not skin:
+		_set_skin_visible(_game, false)
+
+
+## Apaga SOLO las mallas que cuelgan del esqueleto de los brazos. Se busca por
+## tipo de nodo, no por nombre de escena: si el asset se reexporta con otro
+## nombre, la medicion sigue valiendo.
+func _set_skin_visible(root: Node, visible: bool) -> void:
+	var stack: Array = [root]
+	var hidden := 0
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is MeshInstance3D and (node as MeshInstance3D).skin != null:
+			(node as MeshInstance3D).visible = visible
+			hidden += 1
+		for child in node.get_children():
+			stack.append(child)
+	print("BENCH skin=%s mallas_apagadas=%d" % [str(visible), hidden])
 
 
 func _process(delta: float) -> void:

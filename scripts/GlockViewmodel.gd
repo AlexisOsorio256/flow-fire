@@ -1,8 +1,8 @@
 class_name GlockViewmodel
 extends Node3D
 
-## VIEWMODEL: la pistola montada y la pose de camara. La mano es una capa de
-## presentacion horneada; no participa en la mecanica.
+## VIEWMODEL: la pistola montada, los brazos y la pose de camara. Los brazos son
+## una capa de presentacion; no participan en la mecanica.
 ##
 ## NO decide gameplay. Recibe el estado ya decidido por `Glock.gd` y lo
 ## representa.
@@ -12,7 +12,7 @@ extends Node3D
 ##   Viewmodel
 ##   └── PoseRoot          cadera / ADS / sprint / bob / sway / respiracion
 ##       └── BodyGive      cesion lenta del conjunto (GlockRecoil.give_*)
-##           ├── RightHand    ArmsRig 20 huesos + 1 malla, agarre horneado
+##           ├── ArmsRig   fps_arms.glb: 1 malla, esqueleto deform, 5 clips
 ##           └── WeaponGrip  el arma dentro del pivote (GRIP_POS / GRIP_ROT)
 ##               └── WeaponSocket   retroceso: UNICA transformacion del arma
 ##                   └── Weapon -> Frame / Slide / Barrel / Magazine / ...
@@ -21,36 +21,43 @@ extends Node3D
 ##
 ##   El arma entera (recoil) ........ WeaponSocket, escrito por GlockRecoil
 ##   Corredera, gatillo y cargador .. Glock.gd -> GlockWeapon
+##   Huesos humanos ................. AnimationPlayer de ArmsRig, y SOLO huesos
 ##   Camara ......................... Player.gd (aqui no se toca)
 ##
-## Mano derecha riggeada minima (v1): 1 malla, 1 material, ~20 deform bones,
-## agarre horneado sobre el Grip, 0 clips. El arma sigue siendo el hero asset
-## y la mano no escribe transforms de ninguna pieza.
+## LOS BRAZOS NO ESCRIBEN EL TRANSFORM DEL ARMA. `ArmsRig` cuelga de `BodyGive`,
+## asi que recibe la cesion lenta del conjunto pero NO el retroceso rapido: el
+## arma cabecea dentro del agarre, que es lo que se quiere leer. Quien pide los
+## clips es `Glock.gd`, en sus propios hitos: la animacion no tiene cronometros
+## ni estado, y no puede convertirse en una segunda autoridad mecanica.
 ##
 ## EL ARMA NO ESTA EN NINGUN ESQUELETO, ni se busca dentro de uno: `GlockWeapon`
-## es un arbol de piezas rigidas y su sitio son DOS CONSTANTES CALIBRADAS
-## (GRIP_POS / GRIP_ROT), no una medicion en runtime.
+## es un arbol de piezas rigidas.
 ##
 ## ESCALA: el arma va en metros (malla 174 mm; referencia Gen5 185 mm, se
 ## declara aproximacion visual). Nadie la escala para encuadrar; el encuadre se
 ## calibra alrededor.
 
-## El arma dentro del pivote. CALIBRADO mirando en :0: el GLB canonicalizado
-## viene recentrado y el encuadre se calibra moviendo el pivote. Radianes.
-## El arma y la mano comparten este pivote dentro del viewmodel.
+## El arma dentro del pivote.
 ##
-## SON CASI IDENTIDAD A PROPOSITO. La mano se orienta en Blender
-## (`tools/build_hand_rig.py`) para que el puño caiga en el ORIGEN del GLB con
-## la empuñadura hacia +Y y los dedos hacia -Z, que es exactamente el espacio
-## del nodo `Grip` del arma. Antes estos numeros eran una calibracion a ojo
-## sobre un rig de capsulas; al cambiar la malla habrian dejado de valer.
+## SON IDENTIDAD A PROPOSITO. El asset de brazos se autora en el espacio del arma
+## (mismo sistema que el GLB de la Glock) con la mano ya agarrando la
+## empuñadura, asi que no hay desplazamiento que compensar: `mount_arms()` iguala
+## la raiz del brazo a la del arma con UNA operacion medida, no con una constante
+## calibrada a ojo. Si la malla del brazo cambia, este archivo no se toca.
 const GRIP_POS := Vector3(0.0, 0.0, 0.0)
 const GRIP_ROT := Vector3(0.0, 0.0, 0.0)
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
-## CALIBRADO con la pistola en metros reales: la distancia al ojo es la de un
-## encuadre validado (0,31 m), no la que exigia la escala inflada de los brazos.
-const HIP_POS := Vector3(0.110, -0.011, -0.308)
+## CALIBRADO con la pistola en metros reales. La distancia final al ojo es la
+## suma del rig (`Player.WEAPON_RIG_POS.z`) y de esta pose; el numero que manda
+## es el que mide `tools/frame_probe.tscn` (0,653 m en cadera), no esta linea.
+## ACERCADO: el encuadre anterior dejaba el arma a 0,653 m del ojo (suma de
+## `Player.WEAPON_RIG_POS.z` y esta pose), que a 82 grados de FOV la dibuja como
+## un 12% del alto de cuadro: se lee lejos para una pistola que se lleva en la
+## mano. Ahora esta a 0,52 m, que es la distancia de un viewmodel normal y ademas
+## queda coherente con el ADS (0,44 m). El encuadre real lo mide
+## `tools/frame_probe.tscn`; este numero no se toca a ojo.
+const HIP_POS := Vector3(0.095, -0.011, -0.130)
 ## Ojo -> mira trasera en ADS.
 const ADS_SIGHT_DISTANCE := 0.44
 ## Pose de recarga: el arma sube al centro-bajo, se canta hacia dentro para
@@ -65,9 +72,57 @@ const RELOAD_POSE_RIGHT := -0.035
 const RELOAD_POSE_FWD := 0.085
 const RELOAD_POSE_PITCH := 0.30
 const RELOAD_POSE_ROLL := -0.42
+## INSPECCION: pose PROPIA, no la de recarga. El puerto de expulsion esta en el
+## lado DERECHO de la corredera y la camara esta detras-izquierda y arriba del
+## arma (vector arma->camara en cadera, medido con `tools/frame_probe.tscn`:
+## (-0,16, +0,28, +0,94)). Subir el arma no ensena nada: el puerto solo encara al
+## ojo con guiñada NEGATIVA (el morro se va a la derecha del tirador y la ventana
+## gira hacia su cara). Antes la inspeccion reutilizaba la pose de recarga y el
+## puerto miraba hacia fuera: la recamara no se veia, que es justo lo unico que
+## la inspeccion tiene que ensenar.
+## La subida es PEQUENA a proposito. Subir y acercar el arma mete el antebrazo
+## en cuadro: los brazos van soldados a la pose del arma, asi que levantar el
+## arma levanta el brazo entero y la mano acaba tapando la corredera (medido en
+## captura: a +0,12 de subida y +0,13 de avance la mano llenaba el encuadre y el
+## arma quedaba detras). En la pose de cadera, que es la que funciona, el
+## antebrazo sale por abajo-derecha; la inspeccion se queda cerca de ahi.
+const INSPECT_POSE_UP := 0.05
+const INSPECT_POSE_RIGHT := -0.05
+const INSPECT_POSE_FWD := 0.02
+const INSPECT_POSE_PITCH := 0.06
+## La guiñada es GRANDE y no es un adorno: con el arma a 0,56 m y la camara
+## detras, el puerto (normal +X del arma) solo encara al ojo cerca de -85 grados.
+## Se midio: a -39 grados el puerto daba +0,46 contra el ojo (oblicuo); con este
+## valor pasa de +0,9. `tools/frame_probe.tscn` imprime los numeros.
+const INSPECT_POSE_YAW := -1.45
+const INSPECT_POSE_ROLL := -0.20
+## ACOPLAMIENTO CON EL ASSET DE BRAZOS, declarado para que nadie lo rompa en
+## silencio: los brazos van soldados a la pose del arma, asi que el clip
+## `Inspect` lleva dentro la CONTRARROTACION de esta guiñada. Si se cambia
+## INSPECT_POSE_YAW/PITCH/ROLL aqui, hay que cambiar los mismos tres numeros en
+## `tools/build_arms.py` (constantes INSPECT_PITCH/YAW/ROLL de su cabecera) y
+## reexportar. No es una preferencia estetica: sin la contrarrotacion el
+## antebrazo cruza el encuadre y tapa el arma.
+## Los offsets de posicion (UP/RIGHT/FWD) NO necesitan ese espejo: mueven el
+## arma y el brazo juntos, no cambian su orientacion relativa.
 
 const VIEWMODEL_LAYER := 13
 const VIEWMODEL_LAYER_BIT := 1 << (VIEWMODEL_LAYER - 1)
+
+## BRAZOS: un unico asset de produccion, montado en `BodyGive`. Su fuente y su
+## contrato estan en `CREDITS_MODELS.md`; su builder, en `tools/build_arms.py`.
+##
+## El asset se autora en el ESPACIO DEL ARMA (mismo sistema que `g19_pistol.glb`:
+## +Y arriba, -Z al morro, origen en la raiz del arma) con la mano derecha ya
+## agarrando la empuñadura. Por eso al montar solo hay que igualar la raiz del
+## brazo a la del arma: no hay offsets que calibrar en runtime, y si la malla
+## cambia, el encuadre no se toca.
+const ARMS_PATH := "res://assets/models/fps_arms.glb"
+const CLIP_IDLE := "Idle"
+const CLIP_FIRE := "Fire"
+const CLIP_RELOAD := "Reload"
+const CLIP_RELOAD_EMPTY := "ReloadEmpty"
+const CLIP_INSPECT := "Inspect"
 
 var camera: Camera3D
 
@@ -79,6 +134,11 @@ var weapon_socket: Node3D
 
 # --- arma ------------------------------------------------------------------
 var weapon: GlockWeapon
+
+# --- brazos ----------------------------------------------------------------
+var arms_rig: Node3D
+var arms_player: AnimationPlayer
+var _clip := ""
 
 # --- puntos del arma -------------------------------------------------------
 var muzzle: Node3D:
@@ -95,6 +155,7 @@ var _in_speed := 0.0
 var _in_look := Vector2.ZERO
 var _in_move := Vector2.ZERO
 var _in_reload_pose := 0.0
+var _in_inspect_pose := 0.0
 
 var bob_phase := 0.0
 var idle_phase := 0.0
@@ -122,9 +183,9 @@ func _ready() -> void:
 	_build_viewmodel_light()
 
 
-## Monta la mano y el arma en el mismo espacio de Grip. Ninguno de los dos
-## assets contiene animacion: el WeaponSocket es el unico que mueve la Glock
-## entera durante el recoil.
+## Monta el arma y los brazos en el mismo espacio de Grip. Ninguno de los dos
+## assets contiene animacion de mecanica: los brazos SOLO mueven huesos humanos,
+## y el WeaponSocket es el unico que mueve la Glock entera durante el recoil.
 func mount() -> bool:
 	weapon = GlockWeapon.new()
 	weapon.name = "Weapon"
@@ -134,29 +195,110 @@ func mount() -> bool:
 		weapon.queue_free()
 		weapon = null
 		return false
-	# SIN MANO. Y es una decision, no un olvido.
-	#
-	# El viewmodel montaba un brazo `right_hand.glb` que resulto ser PEOR que no
-	# tener mano: un antebrazo mal orientado y demasiado cerca de la camara tapa
-	# el arma y el fogonazo, que es justo lo que este producto vende. La
-	# constitucion es explicita: un asset malo no se conserva por el trabajo ya
-	# hecho, y no se sigue puliendo basura. Se retira.
-	#
-	# Lo que queda es un viewmodel de SOLO ARMA, que es una presentacion honesta
-	# y muy comun. Cuando haya un brazo que aguante una captura, se vuelve a
-	# montar aqui: `body_give` sigue existiendo y sigue siendo su sitio.
-	#
-	# El arma sigue siendo el hero asset y nadie le escribe transforms: lo mueve
-	# `WeaponSocket` (recoil) y `BodyGive` (cesion). El pivot del retroceso se
-	# toma del Grip medido en el GLB.
 	weapon_grip.position = GRIP_POS
 	weapon_grip.rotation = GRIP_ROT
+	if not mount_arms():
+		return false
 	muzzle = weapon.muzzle
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
 	if recoil != null:
 		recoil.set_pivot(weapon.grip_pivot())
 	return true
+
+
+## Los brazos son una capa de PRESENTACION, y son obligatorios: si faltan, el
+## viewmodel no arranca en vez de dibujar una pistola flotante. El contrato de
+## produccion lo dice: si falta un asset obligatorio, el arranque falla.
+func mount_arms() -> bool:
+	var packed := load(ARMS_PATH) as PackedScene
+	if packed == null:
+		push_error("Viewmodel detenido: falta el asset de brazos " + ARMS_PATH)
+		return false
+	var instance := packed.instantiate() as Node3D
+	if instance == null:
+		push_error("Viewmodel detenido: " + ARMS_PATH + " no tiene raiz Node3D")
+		return false
+	# La raiz importada se cuelga de un portanodos, y es EL PORTANODOS el que se
+	# calibra. Escribir sobre la raiz importada borraria la transformacion que le
+	# haya puesto el importador (hoy es identidad, pero eso es un detalle del
+	# importador, no un contrato del asset).
+	var holder := Node3D.new()
+	holder.name = "ArmsRig"
+	body_give.add_child(holder)
+	holder.add_child(instance)
+	arms_rig = holder
+	# El arma esta en reposo en este instante (WeaponGrip y WeaponSocket son
+	# identidad), asi que su transform de mundo ES el espacio del arma. Se iguala
+	# con una operacion, no con una constante calibrada: cambiar la malla del
+	# brazo no obliga a tocar este archivo.
+	pose_root.force_update_transform()
+	body_give.force_update_transform()
+	weapon.force_update_transform()
+	arms_rig.transform = body_give.global_transform.affine_inverse() * weapon.global_transform
+	arms_player = _find_player(arms_rig)
+	if arms_player == null:
+		push_error("Viewmodel detenido: los brazos no traen AnimationPlayer")
+		return false
+	for name in [CLIP_IDLE, CLIP_FIRE, CLIP_RELOAD, CLIP_RELOAD_EMPTY, CLIP_INSPECT]:
+		if _clip_name(name) == "":
+			push_error("Los brazos no traen el clip obligatorio " + name)
+			return false
+	var idle := arms_player.get_animation(_clip_name(CLIP_IDLE))
+	if idle != null:
+		idle.loop_mode = Animation.LOOP_LINEAR
+	arms_player.animation_finished.connect(_on_clip_finished)
+	play_clip(CLIP_IDLE, true)
+	_apply_viewmodel_layer(arms_rig)
+	print("BRAZOS montados: 1 malla, clips=", arms_player.get_animation_list(),
+		" huesos=", _bone_count())
+	return true
+
+
+## Nombre real del clip dentro del AnimationPlayer importado. El importador de
+## glTF puede prefijarlo, asi que se busca por sufijo en vez de por igualdad.
+func _clip_name(clip: String) -> String:
+	if arms_player == null:
+		return ""
+	for candidate in arms_player.get_animation_list():
+		var text := String(candidate)
+		if text == clip or text.ends_with("/" + clip) or text.ends_with("|" + clip) \
+				or text.ends_with("_" + clip):
+			return text
+	return ""
+
+
+## Reproduce un clip de brazos. Lo llaman SIEMPRE los hitos de `Glock.gd`: el
+## AnimationPlayer no decide nada, solo obedece. `restart` vuelve al frame 0
+## (un disparo detras de otro tiene que reempezar el latigazo, no ignorarlo).
+func play_clip(clip: String, restart := false) -> void:
+	if arms_player == null:
+		return
+	var found := _clip_name(clip)
+	if found == "":
+		push_error("Los brazos no traen el clip " + clip)
+		return
+	if not restart and _clip == found and arms_player.is_playing():
+		return
+	_clip = found
+	arms_player.play(found)
+
+
+func _on_clip_finished(clip: StringName) -> void:
+	if String(clip).ends_with(CLIP_FIRE):
+		play_clip(CLIP_IDLE, true)
+
+
+func _bone_count() -> int:
+	var stack: Array = [arms_rig]
+	var total := 0
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is Skeleton3D:
+			total += (node as Skeleton3D).get_bone_count()
+		for child in node.get_children():
+			stack.append(child)
+	return total
 
 
 func _find_player(root_node: Node) -> AnimationPlayer:
@@ -170,8 +312,7 @@ func _find_player(root_node: Node) -> AnimationPlayer:
 	return null
 
 
-## Gesto Fire horneado (latigazo de muneca 0,2 s sobre el agarre). Lo llama
-## Glock al disparar; si no hay player la mano sigue estatica y no se rompe.
+## Offset del cargador dentro del arma (metros). Lo decide `Glock.gd`.
 func set_magazine_offset(offset_m: float) -> void:
 	if weapon != null:
 		weapon.set_magazine_offset(offset_m)
@@ -231,13 +372,15 @@ func _build_viewmodel_light() -> void:
 # ---------------------------------------------------------------------------
 # Pose
 # ---------------------------------------------------------------------------
-func set_pose_inputs(aim: float, sprint: float, speed: float, look: Vector2, move: Vector2, reload_pose: float) -> void:
+func set_pose_inputs(aim: float, sprint: float, speed: float, look: Vector2, move: Vector2,
+		reload_pose: float, inspect_pose := 0.0) -> void:
 	_in_aim = aim
 	_in_sprint = sprint
 	_in_speed = speed
 	_in_look = look
 	_in_move = move
 	_in_reload_pose = reload_pose
+	_in_inspect_pose = inspect_pose
 
 
 func _apply_pose(delta: float) -> void:
@@ -290,6 +433,12 @@ func _apply_pose(delta: float) -> void:
 	pos.z += _in_reload_pose * RELOAD_POSE_FWD
 	rot.x += _in_reload_pose * RELOAD_POSE_PITCH
 	rot.z += _in_reload_pose * RELOAD_POSE_ROLL
+	pos.y += _in_inspect_pose * INSPECT_POSE_UP
+	pos.x += _in_inspect_pose * INSPECT_POSE_RIGHT
+	pos.z += _in_inspect_pose * INSPECT_POSE_FWD
+	rot.x += _in_inspect_pose * INSPECT_POSE_PITCH
+	rot.y += _in_inspect_pose * INSPECT_POSE_YAW
+	rot.z += _in_inspect_pose * INSPECT_POSE_ROLL
 	pose_root.position = pos
 	pose_root.rotation = rot
 

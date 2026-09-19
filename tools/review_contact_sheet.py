@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Hoja de contacto para revisar UNA accion rapida del juego real.
 
+Usa el MISMO capturador que el resto del proyecto: `tools/shot.gd`. Hubo un
+segundo harness que solo servia a esta hoja y se retiro; un solo capturador, dos
+lecturas (frames sueltos y hoja de contacto).
+
 No es un test, no calcula metricas, no da veredictos: graba la accion a
 suficientes FPS y reune los frames en UNA sola PNG para mirarla de una vez.
 
@@ -91,7 +95,7 @@ def main():
             "--audio-driver", "Dummy",
             "--resolution", "960x540",
             "--display-driver", "x11",
-            "tools/review_capture.tscn",
+            "tools/shot.tscn",
             "--", "--action=" + action, "--out=" + tmp,
             "--warmup=40", "--total=%d" % total,
             "--time-scale=%s" % ts,
@@ -100,11 +104,14 @@ def main():
         for line in (proc.stdout.decode() + proc.stderr.decode()).splitlines():
             # Lo unico que importa del log: disparos REALES (senal shot_fired),
             # no intentos. Si la hoja dice "rafaga de 4" esto debe decir 4.
-            if "REVIEW disparos" in line:
+            if line.strip().startswith("SHOT action="):
                 print(line.strip())
+        # `shot.gd` nombra cada frame con su tiempo de JUEGO en ms
+        # (`f_00123ms.png`): el orden es el del tiempo, no el del indice, y con
+        # camara lenta esas dos cosas no coinciden.
         frames = sorted(
             (f for f in os.listdir(tmp) if f.endswith(".png")),
-            key=lambda f: int(f.split("_")[1]),
+            key=parse_ms,
         )
         if not frames:
             print("no se capturo ningun frame")

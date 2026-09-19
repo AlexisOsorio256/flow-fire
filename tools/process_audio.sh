@@ -11,6 +11,11 @@
 # `tools/build_shot_real.py` de una grabación real y ya fija su pico; volver a
 # normalizarlos los desharía.
 #
+# OJO: los seis de impacto (`impact_*.wav`, `ricochet.wav`) tampoco. Los corta
+# `tools/build_impacts.py`, cada uno de una grabación distinta, y se normalizan
+# por PICO (no por media) porque su factor de cresta va de 14 a 29 dB. Aquí no
+# se tocan.
+#
 # Uso: tools/process_audio.sh [--dry-run]
 # Requiere ffmpeg/ffprobe.
 #
@@ -36,7 +41,6 @@ AUDIO_DIR="$(cd "$(dirname "$0")/.." && pwd)/assets/audio"
 BACKUP_DIR="/tmp/audio_backup"
 DRY_RUN="${1:-}"
 
-SHOT_ATTACK_TARGET=-10.0   # dB de media en 0-250 ms
 IMPACT_ATTACK_TARGET=-12.0
 MECH_ATTACK_TARGET=-14.0
 SOFT_ATTACK_TARGET=-16.0
@@ -44,7 +48,6 @@ SOFT_ATTACK_TARGET=-16.0
 # techo era -1.5 dBFS pero la ganancia se calculaba sobre una media de 250 ms
 # que en shot_4/shot_5 medía material ANTERIOR al disparo: el "ataque" acababa
 # en 0 dBFS y las muestras salían recortadas (86 muestras al ras en shot_2).
-SHOT_PEAK_CEILING=-1.2
 PEAK_CEILING=-1.5          # dBFS
 
 # --- Forma del corte del disparo ---
@@ -89,49 +92,6 @@ envelope1ms() {
                     idx++; s = 0; c = 0
                 }
             }
-        }'
-}
-
-# shot_window <archivo> <t_ataque> <tope_ms> -> "inicio fin" en segundos
-#   inicio = t_ataque - 1 ms (margen para no comerse el primer flanco)
-#   fin    = primer instante en que vuelve a entrar material fuerte DESPUES del
-#            ataque, o el tope si no lo hay.
-#
-# Por que el fin no es simplemente el tope: los 6 disparos de la grabacion
-# original son una rafaga real de Glock 18c (1100-1360 RPM), asi que los ultimos
-# disparos tienen el SIGUIENTE disparo dentro de la misma ventana. Medido en la
-# envolvente de 20 ms: tras el ataque el nivel cae monotonamente 25-35 dB y luego
-# salta +15 dB de golpe. Ese salto es el disparo siguiente, no la cola del actual.
-# Colarlo hacia que un solo clic del jugador sonara a dos disparos.
-shot_window() {
-    local file="$1" atk="$2" cap_ms="$3"
-    envelope1ms "$file" | awk -v atk="$atk" -v cap="$cap_ms" -v sr=44100 '
-        {
-            # ventanas de 20 ms (20 tramas de 1 ms)
-            acc += $2; n++
-            if (n == 20) {
-                t = $1
-                w[++k] = t; lvl[k] = acc / 20.0; acc = 0; n = 0
-            }
-        }
-        END {
-            # ataque = ventana de 20 ms mas fuerte de los primeros 60 ms
-            best = -999; bi = 0
-            for (i = 1; i <= k; i++) {
-                if (w[i] > atk + 0.060) break
-                if (lvl[i] > best) { best = lvl[i]; bi = i }
-            }
-            s = atk - 0.001; if (s < 0) s = 0
-            e = s + cap / 1000.0
-            # primer salto sostenido hacia arriba tras el ataque
-            for (i = bi + 2; i <= k - 2; i++) {
-                if (lvl[i] - lvl[i - 1] >= 6.0 && lvl[i + 1] >= lvl[i] - 3.0 && lvl[i + 2] >= lvl[i] - 3.0) {
-                    var = w[i] - 0.030
-                    if (var < e) e = var
-                    break
-                }
-            }
-            printf "%.3f %.3f", s, e
         }'
 }
 
@@ -194,7 +154,7 @@ start_offset() {
 # "respaldaba" del propio WAV procesado y una re-ejecucion lo procesaba DOS
 # veces). Los originales de la foley heredada (Freesound) ya no existen como
 # tales: sus WAV versionados SON los masters. Lo reproducible de verdad son los
-# cortes con master versionado (`process_shot`, `process_mag`).
+# cortes con master versionado (`process_mag`, y los disparos en su propio builder).
 process() {
     local name="$1" target="$2" max_dur="$3" fade="$4" mode="$5"
     local file="$AUDIO_DIR/$name.wav"
@@ -253,98 +213,13 @@ process() {
         "$(level "$file" 0.35)"
 }
 
-# process_shot <n> <t_ataque> <tope_ms> <fade>
-#
-# Corta el disparo `n` de la grabacion original en su ataque real, con la cola
-# acotada al material que pertenece a ESE disparo, iguala su loudness de ataque
-# con el resto de variantes y lo deja por debajo del techo.
-#
-# Por que no se reutiliza `process`: los shot_N.wav anteriores eran ventanas de
-# 700 ms cortadas A MANO de esta misma rafaga, con offsets que no coincidian con
-# ningun ataque. Medido: shot_2.wav empezaba 310 ms ANTES de su disparo, asi que
-# el juego reproducia 310 ms de ruido de manejo y luego el estampido; shot_4 y
-# shot_5 empezaban 39 y 44 ms antes. Un clic del jugador sonaba a dos eventos.
-process_shot() {
-    local n="$1" atk="$2" cap_ms="$3" fade="$4"
-    local name="shot_$n"
-    local file="$AUDIO_DIR/$name.wav"
-    local master="$AUDIO_DIR/source/sonniss_gdc2016_glock18c_1m.wav"
-    [ -f "$master" ] || { echo "  falta la grabacion original: $master"; return; }
-    [ -f "$file" ] && [ ! -f "$BACKUP_DIR/$name.wav" ] && cp "$file" "$BACKUP_DIR/$name.wav"
-
-    local win start stop
-    win="$(shot_window "$master" "$atk" "$cap_ms")"
-    start="$(echo "$win" | awk '{print $1}')"
-    stop="$(echo "$win" | awk '{print $2}')"
-    local keep
-    keep="$(awk -v s="$start" -v e="$stop" 'BEGIN { printf "%.3f", e - s }')"
-
-    local tmp="$BACKUP_DIR/$name.trim.wav"
-    ffmpeg -v error -y -i "$master" -af "atrim=start=${start}:end=${stop},asetpts=PTS-STARTPTS" \
-        -ac 1 -ar 44100 -c:a pcm_s16le "$tmp"
-
-    local atk_rms gain fade_start
-    atk_rms="$(level "$tmp" 0.25)"
-    gain="$(awk -v t="$SHOT_ATTACK_TARGET" -v a="$atk_rms" 'BEGIN { printf "%.2f", t - a }')"
-    fade_start="$(awk -v k="$keep" -v f="$fade" 'BEGIN { s = k - f; printf "%.3f", (s > 0 ? s : 0) }')"
-
-    if [ "$DRY_RUN" = "--dry-run" ]; then
-        printf "  %-8s maestro %.3f..%.3f s  keep=%.3f s  ataque=%s dB  ganancia=%s dB\n" \
-            "$name" "$start" "$stop" "$keep" "$atk_rms" "$gain"
-        return
-    fi
-
-    # Cadena: ganancia de familia -> recorte -> fade. El volumen del mecanico va
-    # aqui y no en el motor para que el pico de la muestra siga siendo el del
-    # estampido.
-    local chain="volume=${gain}dB,atrim=0:${keep}"
-    if awk -v f="$fade" 'BEGIN { exit !(f > 0) }'; then
-        chain="$chain,afade=t=out:st=${fade_start}:d=${fade}"
-    fi
-    ffmpeg -v error -y -i "$tmp" -af "$chain" -ac 1 -ar 44100 -c:a pcm_s16le "$file"
-
-    # Techo de pico: si la ganancia lo paso, se baja lo justo y se comprueba que
-    # no quede ninguna muestra al ras (recortada).
-    local after_peak
-    after_peak="$(peak "$file")"
-    if awk -v p="$after_peak" -v c="$SHOT_PEAK_CEILING" 'BEGIN { exit !(p > c) }'; then
-        local trim
-        trim="$(awk -v p="$after_peak" -v c="$SHOT_PEAK_CEILING" 'BEGIN { printf "%.2f", c - p }')"
-        ffmpeg -v error -y -i "$file" -af "volume=${trim}dB" -ac 1 -ar 44100 -c:a pcm_s16le "$file.peak.wav"
-        mv "$file.peak.wav" "$file"
-    fi
-
-    printf "  %-8s maestro %.3f..%.3f s  dur %5.2f -> %5.2f  ataque %6s -> %6s  pico %5s -> %5s\n" \
-        "$name" "$start" "$stop" "$cap_ms" "$(duration_of "$file")" \
-        "$atk_rms" "$(level "$file" 0.25)" "$after_peak" "$(peak "$file")"
-}
-
-# Los 6 ataques de la grabacion original, medidos con la envolvente de 1 ms sobre
-# assets/audio/source/sonniss_gdc2016_glock18c_1m.wav (ver CREDITS_AUDIO.md).
-# El nombre del fichero de origen lo confirma: "...clean_Six_shots_x_1.wav".
-#
-# El tope de cada corte NO es estetico: es el hueco real hasta el disparo
-# siguiente menos 35 ms de margen. La rafaga es 6 tiros a 1100-1360 RPM, asi que
-# los tiros contiguos estan a 178-222 ms. Dejar la ventana mas larga que ese
-# hueco mete el disparo vecino dentro de la muestra y un clic del jugador suena a
-# dos disparos (era justo el defecto de los shot_N.wav anteriores).
-#   n  t_ataque  hueco_al_siguiente  tope  fade
-#   1  0.1190    222 ms              160   0.04
-#   2  0.3410    439 ms              340   0.05
-#   3  0.7800    206 ms              160   0.04
-#   4  0.9860    178 ms              135   0.04
-#   5  1.1640    183 ms              140   0.04
-#
-# El fade es corto y solo cierra el corte: alargarlo se comia la mitad del
-# estampido en los tiros de 135-160 ms, y eso es la mitad de lo que el montaje
-# tiene que reconstruir despues.
-SHOT_CUTS=(
-    "1 0.1190 160 0.04"
-    "2 0.3410 340 0.05"
-    "3 0.7800 160 0.04"
-    "4 0.9860 135 0.04"
-    "5 1.1640 140 0.04"
-)
+# Los cinco disparos NO se cortan aqui. Los construye
+# `tools/build_shot_real.py` desde tomas reales de pistola con una cadena de
+# dinamica/EQ (HPF, low-shelf y trim de ataque comun) y los mide
+# `tools/measure_shots.py`. Antes este script tenia un `process_shot` que
+# cortaba la rafaga de la Glock 18C de `assets/audio/source/`; ese maestro ya no
+# existe y la funcion no se llamaba desde ningun sitio, asi que se retiro con su
+# tabla `SHOT_CUTS`. Dejarla era documentar un camino que ya no produce nada.
 
 # process_mag <nombre> <inicio> <fin> <pico_objetivo> <fade>
 #
@@ -420,7 +295,23 @@ echo "== Disparos =="
 echo "   (los cinco shot_*.wav los genera tools/build_shot_real.py; no se tocan)"
 
 echo "== Impactos =="
-for s in impact_concrete impact_metal impact_wood ricochet; do process "$s" "$IMPACT_ATTACK_TARGET" 0.60 0.12 transient; done
+# Los SEIS impactos los corta `tools/build_impacts.py` desde sus fuentes
+# (Sonniss #GameAudioGDC y Freesound CC0), no desde $BACKUP_DIR: cada uno sale de
+# una grabacion distinta y con una receta propia (inicio, cola y fade medidos).
+# Este script ya no los toca. Normalizarlos aqui otra vez los desharía: `process`
+# alinea a un ataque y una media comunes, y la familia de impactos tiene crestas
+# de 14 a 29 dB, asi que la media comun los dejaba descompensados.
+#
+#   impact_metal / impact_concrete   impacto de bala real (Gamemaster Audio)
+#   impact_aluminum                  chapa fina golpeada (Airborne Sound)
+#   impact_wood                      tabla de madera partida (Double Trouble)
+#   impact_drywall                   flecha real contra panel fino (Freesound CC0)
+#   ricochet                         rebote de bala real con Doppler (Freesound CC0)
+#
+# Procedencia, autor y licencia de cada uno: CREDITS_AUDIO.md.
+echo "   (los seis impact_*.wav y ricochet.wav los genera tools/build_impacts.py; no se tocan)"
+echo "   (IMPORTANTE: antes impact_drywall copiaba el master de impact_concrete y"
+echo "    impact_aluminum era un EQ de impact_metal; ya no.)"
 
 echo "== Mecánica del arma =="
 # Los dos golpes de la corredera son DOS eventos físicos distintos (tope trasero
