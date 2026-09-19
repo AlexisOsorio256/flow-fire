@@ -39,6 +39,10 @@ if [ "$ACTION" = "evidencia" ]; then
   run downrange --warmup=40 --total=2                                  # HIP
   run ads       --warmup=40 --total=2                                  # ADS
   run fire      --warmup=40 --total=48 --stride=2 --time-scale=1.0     # disparo normal
+  # En ADS el arma esta a 0,44 m del ojo y el brazo pasa justo por debajo: es el
+  # estado donde mas facil es que la mano tape la boca. Se captura aparte.
+  ( SHOT_OUT=captures/shot/ads_fire \
+    run ads_fire --warmup=40 --total=8 --time-scale=0.06 )             # fogonazo apuntando
   # En SUBSHELL: `SHOT_OUT=x run ...` sobre una funcion deja la variable puesta
   # en el shell actual y la siguiente accion escribiria en la carpeta equivocada.
   ( SHOT_OUT=captures/shot/fire_slow \
