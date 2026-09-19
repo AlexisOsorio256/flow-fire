@@ -1415,6 +1415,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--verify-only", default="", help="valida un GLB ya escrito y sale")
     p.add_argument("--tex", type=int, default=1024,
                    help="lado al que se lleva TODA textura mayor que el (0 = no tocar)")
+    ## El hombro (cabeza de `upper_arm`) y el pole del codo son los dos mandos
+    ## con los que se encuadra el brazo en ADS: en ADS el arma se centra con el
+    ## ojo, asi que el antebrazo tiene que salir por abajo-derecha en vez de
+    ## apuntar a la camara.  Se pueden probar sin editar el fichero.
+    p.add_argument("--shoulder-r", default="", help="x,y,z en espacio del arma")
+    p.add_argument("--shoulder-l", default="")
+    p.add_argument("--pole-r", default="")
+    p.add_argument("--pole-l", default="")
     p.add_argument("--grip-slide", type=float, default=0.0)
     p.add_argument("--grip-roll", type=float, default=0.0)
     p.add_argument("--grip-off", default="0,0,0")
@@ -1482,6 +1490,19 @@ def main() -> None:
             "  y NO esta en el repo (downloads/ es gitignored)." % donor)
 
     global GRIP_CENTER, GRIP_AXIS, IDLE_D_LOCAL, UP_LEN, FORE_LEN
+    global SHOULDER_R, SHOULDER_L, POLE_R, POLE_L
+    for _name, _val in (("SHOULDER_R", args.shoulder_r), ("SHOULDER_L", args.shoulder_l),
+                        ("POLE_R", args.pole_r), ("POLE_L", args.pole_l)):
+        if _val:
+            _v = Vector([float(x) for x in _val.split(",")])
+            if _name == "SHOULDER_R":
+                SHOULDER_R = _v
+            elif _name == "SHOULDER_L":
+                SHOULDER_L = _v
+            elif _name == "POLE_R":
+                POLE_R = _v
+            else:
+                POLE_L = _v
     GRIP_CENTER = GRIP_CENTER + GRIP_AXIS * args.grip_slide \
         + Vector([float(v) for v in args.grip_off.split(",")])
 

@@ -393,18 +393,13 @@ def build() -> None:
             for dx in (-0.7, 0.0, 0.7):
                 metal.append(add_box("Hanger", (x + dx, y, HEIGHT - 0.05), (0.035, 0.035, 0.28), steel, 0.004))
 
-    # ------------------------------------------------- separadores de calle
-    # Perfileria de acero: pie + montante + dos railes. Es el elemento que
-    # convierte "una nave" en "un campo de tiro".
-    for lane_x in (-8.0, -4.0, 0.0, 4.0, 8.0):
-        for index in range(0, panels, 2):
-            y = Z1 + BAY * index + 0.6
-            metal.append(add_box("Lane post", (lane_x, y, 0.66), (0.07, 0.07, 1.24), steel, 0.006))
-            metal.append(add_box("Lane foot", (lane_x, y, 0.045), (0.34, 0.34, 0.09), steel, 0.008))
-        # Raíl inferior y superior de cada calle (72 m en dos tramos limpios).
-        metal.append(add_box("Lane rail low", (lane_x, CENTER_Y - 20.0, 0.34), (0.05, LENGTH - 40.0, 0.07), steel, 0.005))
-        metal.append(add_box("Lane rail low", (lane_x, CENTER_Y + 20.0, 0.34), (0.05, LENGTH - 40.0, 0.07), steel, 0.005))
-        metal.append(add_box("Lane rail top", (lane_x, CENTER_Y, 1.16), (0.05, LENGTH - 8.0, 0.07), steel, 0.005))
+    # --------------------------------------------- separadores de calle: FUERA
+    # Aqui vivian los montantes, los pies y los tres railes por calle (cinco
+    # calles) de acero pintado. Eran el elemento que convertia "una nave" en
+    # "un campo de tiro"... y tambien lo que el dueño del repo no quiere:
+    # "no quiero que esten los fierros, debe estar sin eso [para] moverme por
+    # donde yo quiero en todo el mapa". El rango es un instrumento: se camina
+    # por el entero y se dispara a lo que hay. No se repone nada en su lugar.
 
     # ------------------------------------------------------ puesto de tiro
     # La linea de fuego: encimera de roble sobre bancada de acero, mampara
@@ -417,9 +412,9 @@ def build() -> None:
     for dx in (-0.62, 0.62):
         for dy in (-0.50, 0.50):
             metal.append(add_cylinder("Booth leg", (1.80 + dx, gz(bench_z) + dy, 0.36), 0.026, 0.72, steel, 12))
-    for dx in (-1.05, 1.05):
-        metal.append(add_box("Booth divider", (1.80 + dx, gz(bench_z), 1.18), (0.05, 1.10, 0.95), steel, 0.008))
-        metal.append(add_box("Divider post", (1.80 + dx, gz(bench_z), 0.34), (0.07, 0.07, 0.68), steel, 0.006))
+    # Las pantallas laterales del puesto tambien se van: son los dos paneles
+    # negros grandes que flanqueaban el carril y tapaban media linea de tiro.
+    # Queda la mesa, que es lo unico que el jugador usa (los cargadores).
 
     # ----------------------------------------------------------- blanco/trap
     # Trampa de balas: rampa de acero inclinada, labio y alas laterales de

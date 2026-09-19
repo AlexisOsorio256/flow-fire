@@ -91,14 +91,12 @@ func _materials() -> void:
     mag_prop_mat.roughness = 0.45
 
 func _build_props() -> void:
-    _make_barrier(-5.8, -8.0, deg_to_rad(-8.0))
-    _make_barrier(5.6, -14.5, deg_to_rad(10.0))
-    _make_barrier(-5.4, -22.0, deg_to_rad(-6.0))
-    # Coberturas deliberadas: la de x=-2 cubre el blanco de papel de x=-2
-    # (se tira A TRAVES de la tabla: 55 mm de pino los pasa sobrados) y la
-    # de x=3 cubre el acero (ahi no hay paso: chispa y nada mas).
-    _make_barrier(-2.0, -16.5, deg_to_rad(20.0))
-    _make_barrier(3.0, -24.5, deg_to_rad(-18.0))
+    # LAS PLANCHAS DE ACERO YA NO ESTAN, y es una decision del dueño del repo,
+    # no una perdida: eran cinco mamparas atravesadas en los carriles que
+    # bloqueaban el paso y la linea de tiro ("no quiero que esten los fierros,
+    # debe estar sin eso [para] moverme por donde yo quiero en todo el mapa").
+    # El rango es un instrumento de medida: se camina por el y se dispara a lo
+    # que hay, sin escondites de por medio. `_make_barrier` se va con ellas.
 
     _make_plank_wall(-2.5, -12.0, deg_to_rad(15.0))
     # Torre de 4: el tiro de pie (~1.37 m a 2.5 m) da al cajon alto. Una 9 mm
@@ -162,23 +160,6 @@ func _static_box(parent: Node3D, node_name: String, size: Vector3, pos: Vector3,
     return body
 
 
-func _make_barrier(x: float, z: float, rot_y: float) -> void:
-    var root := Node3D.new()
-    root.position = Vector3(x, 0, z)
-    root.rotation.y = rot_y
-    add_child(root)
-
-    var board := _static_box(root, "BarrierBoard", Vector3(2.3, 0.72, 0.055), Vector3(0, 1.08, 0), wood_mat)
-    board.set_meta("surface", "pine")
-    board.set_meta("penetrable", true)
-
-    for leg_x in [-1.0, 1.0]:
-        var leg := _static_box(root, "BarrierLeg", Vector3(0.08, 1.05, 0.08), Vector3(leg_x, 0.52, 0), wood_mat)
-        leg.set_meta("surface", "pine")
-
-
-## Muro de tablones con rendijas (45 mm de pino): lo atraviesa una 9 mm
-## perdiendo ~15% de velocidad por tablon; por las rendijas pasa intacta.
 func _make_plank_wall(x: float, z: float, rot_y: float) -> void:
     var root := Node3D.new()
     root.name = "PlankWall"
