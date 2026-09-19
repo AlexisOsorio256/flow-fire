@@ -79,19 +79,17 @@
   (https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f)
   by BAMEN (https://sketchfab.com/bamenwo05) licensed under CC-BY-4.0
   (http://creativecommons.org/licenses/by/4.0/)*
-- El asset se construye con `tools/build_arms.py`, que quita la malla `Icosphere`
-  que trae el paquete, quita los diez huesos `_end` de hoja, **baja las texturas
-  de la mano de 2048² a 1024²**, y lo autora en el **espacio del arma** con la
-  mano derecha agarrando NUESTRA `g19_pistol.glb`. El ajuste del puno no es a
-  ojo: importa el arma, construye un BVH de la empuñadura real y busca flexion,
-  desplazamiento y giro que dejen **las yemas tocando** (0 a -1 mm), midiendo el
-  dentro/fuera por paridad de cruces de rayo, no por normales.
-- **El donante NO esta en el repo** (`downloads/` esta ignorado por Git). Para
-  reconstruir el asset hay que descargar el ZIP desde la URL de arriba,
-  descomprimirlo en `downloads/models/bamen_fps_arms/` y ejecutar
-  `blender --background --python tools/build_arms.py`. El builder aborta con ese
-  mensaje si falta. No es "reproducible desde un repo limpio": es reproducible
-  desde un repo limpio **mas una descarga CC-BY**.
+- El GLB de BAMEN que está versionado es hoy la **fuente canónica de producción**.
+  La pasada que lo generó limpió la malla `Icosphere`, retiró diez huesos
+  `_end`, bajó las texturas de mano a 1024² y ajustó el agarre sobre nuestra
+  G19. Ese proceso ya no coincide con el `tools/build_arms.py` actual.
+- **Estado del builder actual:** `tools/build_arms.py` apunta al donante
+  "animated pistol" de DJMaesen como experimento de reemplazo. La normalización
+  de escala/bind de ese donante sigue fallando su propia verificación y el
+  builder aborta antes de exportar. Por tanto **NO reconstruye el BAMEN actual
+  ni es todavía ruta de producción**. El donante BAMEN permanece disponible en
+  `downloads/models/bamen_fps_arms/` localmente, pero `downloads/` está
+  ignorado por Git.
 - Godot extrae las seis texturas a `assets/models/fps_arms_FPS_*.png`: quedan
   **duplicadas** (dentro del GLB y fuera), 5,6 MB. Se declara en vez de
   esconderse. La alternativa sin duplicar seria incrustarlas en BasisU, y ese
