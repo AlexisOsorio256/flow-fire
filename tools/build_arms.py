@@ -104,16 +104,43 @@ GRIP_PALM = {"R": Vector((-0.85, 0.0, -0.53)).normalized(),
 SLIDE_REAR_Z = 0.0803
 SLIDE_TOP_Y = 0.0634
 SLIDE_TRAVEL = 0.039
+## BOCA DE APOYO (mano izquierda encima de la derecha, agarre a dos manos).
+## Referencia visual: el agarre que trae autorado DJMaesen "animated pistol"
+## (CC-BY-4.0): las dos manos envuelven la empuñadura, la izquierda por encima de
+## la derecha con el pulgar hacia delante.  La izquierda SOLO esta aqui en `Idle`
+## y `Fire`; en cuanto empieza una recarga se suelta (los hitos mecanicos no se
+## tocan).  Estos numeros los ajusta el banco mirando el encuadre, no son del
+## donante.
+SUPPORT_SLIDE = 0.018
+SUPPORT_ROLL = 168.0
+SUPPORT_OFF = Vector((0.0, 0.0, 0.0))
+
+
+def support_socket() -> Matrix:
+    """Boca de la mano de apoyo: mismo eje de empuñadura, mano izquierda."""
+    o = GRIP_CENTER + GRIP_AXIS * SUPPORT_SLIDE + SUPPORT_OFF
+    m = frame_matrix(o, GRIP_AXIS, GRIP_PALM["R"])
+    return m @ Matrix.Rotation(math.radians(SUPPORT_ROLL), 4, "Y")
+
+
 ## Boton del reten del cargador: vertice mas a la izquierda del armazon.
 MAG_RELEASE = Vector((-0.0130, -0.0182, 0.0322))
 
-## Cabeza del humero (hombro) en espacio del arma.  La derecha cae detras del
-## plano de la camara en el encuadre de cadera, que es lo que deja el antebrazo
-## saliendo por abajo en vez de cruzar el arma.  Estos tres pares los AJUSTA el
-## banco mirando el encuadre real de `frame.json`, no son constantes del donante.
-SHOULDER_R = Vector((0.130, -0.100, 0.440))
+## Cabeza del humero (hombro) en espacio del arma y pole del codo.  Los AJUSTA
+## el banco mirando el encuadre real de `frame.json`, no son constantes del
+## donante.
+##
+## EL BRAZO DERECHO ESTA PUESTO PARA EL ENCUADRE DE ADS, no para el de cadera.
+## En ADS el arma se centra con el ojo, asi que todo el brazo cae en el eje de
+## la camara: con el hombro en (0,13, -0,10, 0,44) y el pole hacia abajo el
+## antebrazo apuntaba AL OJO y lo unico que se veia era un tubo de manga con el
+## dorso del guante encima (una manopla).  Bajando el hombro y abriendo el pole
+## a la derecha el antebrazo sale por abajo-derecha, se ven los nudillos y el
+## indice, y el arma queda limpia.  Medido con el banco en `ads` y `hip`: en los
+## dos se lee mejor, no es un arreglo que rompa la cadera.
+SHOULDER_R = Vector((0.180, -0.180, 0.500))
 SHOULDER_L = Vector((-0.150, -0.230, 0.310))
-POLE_R = Vector((0.22, -0.90, 0.36))
+POLE_R = Vector((0.85, -0.55, 0.10))
 POLE_L = Vector((-0.30, -0.88, 0.36))
 ## Longitudes reales del donante (medidas de sus cabezas, no de la ficha).
 UP_LEN = 0.3469
@@ -125,20 +152,31 @@ FORE_LEN = 0.2463
 ## signo real de cada falange se MIDE en la malla (ver `measure_curl_signs`) y el
 ## EJE de flexion se mide de la geometria (ver `measure_flex_axes`), no se
 ## supone que sea la X local.
+##
+## ESTOS NUMEROS SON POSE AUTORA, NO RESULTADO DE UNA BUSQUEDA.  Referencia
+## visual: el donante DJMaesen "animated pistol" (CC-BY-4.0,
+## `downloads/models/djmaesen_animated_pistol/`), que trae una mano enguantada
+## agarrando una pistola de verdad: indice extendido a lo largo del armazon POR
+## ENCIMA del guardamonte (que queda vacio), medio/anular/menique envolviendo el
+## lomo delantero SIN garra, pulgar por el costado izquierdo.  La version
+## anterior llegaba a estos mismos dedos buscando que las yemas se hundieran
+## 0,3 mm en el arma; el dueño vio esa deformacion y la rechazo.  Ahora la
+## flexion se queda donde la pone el autor y lo unico que se busca es DONDE se
+## posa la mano.
 ## ---------------------------------------------------------------------------
 CURL = {
-    "grip": {"f_index": (2, -4, -6), "f_middle": (30, 38, 26),
-             "f_ring": (32, 40, 28), "f_pinky": (34, 42, 30)},
+    "grip": {"f_index": (2, -6, -10), "f_middle": (15, 19, 12),
+             "f_ring": (16, 20, 13), "f_pinky": (17, 21, 14)},
     "relax": {"f_index": (2, 2, 2), "f_middle": (4, 5, 4),
               "f_ring": (5, 6, 5), "f_pinky": (6, 7, 6)},
     "open": {"f_index": (-14, -18, -12), "f_middle": (-16, -20, -14),
              "f_ring": (-16, -20, -14), "f_pinky": (-18, -22, -16)},
-    "slide": {"f_index": (6, 6, 6), "f_middle": (10, 12, 10),
-              "f_ring": (11, 13, 11), "f_pinky": (12, 14, 12)},
-    "mag": {"f_index": (24, 30, 20), "f_middle": (28, 34, 24),
-            "f_ring": (30, 36, 26), "f_pinky": (32, 38, 28)},
-    "point": {"f_index": (-8, -12, -8), "f_middle": (20, 26, 18),
-              "f_ring": (22, 28, 20), "f_pinky": (24, 30, 22)},
+    "slide": {"f_index": (8, 6, 4), "f_middle": (12, 12, 8),
+              "f_ring": (13, 13, 9), "f_pinky": (14, 14, 10)},
+    "mag": {"f_index": (14, 16, 10), "f_middle": (16, 19, 12),
+            "f_ring": (17, 20, 13), "f_pinky": (18, 21, 14)},
+    "point": {"f_index": (-8, -12, -8), "f_middle": (10, 13, 9),
+              "f_ring": (11, 14, 10), "f_pinky": (12, 15, 11)},
     "light": {"f_index": (2, 2, 2), "f_middle": (4, 5, 4),
               "f_ring": (5, 6, 5), "f_pinky": (6, 7, 6)},
 }
@@ -888,19 +926,6 @@ def measure_socket_vec(arm, side: str, vec: tuple, signs: dict) -> tuple:
 # ===========================================================================
 # pose
 # ===========================================================================
-def scale_curl(vec: tuple, scale: float, pinky_extra: float = 0.0) -> tuple:
-    """Escala la flexion de medio/anular/meñique y añade un extra al meñique (es
-    el dedo corto: con la misma flexion que el anular no llega a la cara
-    delantera).  El indice se queda extendido a lo largo del armazon, que es lo
-    que hace que los dedos se lean separados, y el pulgar no se toca."""
-    v = list(vec)
-    for i in range(3, 12):
-        v[i] = v[i] * scale
-    for i in range(9, 12):
-        v[i] = v[i] + pinky_extra
-    return tuple(v)
-
-
 def grip_report(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHTree) -> None:
     """Informe POR DEDO del contacto con la empuñadura, medido sobre la malla ya
     colocada.  Es el numero que dice si el puño agarra o solo lo parece."""
@@ -923,17 +948,28 @@ def grip_report(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHT
 
 
 def _cost_of(gaps: dict) -> float:
-    """Coste del ajuste.  Aire = caro; hundirse mas de 1 mm = 12x mas caro.  La
-    palma no entra (su contacto lo fija el tamaño de la mano, no la flexion) y el
-    indice solo se penaliza si se mete DENTRO de algo (va extendido sobre el
-    armazon, no agarra); su aire entra con peso bajo, para que entre dos ajustes
-    equivalentes gane el que deja el indice mas cerca del armazon."""
-    def cost(g):
-        return g if g > 0.0 else (12.0 * (-g - 0.001) if g < -0.001 else 0.0)
+    """Coste del ajuste, con el criterio del dueño: LA MANO SE POSA, NO SE EMPUJA.
 
-    idx = gaps["f_index"]
+    Donde antes se buscaba "0 a -1 mm" (tocar hundiendo un pelo) ahora se busca
+    AIRE PEQUENO Y POSITIVO: 0 a +2 mm.  Un dedo a 1 mm del lomo delantero no se
+    ve; un dedo hundido 0,3 mm en el arma es una deformacion que se ve.  Asi que
+    la penetracion se castiga 40:1 y el aire solo se prefiere pequeño (0,05:1),
+    de forma que el minimo cae justo por fuera de la superficie.
+
+    La PALMA y el PULGAR no entran: se apoyan donde los deje la pose.  Se probo a
+    exigirles tambien "no hundirse" y el optimizador resolvia alejando la mano
+    15 mm de la empuñadura (una mano flotando, peor que el problema).  El unico
+    punto que se hunde es el pliegue del pulgar en la espalda (un vertice del
+    web), y se declara en el informe."""
+    def cost(g):
+        return 40.0 * (-g) if g < 0.0 else 0.05 * g
+
+    def no_sink(g):
+        ## Solo castiga HUNDIRSE: el aire es gratis.  No empuja nada a tocar.
+        return 40.0 * (-g) if g < 0.0 else 0.0
+
     return (cost(gaps["f_middle"]) + cost(gaps["f_ring"]) + cost(gaps["f_pinky"])
-            + 1.5 * max(0.0, -idx - 0.001) + 0.20 * max(0.0, idx - 0.001))
+            + no_sink(gaps["f_index"]))
 
 
 def _gaps_for(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHTree,
@@ -942,9 +978,7 @@ def _gaps_for(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHTre
 
     `measure_socket_vec` y `pad_points` solo dependen de `vec`, asi que se pagan
     UNA vez por flexion y no por candidato.  La holgura se mide sobre TODA la
-    yema: recortar la yema a los puntos mas cercanos a la boca sin desplazar
-    infravalora el hundimiento real (se probo: -0,7 mm estimados contra -1,9 mm
-    medidos), y con el atajo de `surf_gap` medirla entera ya es barato."""
+    yema: recortarla a los puntos mas cercanos infravalora el hundimiento real."""
     clear_fingers(arm, side)
     update()
     _, _, f_arm = measure_socket_vec(arm, side, vec, signs)
@@ -964,109 +998,52 @@ def _gaps_for(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHTre
     return out
 
 
-def refine_contact(arm, meshes: list, base: dict, side: str, signs: dict,
-                   bvh: BVHTree, vec: tuple, dloc: Vector, roll: float) -> tuple:
-    """Pone la YEMA de cada dedo que agarra a -0.3 mm de la cara delantera.
-
-    El desplazamiento y el giro son rigidos para toda la mano, asi que no pueden
-    corregir que un dedo sea 1,5 mm mas corto que otro: eso solo se arregla
-    flexionando ese dedo un poco mas o un poco menos.  Se busca, por dedo, el
-    factor de flexion que deja su holgura en el objetivo (sin aire y sin
-    hundirse mas de 1 mm)."""
-    s0 = frame_matrix(GRIP_CENTER, GRIP_AXIS, GRIP_PALM[side])
-    rot = Matrix.Rotation(math.radians(roll), 3, "Y")
-    v = list(vec)
-    for f in ("f_middle", "f_ring", "f_pinky"):
-        i = FINGERS.index(f) * 3
-        best = None
-        for step in range(21):
-            k = 0.70 + 0.025 * step
-            cand = list(v)
-            for j in range(3):
-                cand[i + j] = v[i + j] * k
-            clear_fingers(arm, side)
-            update()
-            _, _, f_arm = measure_socket_vec(arm, side, tuple(cand), signs)
-            pads = pad_points(arm, meshes, base, side, f_arm, only=(f,))
-            clear_fingers(arm, side)
-            update()
-            g = min(surf_gap(bvh, s0 @ (rot @ c + dloc)) for c in pads[f])
-            err = abs(g + 0.0003)
-            if best is None or err < best[0]:
-                best = (err, k, g)
-        for j in range(3):
-            v[i + j] = v[i + j] * best[1]
-        print("BUILD contacto %-9s flexion x%.3f -> holgura %+.2f mm"
-              % (f, best[1], 1000.0 * best[2]))
-    return tuple(v)
-
-
 def fit_grip(arm, meshes: list, base: dict, signs: dict, side: str, bvh: BVHTree) -> dict:
-    """Busca la flexion de los tres dedos que agarran y el desplazamiento/giro de
-    la boca que dejan sus YEMAS TOCANDO la empuñadura de verdad.
+    """Coloca el puño RIGIDAMENTE sobre la empuñadura: SOLO busca el
+    desplazamiento y el giro de la boca.
 
-    Objetivo por dedo: holgura entre 0 y -1 mm (tocar, hundirse un pelo, nunca
-    aire).  El indice no se puntua por aire: va extendido a lo largo del armazon
-    y solo se penaliza si se mete DENTRO de algo.  Busqueda en dos pasadas
-    (gruesa y fina) porque la superficie es suave: 10x mas barata y el mismo
-    minimo."""
+    Lo que NO hace, a proposito: no busca la flexion de los dedos.  La flexion
+    sale de `CURL` (pose autora, con la referencia visual del donante que ya
+    sujeta una pistola) y no se toca para "cuadrar" el contacto.  Buscar la
+    flexion hasta que las yemas entren en el arma es lo que deformaba la mano;
+    el dueño lo vio y lo rechazo.  Aqui la mano se POSA: si un dedo queda a
+    1-2 mm del lomo delantero, se queda asi.
+
+    Busqueda en dos pasadas (gruesa y fina): la superficie es suave y el mismo
+    minimo sale 10x mas barato."""
     global GRIP_OFFSET, GRIP_ROLL
     s0 = frame_matrix(GRIP_CENTER, GRIP_AXIS, GRIP_PALM[side])
     s0b = s0.to_3x3()
+    vec = curl_vec("grip")
     best = None
 
-    def consider(vec, scale, pinky_extra, combos, tag):
+    def consider(combos, tag):
         nonlocal best
-        found = _gaps_for(arm, meshes, base, side, signs, bvh, vec, s0, combos)
-        for gaps, dloc, roll in found:
+        for gaps, dloc, roll in _gaps_for(arm, meshes, base, side, signs, bvh,
+                                          vec, s0, combos):
             score = _cost_of(gaps)
             if best is None or score < best["score"]:
-                best = {"score": score, "scale": scale, "dloc": dloc, "roll": roll,
-                        "gaps": gaps, "vec": vec, "offset_gun": s0b @ dloc,
-                        "pinky_extra": pinky_extra}
-        print("BUILD ajuste %-7s escala=%.2f pinky=%+4.1f -> score=%.4f"
-              % (tag, scale, pinky_extra, best["score"]))
+                best = {"score": score, "dloc": dloc, "roll": roll, "gaps": gaps}
+        print("BUILD ajuste %-6s -> score=%.4f  holguras(mm) medio=%+.2f anular=%+.2f "
+              "menique=%+.2f indice=%+.2f palma=%+.2f"
+              % (tag, best["score"], 1000 * best["gaps"]["f_middle"],
+                 1000 * best["gaps"]["f_ring"], 1000 * best["gaps"]["f_pinky"],
+                 1000 * best["gaps"]["f_index"], 1000 * best["gaps"]["palm"]))
 
-    coarse = [(Vector((dx, 0.0, dz)), roll)
-              for dz in (0.012, 0.004, -0.004)
-              for dx in (-0.008, 0.0, 0.008)
-              for roll in (-24.0, -12.0, 0.0, 12.0)]
-    for scale in (1.00, 1.06, 1.12):
-        for pe in (0.0, 12.0, 24.0):
-            consider(scale_curl(curl_vec("grip"), scale, pe), scale, pe, coarse, "grueso")
-
-    bs, bp = best["scale"], best["pinky_extra"]
+    consider([(Vector((dx, 0.0, dz)), roll)
+              for dz in (0.014, 0.008, 0.002, -0.004, -0.010, -0.016)
+              for dx in (-0.010, -0.004, 0.002, 0.008)
+              for roll in (-24.0, -12.0, 0.0, 12.0, 24.0)], "grueso")
     bd, br = best["dloc"], best["roll"]
-    fine = [(bd + Vector((dx, 0.0, dz)), br + roll)
-            for dz in (-0.003, 0.0, 0.003)
-            for dx in (-0.002, 0.0, 0.002)
-            for roll in (-5.0, 0.0, 5.0)]
-    for scale in (bs - 0.03, bs, bs + 0.03):
-        for pe in (bp - 4.0, bp, bp + 4.0):
-            consider(scale_curl(curl_vec("grip"), scale, pe), scale, pe, fine, "fino")
+    consider([(bd + Vector((dx, 0.0, dz)), br + roll)
+              for dz in (-0.003, 0.0, 0.003)
+              for dx in (-0.002, 0.0, 0.002)
+              for roll in (-5.0, 0.0, 5.0)], "fino")
 
-    ## Refinado POR DEDO: el desplazamiento rigido no puede igualar dedos de
-    ## distinta longitud; la flexion de cada uno si.
-    vec = refine_contact(arm, meshes, base, side, signs, bvh, best["vec"],
-                         best["dloc"], best["roll"])
-    final = _gaps_for(arm, meshes, base, side, signs, bvh, vec, s0,
-                      [(best["dloc"] + Vector((dx, 0.0, dz)), best["roll"] + roll)
-                       for dz in (-0.002, 0.0, 0.002)
-                       for dx in (-0.002, 0.0, 0.002)
-                       for roll in (-4.0, 0.0, 4.0)])
-    for gaps, dloc, roll in final:
-        score = _cost_of(gaps)
-        if score < best["score"]:
-            best = {"score": score, "scale": best["scale"], "dloc": dloc, "roll": roll,
-                    "gaps": gaps, "vec": vec, "offset_gun": s0b @ dloc,
-                    "pinky_extra": best["pinky_extra"]}
-
-    CURL["grip"] = {f: tuple(best["vec"][FINGERS.index(f) * 3:FINGERS.index(f) * 3 + 3])
-                    for f in FINGERS}
-    GRIP_OFFSET = best["offset_gun"]
+    GRIP_OFFSET = s0b @ best["dloc"]
     GRIP_ROLL = best["roll"]
-    print("BUILD ajuste: escala=%.2f dloc=%s roll=%+.0f score=%.4f"
-          % (best["scale"], [round(v, 4) for v in best["dloc"]], best["roll"], best["score"]))
+    print("BUILD ajuste: dloc=%s roll=%+.0f score=%.4f (flexion NO se busca: viene de CURL)"
+          % ([round(v, 4) for v in best["dloc"]], best["roll"], best["score"]))
     return best
 
 
@@ -1272,7 +1249,7 @@ def build_tracks(sockets: dict) -> dict:
         return socket_from_dir(pos, hand_dir or L_FREE_DIR, palm or L_FREE_PALM, d_local)
 
     relay = [
-        (0.00, free_at(IDLE_L_POS), curl_vec("relax")),
+        (0.00, support_socket(), curl_vec("grip")),
         (0.13, free_at(L_OUT_LEFT), curl_vec("relax")),
         (0.22, free_at(L_RELEASE + Vector((0.0, -0.01, -0.01)),
                        Vector((0.42, -0.30, -0.86)), Vector((0.86, 0.30, -0.40))),
@@ -1292,7 +1269,7 @@ def build_tracks(sockets: dict) -> dict:
         (1.52, mag_socket(-0.012), curl_vec("grip")),
         (1.62, free_at(L_UNDER + Vector((0.0, -0.03, 0.02)), L_MID_DIR), curl_vec("relax")),
         (1.72, free_at(L_OUT_LEFT, L_MID_DIR), curl_vec("relax")),
-        (2.10, free_at(IDLE_L_POS), curl_vec("relax")),
+        (2.10, support_socket(), curl_vec("grip")),
     ]
     empty_keys = relay + [
         (1.48, mag_socket(-0.012), curl_vec("mag")),
@@ -1301,10 +1278,10 @@ def build_tracks(sockets: dict) -> dict:
         (1.72, slide_socket(-SLIDE_TRAVEL, lift=0.010), curl_vec("slide")),
         (1.80, slide_socket(-SLIDE_TRAVEL * 0.35, lift=0.012), curl_vec("slide")),
         (1.94, free_at(L_UNDER, L_MID_DIR), curl_vec("relax")),
-        (2.35, free_at(IDLE_L_POS), curl_vec("relax")),
+        (2.35, support_socket(), curl_vec("grip")),
     ]
     inspect_keys = [
-        (0.00, free_at(IDLE_L_POS), curl_vec("relax")),
+        (0.00, support_socket(), curl_vec("grip")),
         (0.07, free_at(L_UNDER, L_MID_DIR), curl_vec("relax")),
         (0.13, slide_socket(0.0, lift=0.008), curl_vec("slide")),
         (0.22, slide_socket(-0.012, lift=0.008), curl_vec("slide")),
@@ -1314,7 +1291,7 @@ def build_tracks(sockets: dict) -> dict:
         (1.26, slide_socket(-SLIDE_TRAVEL * 0.30, lift=0.012), curl_vec("slide")),
         (1.40, free_at(L_UNDER, L_MID_DIR), curl_vec("relax")),
         (1.70, free_at(L_OUT_LEFT), curl_vec("relax")),
-        (2.00, free_at(IDLE_L_POS), curl_vec("relax")),
+        (2.00, support_socket(), curl_vec("grip")),
     ]
     return {
         "Reload": Track(reload_keys),
@@ -1339,10 +1316,13 @@ def idle_pose(t: float, tracks: dict | None = None) -> Pose:
     p.l_sh = SHOULDER_L + Vector((0.0, 0.0014 * breath, 0.0))
     p.r_socket = grip_socket("R", roll_deg=0.30 * breath)
     if tracks is None:
-        p.l_socket = socket_from_dir(
-            IDLE_L_POS + Vector((0.0012 * breath, 0.0, 0.0016 * math.sin(ph + 1.0))),
-            L_FREE_DIR, L_FREE_PALM, IDLE_D_LOCAL)
-        p.l_curl = curl_vec("relax")
+        ## AGARRE A DOS MANOS: la izquierda se apoya en la empuñadura (encima de
+        ## la derecha) y respira con ella.  Antes colgaba fuera de cuadro.
+        m = support_socket()
+        m.translation = m.translation + Vector((0.0006 * breath, 0.0,
+                                                0.0010 * math.sin(ph + 1.0)))
+        p.l_socket = m
+        p.l_curl = curl_vec("grip")
     return p
 
 
@@ -1422,6 +1402,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--shoulder-r", default="", help="x,y,z en espacio del arma")
     p.add_argument("--shoulder-l", default="")
     p.add_argument("--pole-r", default="")
+    p.add_argument("--support-slide", type=float, default=None)
+    p.add_argument("--support-roll", type=float, default=None)
+    p.add_argument("--support-off", default="")
     p.add_argument("--pole-l", default="")
     p.add_argument("--grip-slide", type=float, default=0.0)
     p.add_argument("--grip-roll", type=float, default=0.0)
@@ -1491,6 +1474,13 @@ def main() -> None:
 
     global GRIP_CENTER, GRIP_AXIS, IDLE_D_LOCAL, UP_LEN, FORE_LEN
     global SHOULDER_R, SHOULDER_L, POLE_R, POLE_L
+    global SUPPORT_SLIDE, SUPPORT_ROLL, SUPPORT_OFF
+    if args.support_slide is not None:
+        SUPPORT_SLIDE = args.support_slide
+    if args.support_roll is not None:
+        SUPPORT_ROLL = args.support_roll
+    if args.support_off:
+        SUPPORT_OFF = Vector([float(x) for x in args.support_off.split(",")])
     for _name, _val in (("SHOULDER_R", args.shoulder_r), ("SHOULDER_L", args.shoulder_l),
                         ("POLE_R", args.pole_r), ("POLE_L", args.pole_l)):
         if _val:
@@ -1529,9 +1519,9 @@ def main() -> None:
     bvh = gun_grip_bvh()
     base0 = {b.name: b.matrix_local.copy() for b in arm.data.bones}
     fit = fit_grip(arm, meshes, base0, signs["R"], "R", bvh)
-    print("BUILD ajuste del puño: flexion x%.2f  desplazamiento=%s  giro=%+.0f deg  "
+    print("BUILD ajuste del puño: desplazamiento=%s  giro=%+.0f deg  "
           "holguras(mm) medio=%+.1f anular=%+.1f meñique=%+.1f indice=%+.1f palma=%+.1f"
-          % (fit["scale"], [round(v, 4) for v in fit["dloc"]], fit["roll"],
+          % ([round(v, 4) for v in fit["dloc"]], fit["roll"],
              1000 * fit["gaps"]["f_middle"], 1000 * fit["gaps"]["f_ring"],
              1000 * fit["gaps"]["f_pinky"], 1000 * fit["gaps"]["f_index"],
              1000 * fit["gaps"]["palm"]))
