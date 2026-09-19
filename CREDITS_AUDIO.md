@@ -6,8 +6,10 @@ investigación (pruebas, descartes y medidas) vive en la historia de Git, no aqu
 La mayoria de WAV se convierten a 44,1 kHz mono 16-bit con `tools/process_audio.sh`
 (ffmpeg), alineados a su ataque y normalizados por familia. Los cuatro de Foley
 sintetizado NO los toca ese script: los genera `tools/make_weapon_sounds.py`.
-Los masters versionados estan en `assets/audio/source/` (con `.gdignore` para
-que Godot no los importe).
+Los WAV de runtime estan versionados en `assets/audio/`. Las fuentes crudas
+que necesitan `build_shot_real.py` y `build_impacts.py` viven en
+`downloads/` (gitignored y fuera del importador de Godot); `assets/audio/source/`
+solo conserva los excerpts que todavía consume el Foley heredado.
 
 Los cinco disparos (`shot_1..5.wav`) tampoco pasan por ahí: son **48 kHz** mono
 16-bit y los construye `tools/build_shot_real.py` desde cinco grabaciones reales
