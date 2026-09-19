@@ -1,53 +1,46 @@
 #!/usr/bin/env python3
-"""ARMS: primera persona para el simulador de Glock 19 (donante BAMEN).
+"""ARMS DE PRODUCCION: brazos en primera persona para el simulador de Glock 19.
 
-    blender --background --python tools/build_arms.py -- --out assets/models/fps_arms.glb --verify 1
-    blender --background --python tools/build_arms.py -- --out /tmp/bamen_arms.glb --bind-only 1 --grip-report 1
+    blender --background --python tools/build_arms.py -- --out assets/models/fps_arms.glb --grip-report 1 --verify 1
+    blender --background --python tools/build_arms.py -- --out /tmp/dj.glb --bind-only 1
     blender --background --python tools/build_arms.py -- --verify-only assets/models/fps_arms.glb
 
 DONANTE  (NO esta en el repo: `downloads/` es gitignored)
 ---------------------------------------------------------
-    downloads/models/bamen_fps_arms/scene.gltf
-    BAMEN, "FREE [FPS Arms] GameReady - RIGGED"
-    https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f
+    downloads/models/djmaesen_animated_pistol/extracted/scene.gltf
+    DJMaesen, "animated pistol"
+    https://sketchfab.com/3d-models/animated-pistol-bd896167e7ca44f19597d3afe6a8d83f
     Licencia, textual del `license.txt` que viene en la descarga:
         license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
         requirements:	Author must be credited. Commercial use is allowed.
-    CC-BY-4.0: atribucion OBLIGATORIA (la linea de credito exacta esta en
+    CC-BY-4.0: atribucion OBLIGATORIA (la linea exacta esta en
     `CREDITS_MODELS.md`), uso comercial permitido.
     Un checkout limpio tiene que bajar el ZIP de esa URL y descomprimirlo en
-    `downloads/models/bamen_fps_arms/` (scene.gltf + scene.bin + textures/).
+    `downloads/models/djmaesen_animated_pistol/extracted/`.
 
 QUE HACE
 --------
-Coge el donante, tira la basura (la malla ajena `Icosphere` y los 10 huesos
-hoja `*_end_*`, que no tienen pesos), lo normaliza a metros y lo AUTORA EN
-ESPACIO DEL ARMA: el mismo sistema que `assets/models/g19_pistol.glb` (+Y
-arriba, -Z al morro, origen en la raiz del arma). El puno derecho se coloca
-sobre la empuñadura MIDIENDO el tunel del puño en la malla (no a ojo) y el
-brazo sale de un IK analitico de dos huesos con pole. La POSE DE REPOSO del GLB
-exportado es la de `Idle` en t=0, asi que el asset ya agarra la pistola aunque
-nadie reproduzca un clip, y `GRIP_POS`/`GRIP_ROT` se quedan en (0,0,0).
+Del donante se queda SOLO su malla de brazos (`Object_83`, 13.536 tris, 1
+material `arms`), su esqueleto (51 huesos, todos deform, cero constraints) y su
+POSE DE AGARRE A DOS MANOS, que es lo que el dueño del repo señala como "decente
+como un juego decente".  La Beretta y sus nodos se tiran.
 
-DETALLE DEL DONANTE QUE HAY QUE CONOCER (medido, no supuesto)
-------------------------------------------------------------
-El glTF del donante NO es un rig "reposo = bind": sus 52 matrices inversas de
-bind describen una T-pose mientras que los nodos describen una pose de brazos
-en primera persona ya resuelta. Blender importa las dos cosas fielmente (bind
-en la T-pose, `pose_bone.matrix` en la pose del autor), asi que el constructor
-hace lo correcto: NORMALIZA a metros (la T-pose del bind vive a x100 del
-origen), y REHORNEA el bind a la pose del autor antes de medir nada. A partir de
-ahi el rig es un rig normal y metrico. Los huesos distales traen longitudes
-falsas (p.ej. `Finger_4_3` = 1,58 m): la POSICION de las cabezas es la buena, y
-la punta real de cada falange se mide en el hueso hoja `*_end_*` ANTES de
-tirarlo (`TIP_LOCAL`). Ninguna medida de este archivo usa `pose_bone.tail`.
+La pose la trae el donante, no una busqueda: el constructor muestrea su
+animacion fotograma a fotograma y se queda con los brazos RELATIVOS A SU PISTOLA
+(el donante anima el arma por su cuenta y los brazos por la suya: en runtime el
+arma la mueve `Glock.gd` y los brazos cuelgan de `BodyGive`, asi que lo que sirve
+es la pose relativa al arma).  Eso se coloca sobre NUESTRA `g19_pistol.glb` con
+UNA transformacion RIGIDA, calculada midiendo el tunel del puño en la malla, y
+solo se busca el desplazamiento y el giro de la boca: la flexion de los dedos NO
+se toca nunca para "cuadrar" el contacto.
 
-SALIDA
-------
-    assets/models/fps_arms.glb
-    2 mallas skinned / 2 materiales / esqueleto deform-only de 42 huesos /
-    5 clips exactos: Idle 3.00 s, Fire 0.26 s, Reload 2.10 s,
-    ReloadEmpty 2.35 s, Inspect 2.00 s.  Nada mas.
+Los cinco clips salen de ahi: `Idle` y `Fire` son la pose de agarre (fotograma 0)
+mas respiracion y latigazo, y `Reload` / `ReloadEmpty` / `Inspect` son las
+ventanas de gesto del donante retimadas a nuestras duraciones exactas.
+
+Salida: `assets/models/fps_arms.glb`, 1 malla, 1 material, esqueleto deform de 51
+huesos, 5 clips exactos (3.00 / 0.26 / 2.10 / 2.35 / 2.00 s), autorado en espacio
+del arma con la raiz en identidad.
 """
 
 from __future__ import annotations
@@ -66,7 +59,7 @@ from mathutils.bvhtree import BVHTree
 
 REPO = Path(__file__).resolve().parents[1]
 
-DONOR = REPO / "downloads" / "models" / "bamen_fps_arms" / "scene.gltf"
+DONOR = REPO / "downloads" / "models" / "djmaesen_animated_pistol" / "extracted" / "scene.gltf"
 GUN = REPO / "assets" / "models" / "g19_pistol.glb"
 OUT = REPO / "assets" / "models" / "fps_arms.glb"
 
@@ -75,145 +68,33 @@ GUN_TO_BLENDER = Matrix.Rotation(math.radians(90.0), 4, "X")
 
 FPS = 100  # 100 fps: 0.26 / 1.02 / 1.40 / 1.72 / 2.35 s caen en frames enteros
 
-FINGERS = ("f_index", "f_middle", "f_ring", "f_pinky")
-FINGER_SRC = {"f_index": 2, "f_middle": 3, "f_ring": 4, "f_pinky": 5}
-
 ## ---------------------------------------------------------------------------
-## MEDIDAS DEL ARMA (espacio del arma, metros), de `tools/_recon_grip.py` sobre
-## NUESTRA g19_pistol.glb: no de la ficha del fabricante.
+## MEDIDAS DEL ARMA (espacio del arma, metros), medidas sobre NUESTRA
+## `g19_pistol.glb`: no de la ficha del fabricante.
 ## ---------------------------------------------------------------------------
-## Eje de la empuñadura (PCA del cuerpo del cargador, que es su canal interior)
-## apuntando hacia ARRIBA.  Rake 17.6 grados.
 GRIP_AXIS = Vector((-0.0041, 0.9529, -0.3032)).normalized()
-## Centro del tunel del puño: punto medio de la empuñadura.
 GRIP_CENTER = Vector((0.0, -0.0425, 0.0390))
-## Desplazamiento y giro del puño sobre la empuñadura: los AJUSTA `fit_grip`
-## midiendo el contacto dedo-empuñadura, no son numeros a ojo.
-GRIP_OFFSET = Vector((0.0, 0.0, 0.0))
-GRIP_ROLL = 0.0
-## Normal palmar (sale de la piel de la palma).  El eje del tunel del puño es la
-## LINEA DE NUDILLOS (meñique -> indice), no el eje del antebrazo: al cerrar el
-## puño el unico cilindro que entra en el hueco va de nudillo a nudillo.  Con el
-## indice arriba y la empuñadura vertical, la palma queda envolviendo el costado
-## DERECHO de la empuñadura y mira hacia dentro-atras (izquierda y algo al
-## morro); asi la muñeca cae detras del arma y el pulgar cruza al lado izquierdo.
 GRIP_PALM = {"R": Vector((-0.85, 0.0, -0.53)).normalized(),
              "L": Vector((0.85, 0.0, -0.53)).normalized()}
-
-## Corredera (cara trasera y cara superior medidas) y su recorrido.
 SLIDE_REAR_Z = 0.0803
 SLIDE_TOP_Y = 0.0634
 SLIDE_TRAVEL = 0.039
-## BOCA DE APOYO (mano izquierda encima de la derecha, agarre a dos manos).
-## Referencia visual: el agarre que trae autorado DJMaesen "animated pistol"
-## (CC-BY-4.0): las dos manos envuelven la empuñadura, la izquierda por encima de
-## la derecha con el pulgar hacia delante.  La izquierda SOLO esta aqui en `Idle`
-## y `Fire`; en cuanto empieza una recarga se suelta (los hitos mecanicos no se
-## tocan).  Estos numeros los ajusta el banco mirando el encuadre, no son del
-## donante.
-SUPPORT_SLIDE = 0.018
-SUPPORT_ROLL = 168.0
-SUPPORT_OFF = Vector((0.0, 0.0, 0.0))
-
-
-def support_socket() -> Matrix:
-    """Boca de la mano de apoyo: mismo eje de empuñadura, mano izquierda."""
-    o = GRIP_CENTER + GRIP_AXIS * SUPPORT_SLIDE + SUPPORT_OFF
-    m = frame_matrix(o, GRIP_AXIS, GRIP_PALM["R"])
-    return m @ Matrix.Rotation(math.radians(SUPPORT_ROLL), 4, "Y")
-
-
-## Boton del reten del cargador: vertice mas a la izquierda del armazon.
 MAG_RELEASE = Vector((-0.0130, -0.0182, 0.0322))
 
-## Cabeza del humero (hombro) en espacio del arma y pole del codo.  Los AJUSTA
-## el banco mirando el encuadre real de `frame.json`, no son constantes del
-## donante.
-##
-## EL BRAZO DERECHO ESTA PUESTO PARA EL ENCUADRE DE ADS, no para el de cadera.
-## En ADS el arma se centra con el ojo, asi que todo el brazo cae en el eje de
-## la camara: con el hombro en (0,13, -0,10, 0,44) y el pole hacia abajo el
-## antebrazo apuntaba AL OJO y lo unico que se veia era un tubo de manga con el
-## dorso del guante encima (una manopla).  Bajando el hombro y abriendo el pole
-## a la derecha el antebrazo sale por abajo-derecha, se ven los nudillos y el
-## indice, y el arma queda limpia.  Medido con el banco en `ads` y `hip`: en los
-## dos se lee mejor, no es un arreglo que rompa la cadera.
-SHOULDER_R = Vector((0.180, -0.180, 0.500))
-SHOULDER_L = Vector((-0.150, -0.230, 0.310))
-POLE_R = Vector((0.85, -0.55, 0.10))
-POLE_L = Vector((-0.30, -0.88, 0.36))
-## Longitudes reales del donante (medidas de sus cabezas, no de la ficha).
-UP_LEN = 0.3469
-FORE_LEN = 0.2463
 
-## ---------------------------------------------------------------------------
-## FLEXION DE DEDOS (grados, positivo = hacia la palma).  Son DELTAS respecto de
-## la pose de reposo del DONANTE (que ya trae los dedos medio cerrados): el
-## signo real de cada falange se MIDE en la malla (ver `measure_curl_signs`) y el
-## EJE de flexion se mide de la geometria (ver `measure_flex_axes`), no se
-## supone que sea la X local.
-##
-## ESTOS NUMEROS SON POSE AUTORA, NO RESULTADO DE UNA BUSQUEDA.  Referencia
-## visual: el donante DJMaesen "animated pistol" (CC-BY-4.0,
-## `downloads/models/djmaesen_animated_pistol/`), que trae una mano enguantada
-## agarrando una pistola de verdad: indice extendido a lo largo del armazon POR
-## ENCIMA del guardamonte (que queda vacio), medio/anular/menique envolviendo el
-## lomo delantero SIN garra, pulgar por el costado izquierdo.  La version
-## anterior llegaba a estos mismos dedos buscando que las yemas se hundieran
-## 0,3 mm en el arma; el dueño vio esa deformacion y la rechazo.  Ahora la
-## flexion se queda donde la pone el autor y lo unico que se busca es DONDE se
-## posa la mano.
-## ---------------------------------------------------------------------------
-CURL = {
-    "grip": {"f_index": (2, -6, -10), "f_middle": (15, 19, 12),
-             "f_ring": (16, 20, 13), "f_pinky": (17, 21, 14)},
-    "relax": {"f_index": (2, 2, 2), "f_middle": (4, 5, 4),
-              "f_ring": (5, 6, 5), "f_pinky": (6, 7, 6)},
-    "open": {"f_index": (-14, -18, -12), "f_middle": (-16, -20, -14),
-             "f_ring": (-16, -20, -14), "f_pinky": (-18, -22, -16)},
-    "slide": {"f_index": (8, 6, 4), "f_middle": (12, 12, 8),
-              "f_ring": (13, 13, 9), "f_pinky": (14, 14, 10)},
-    "mag": {"f_index": (14, 16, 10), "f_middle": (16, 19, 12),
-            "f_ring": (17, 20, 13), "f_pinky": (18, 21, 14)},
-    "point": {"f_index": (-8, -12, -8), "f_middle": (10, 13, 9),
-              "f_ring": (11, 14, 10), "f_pinky": (12, 15, 11)},
-    "light": {"f_index": (2, 2, 2), "f_middle": (4, 5, 4),
-              "f_ring": (5, 6, 5), "f_pinky": (6, 7, 6)},
-}
-## Pulgar: 4 falanges en este donante.  Flexion + oposicion (swing).
-THUMB = {
-    "grip": (6, 8, 8, 6),
-    "relax": (2, 2, 2, 2),
-    "open": (-6, -6, -6, -6),
-    "slide": (4, 5, 5, 4),
-    "mag": (6, 8, 8, 6),
-    "point": (6, 8, 8, 6),
-    "light": (2, 2, 2, 2),
-}
-THUMB_SWING = {
-    "grip": (-10.0, 0.0, 0.0, 0.0),
-    "relax": (0.0, 0.0, 0.0, 0.0),
-    "open": (0.0, 0.0, 0.0, 0.0),
-    "slide": (-6.0, 0.0, 0.0, 0.0),
-    "mag": (-8.0, 0.0, 0.0, 0.0),
-    "point": (-8.0, 0.0, 0.0, 0.0),
-    "light": (0.0, 0.0, 0.0, 0.0),
-}
-REST_CURL = {"R": "grip", "L": "relax"}
-
-NVEC = 4 * 3 + 4 + 4  # 4 dedos x 3 falanges + pulgar 4 + swing 4
-ZERO_VEC = (0.0,) * NVEC
-
-## Rellenado por `measure_flex_axes` / `measure_tips` en tiempo de construccion.
-FLEX_AXIS: dict = {}
-FLEX_SWING: dict = {}
-TIP_LOCAL: dict = {}
-SIGNS: dict = {}
+## Espacio del arma -> espacio de Blender.  El constructor razona TODO en espacio
+## del arma (+Y arriba, -Z al morro) y convierte al final: el exportador glTF
+## deshace justo esa conversion, asi que el GLB sale en espacio del arma con el
+## nodo raiz en IDENTIDAD.
+def b_point(v) -> Vector:
+    return GUN_TO_BLENDER @ Vector(v)
 
 
-# ===========================================================================
-# utilidades de escena
-# ===========================================================================
+def b_mat(m: Matrix) -> Matrix:
+    return GUN_TO_BLENDER @ m
+
+
+# ===== utilidades =====
 def reset_scene() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     for group in (bpy.data.objects, bpy.data.meshes, bpy.data.materials,
@@ -231,19 +112,16 @@ def reset_scene() -> None:
     bpy.context.scene.render.fps = FPS
     bpy.context.scene.render.fps_base = 1.0
 
-
 def import_gltf(path: Path) -> list:
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(path))
     return [o for o in bpy.data.objects if o not in before]
-
 
 def activate(obj) -> None:
     for o in list(bpy.context.selected_objects):
         o.select_set(False)
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
-
 
 def update() -> None:
     bpy.context.view_layer.update()
@@ -255,17 +133,7 @@ def update() -> None:
 ## deshace justo esa conversion, asi que el GLB sale en espacio del arma con el
 ## nodo raiz en IDENTIDAD (que es lo que exige el contrato: GRIP_POS/GRIP_ROT en
 ## cero y el brazo colgando de BodyGive sin transformacion).
-def b_point(v) -> Vector:
-    return GUN_TO_BLENDER @ Vector(v)
 
-
-def b_mat(m: Matrix) -> Matrix:
-    return GUN_TO_BLENDER @ m
-
-
-# ===========================================================================
-# matrices
-# ===========================================================================
 def frame_matrix(origin: Vector, ydir: Vector, zref: Vector) -> Matrix:
     """Base ortonormal derecha con Y = ydir y Z lo mas cerca posible de zref.
 
@@ -287,7 +155,6 @@ def frame_matrix(origin: Vector, ydir: Vector, zref: Vector) -> Matrix:
                    (X.z, Y.z, Z.z, origin.z),
                    (0.0, 0.0, 0.0, 1.0)))
 
-
 def grip_socket(side: str, slide: float = 0.0, roll_deg: float = 0.0,
                 offset: Vector | None = None) -> Matrix:
     """Boca del agarre de la empuñadura en espacio del arma."""
@@ -298,192 +165,6 @@ def grip_socket(side: str, slide: float = 0.0, roll_deg: float = 0.0,
     if abs(roll) > 1e-9:
         m = m @ Matrix.Rotation(math.radians(roll), 4, "Y")
     return m
-
-
-def mag_socket(offset: float) -> Matrix:
-    """Boca del puño izquierdo agarrando el cargador `offset` metros por debajo
-    del brocal (MAGAZINE_OUT_AXIS = -Y del arma, constante de GlockWeapon.gd)."""
-    m = grip_socket("L")
-    m.translation = m.translation + Vector((0.0, -offset, 0.0))
-    return m
-
-
-def slide_socket(travel: float, lift: float = 0.0) -> Matrix:
-    """Puño izquierdo agarrando la corredera por detras, con los dedos por
-    encima: el eje del tunel es el del cañon (+Z, hacia el tirador) y la palma
-    mira a la derecha (+X).  `travel` es lo que ha retrocedido la corredera."""
-    z = SLIDE_REAR_Z + travel - 0.017
-    o = Vector((0.0, SLIDE_TOP_Y - 0.014 + lift, z))
-    ## Tunel hacia el MORRO (indice delante, meñique detras) y palma a la
-    ## derecha (la palma apoya en el costado izquierdo de la corredera).
-    return frame_matrix(o, Vector((0.0, 0.0, -1.0)), Vector((1.0, 0.0, 0.0)))
-
-
-def socket_from_dir(origin: Vector, hand_dir: Vector, palm_hint: Vector,
-                    d_local: Vector) -> Matrix:
-    """Boca a partir de la direccion que debe tomar el hueso `hand` (su Y) y una
-    pista de normal palmar.  Es la forma natural de colocar la mano cuando NO
-    agarra nada (reposo, transiciones): se dice hacia donde apunta la mano."""
-    Yw = Vector(hand_dir).normalized()
-    Zw = Vector(palm_hint)
-    Zw = (Zw - Yw * Zw.dot(Yw)).normalized()
-    Xw = Yw.cross(Zw)
-    Bw = Matrix(((Xw.x, Yw.x, Zw.x, 0.0), (Xw.y, Yw.y, Zw.y, 0.0),
-                 (Xw.z, Yw.z, Zw.z, 0.0), (0.0, 0.0, 0.0, 1.0)))
-    Yl = Vector(d_local).normalized()
-    Zl = Vector((0.0, 0.0, 1.0))
-    Zl = (Zl - Yl * Zl.dot(Yl)).normalized()
-    Xl = Yl.cross(Zl)
-    Bl = Matrix(((Xl.x, Yl.x, Zl.x, 0.0), (Xl.y, Yl.y, Zl.y, 0.0),
-                 (Xl.z, Yl.z, Zl.z, 0.0), (0.0, 0.0, 0.0, 1.0)))
-    R = Bw @ Bl.inverted()
-    m = R.to_4x4()
-    m.translation = Vector(origin)
-    return m
-
-
-def blend_matrix(a: Matrix, b: Matrix, k: float) -> Matrix:
-    ta, ra, _ = a.decompose()
-    tb, rb, _ = b.decompose()
-    return Matrix.LocRotScale(ta.lerp(tb, k), ra.slerp(rb, k), Vector((1.0, 1.0, 1.0)))
-
-
-def solve_elbow(S: Vector, W: Vector, l1: float, l2: float, pole: Vector) -> Vector:
-    """IK analitico de dos huesos: posicion del codo."""
-    d = W - S
-    dist = d.length
-    if dist < 1e-6:
-        d = Vector((0.0, -1.0, 0.0))
-        dist = 1e-6
-    dist = min(dist, (l1 + l2) * 0.999)
-    n = d.normalized()
-    a = (l1 * l1 - l2 * l2 + dist * dist) / (2.0 * dist)
-    h = math.sqrt(max(l1 * l1 - a * a, 0.0))
-    p = Vector(pole)
-    p = p - n * p.dot(n)
-    if p.length < 1e-6:
-        p = Vector((0.0, -1.0, 0.0)) - n * Vector((0.0, -1.0, 0.0)).dot(n)
-    p.normalize()
-    return S + n * a + p * h
-
-
-# ===========================================================================
-# nombres del donante -> nombres canonicos
-# ===========================================================================
-def canonical(name: str) -> str | None:
-    """Nombre canonico de un hueso del donante, o None si hay que tirarlo."""
-    if name == "_rootJoint":
-        return "root"
-    if name.startswith("FPS Arms Root"):
-        return "chest"
-    m = re.match(r"^Arm_([12])\.([LR])_\d+$", name)
-    if m:
-        return ("upper_arm." if m.group(1) == "1" else "forearm.") + m.group(2)
-    m = re.match(r"^Hand_([12])\.([LR])_\d+$", name)
-    if m:
-        return ("hand." if m.group(1) == "1" else "palm.") + m.group(2)
-    m = re.match(r"^Finger_([1-5])_(\d)\.([LR])_\d+$", name)
-    if m:
-        which, phalanx, side = int(m.group(1)), int(m.group(2)), m.group(3)
-        if which == 1:
-            return "thumb.%02d.%s" % (phalanx, side)
-        finger = {2: "f_index", 3: "f_middle", 4: "f_ring", 5: "f_pinky"}[which]
-        return "%s.%02d.%s" % (finger, phalanx, side)
-    return None
-
-
-def strip_donor(arm, meshes: list, world: Matrix) -> None:
-    """Tira todo lo que no sea la armadura o las dos mallas del donante.
-
-    `world` es la matriz de mundo que tenia la armadura ANTES de soltar los
-    empties de Sketchfab: borrar un padre en Blender reescribe el
-    `matrix_world` del hijo, asi que hay que reponerla a mano."""
-    keep = {arm, *meshes}
-    for obj in list(bpy.data.objects):
-        if obj not in keep:
-            print("BUILD fuera objeto ajeno:", obj.name, obj.type)
-            bpy.data.objects.remove(obj, do_unlink=True)
-    ## Las mallas siguen colgando de la armadura (eso es lo que empareja piel y
-    ## esqueleto al exportar); solo la armadura pierde a sus padres.
-    arm.parent = None
-    arm.matrix_world = world.copy()
-    arm.matrix_parent_inverse = Matrix.Identity(4)
-    for mesh in meshes:
-        mesh.parent = arm
-        mesh.matrix_parent_inverse = Matrix.Identity(4)
-    update()
-
-
-def measure_tips(arm) -> dict:
-    """Offset LOCAL de la punta real de cada falange distal, medido del hueso
-    hoja `*_end_*` (que se tira despues).
-
-    Se mide en la POSE, no en el bind: en el bind del donante los diez huesos
-    hoja caen todos en el MISMO punto degenerado, a 1,57 m de su padre, y de ahi
-    solo sale basura.  En la pose del autor cada hoja esta a ~2 cm de su padre,
-    que es la falange distal.  El offset es local al hueso, asi que sobrevive al
-    rehorneado del bind."""
-    tips = {}
-    for b in arm.data.bones:
-        if "_end_" not in b.name:
-            continue
-        parent = b.parent
-        if parent is None:
-            continue
-        local = (arm.pose.bones[parent.name].matrix.inverted()
-                 @ arm.pose.bones[b.name].head)
-        tips[parent.name] = local
-        print("BUILD punta %-24s offset local=(%.4f,%.4f,%.4f) |d|=%.4f"
-              % (parent.name, local.x, local.y, local.z, local.length))
-    return tips
-
-
-def strip_leaves(arm) -> list:
-    """Quita los huesos hoja `*_end_*` (glTF leaf bones, sin pesos)."""
-    activate(arm)
-    bpy.ops.object.mode_set(mode="EDIT")
-    ebs = arm.data.edit_bones
-    gone = []
-    for name in [n for n in ebs.keys() if "_end_" in n]:
-        eb = ebs[name]
-        kids = [c.name for c in eb.children]
-        assert not kids, "BUILD ABORTA: %s tiene hijos %s" % (name, kids)
-        assert len(arm.pose.bones[name].constraints) == 0, \
-            "BUILD ABORTA: %s tiene constraints" % name
-        ebs.remove(eb)
-        gone.append(name)
-    bpy.ops.object.mode_set(mode="OBJECT")
-    print("BUILD fuera %d huesos hoja (_end)" % len(gone))
-    return gone
-
-
-def rename_bones(arm, meshes: list) -> None:
-    """Renombra huesos y grupos de vertices a los nombres canonicos."""
-    activate(arm)
-    bpy.ops.object.mode_set(mode="EDIT")
-    ebs = arm.data.edit_bones
-    mapping = {}
-    for name in list(ebs.keys()):
-        new = canonical(name)
-        assert new is not None, "BUILD ABORTA: hueso sin nombre canonico %s" % name
-        mapping[name] = new
-    for old, new in mapping.items():
-        if old != new:
-            ebs[old].name = new
-    bpy.ops.object.mode_set(mode="OBJECT")
-    for mesh in meshes:
-        for vg in mesh.vertex_groups:
-            if vg.name in mapping:
-                vg.name = mapping[vg.name]
-    for mesh in meshes:
-        for vg in list(mesh.vertex_groups):
-            if vg.name not in mapping.values():
-                print("BUILD fuera grupo de vertices:", vg.name)
-                mesh.vertex_groups.remove(vg)
-    n = len(arm.data.bones)
-    deform = sum(1 for b in arm.data.bones if b.use_deform)
-    print("BUILD huesos: %d (deform %d)" % (n, deform))
-
 
 def normalize_world(arm, meshes: list, W: Matrix) -> None:
     """Deja la armadura y las mallas en IDENTIDAD y su espacio en espacio-mundo.
@@ -528,20 +209,6 @@ def normalize_world(arm, meshes: list, W: Matrix) -> None:
     update()
     print("BUILD normalizacion: armadura y mallas en identidad (mundo = espacio del arma)")
 
-
-def drop_extra_uvs(meshes: list) -> None:
-    """El donante trae 3 juegos de UV y el material solo usa el primero: los
-    otros dos solo engordan el GLB."""
-    for mesh in meshes:
-        while len(mesh.data.uv_layers) > 1:
-            n = mesh.data.uv_layers[-1].name
-            mesh.data.uv_layers.remove(mesh.data.uv_layers[-1])
-            print("BUILD fuera capa UV:", n)
-
-
-# ===========================================================================
-# medida del contacto mano-empuñadura
-# ===========================================================================
 def skinned_positions(arm, mesh, base: dict) -> list:
     """Posiciones de los vertices con la POSE ACTUAL (mismo calculo que el bake).
     Hace falta para poder medir el puño cerrado antes de hornear nada."""
@@ -558,7 +225,6 @@ def skinned_positions(arm, mesh, base: dict) -> list:
             tot += g.weight
         out.append(acc / tot if tot > 1e-9 else v.co.copy())
     return out
-
 
 def gun_grip_bvh() -> BVHTree:
     """Arbol BVH con la superficie REAL de la empuñadura (armazon, cargador y
@@ -590,7 +256,6 @@ def gun_grip_bvh() -> BVHTree:
     print("BUILD superficie del arma: %d verts / %d caras" % (len(verts), len(polys)))
     return BVHTree.FromPolygons(verts, polys)
 
-
 def inside_gun(bvh: BVHTree, p: Vector) -> bool:
     """Dentro/fuera por PARIDAD DE CRUCES de un rayo.
 
@@ -606,7 +271,6 @@ def inside_gun(bvh: BVHTree, p: Vector) -> bool:
         hits += 1
         origin = loc + direction * 1e-5
     return (hits % 2) == 1
-
 
 def surf_gap(bvh: BVHTree, p: Vector) -> float:
     """Distancia CON SIGNO a la superficie del arma: >0 aire, <0 dentro.
@@ -624,7 +288,6 @@ def surf_gap(bvh: BVHTree, p: Vector) -> float:
     if d > 0.002 and hit[1] is not None and off.dot(hit[1]) > 0.0:
         return d
     return -d if inside_gun(bvh, p) else d
-
 
 def pad_points(arm, meshes: list, base: dict, side: str, f_arm: Matrix,
                only: tuple | None = None) -> dict:
@@ -645,6 +308,7 @@ def pad_points(arm, meshes: list, base: dict, side: str, f_arm: Matrix,
     if only is not None:
         groups = {k: v for k, v in groups.items() if v in only}
     out: dict = {k: [] for k in only} if only is not None else {}
+    W = arm.matrix_world.copy()
     for mesh in meshes:
         idx2name = {g.index: g.name for g in mesh.vertex_groups}
         world = skinned_positions(arm, mesh, base)
@@ -657,489 +321,8 @@ def pad_points(arm, meshes: list, base: dict, side: str, f_arm: Matrix,
             tag = groups.get(idx2name.get(g.group))
             if tag is None:
                 continue
-            out.setdefault(tag, []).append(inv @ p)
+            out.setdefault(tag, []).append(inv @ (W @ p))
     return out
-
-
-# ===========================================================================
-# flexion de dedos
-# ===========================================================================
-def finger_bones(side: str, finger: str) -> list:
-    return ["%s.%02d.%s" % (finger, i, side) for i in (1, 2, 3)]
-
-
-def thumb_bones(side: str) -> list:
-    return ["thumb.%02d.%s" % (i, side) for i in (1, 2, 3, 4)]
-
-
-def finger_joints(arm, side: str, finger: str) -> list:
-    """Cuatro puntos del dedo: las tres CABEZAS mas la punta real.
-
-    La punta NO es `pose_bone.tail` (las longitudes distales del donante son
-    falsas): es el offset local que se midio del hueso hoja antes de tirarlo."""
-    chain = finger_bones(side, finger)
-    pts = [arm.pose.bones[n].head.copy() for n in chain]
-    pts.append(arm.pose.bones[chain[-1]].matrix @ TIP_LOCAL[chain[-1]])
-    return pts
-
-
-def thumb_joints(arm, side: str) -> list:
-    chain = thumb_bones(side)
-    pts = [arm.pose.bones[n].head.copy() for n in chain]
-    pts.append(arm.pose.bones[chain[-1]].matrix @ TIP_LOCAL[chain[-1]])
-    return pts
-
-
-def curl_vec(preset: str) -> tuple:
-    v = []
-    for f in FINGERS:
-        v += list(CURL[preset][f])
-    v += list(THUMB[preset]) + list(THUMB_SWING[preset])
-    return tuple(float(x) for x in v)
-
-
-def lerp_vec(a, b, k):
-    return tuple(x + (y - x) * k for x, y in zip(a, b))
-
-
-def vec_with(base: tuple, overrides: dict) -> tuple:
-    """Copia de `base` con algunos canales cambiados (por ejemplo el indice
-    extendido para pulsar el reten)."""
-    v = list(base)
-    for key, val in overrides.items():
-        if key == "f_index":
-            v[0:3] = list(val)
-        elif key == "f_middle":
-            v[3:6] = list(val)
-        elif key == "f_ring":
-            v[6:9] = list(val)
-        elif key == "f_pinky":
-            v[9:12] = list(val)
-        elif key == "thumb":
-            v[12:16] = list(val)
-        elif key == "swing":
-            v[16:20] = list(val)
-    return tuple(v)
-
-
-def palm_normal(arm, side: str) -> Vector:
-    """Normal palmar (sale de la palma) a partir de la QUIRALIDAD de la mano:
-    Y_mano x (indice -> meñique), con el signo del lado.  No se mide con el
-    desplazamiento de las puntas: con el puño cerrado la punta vuelve hacia la
-    muñeca y esa direccion deja de ser la normal palmar."""
-    hand = arm.pose.bones["hand.%s" % side]
-    ydir = (hand.matrix.to_3x3() @ Vector((0.0, 1.0, 0.0))).normalized()
-    idx = arm.pose.bones["f_index.01.%s" % side].head.copy()
-    pnk = arm.pose.bones["f_pinky.01.%s" % side].head.copy()
-    n = ydir.cross(pnk - idx).normalized()
-    return n if side == "R" else -n
-
-
-def measure_flex_axes(arm) -> None:
-    """EJE de flexion de cada falange, MEDIDO de la geometria de la pose.
-
-    El plano en que se dobla un dedo lo define el producto vectorial de dos
-    falanges consecutivas; ese vector, llevado al espacio LOCAL del hueso, es el
-    eje sobre el que hay que rotar.  Suponer "la X local" funciona en algunos
-    rigs y en otros dobla el dedo de lado; medirlo no supone nada."""
-    for side in ("R", "L"):
-        for f in FINGERS:
-            pts = finger_joints(arm, side, f)
-            n = (pts[1] - pts[0]).cross(pts[2] - pts[1])
-            if n.length < 1e-9:
-                n = (pts[2] - pts[0]).cross(pts[3] - pts[1])
-            n.normalize()
-            for name in finger_bones(side, f):
-                pb = arm.pose.bones[name]
-                ax = (pb.matrix.to_3x3().inverted() @ n).normalized()
-                FLEX_AXIS[name] = ax
-                FLEX_SWING[name] = ax.cross(Vector((0.0, 1.0, 0.0))).normalized()
-        pts = thumb_joints(arm, side)
-        n = (pts[1] - pts[0]).cross(pts[2] - pts[1])
-        if n.length < 1e-9:
-            n = (pts[2] - pts[0]).cross(pts[3] - pts[1])
-        n.normalize()
-        for name in thumb_bones(side):
-            pb = arm.pose.bones[name]
-            ax = (pb.matrix.to_3x3().inverted() @ n).normalized()
-            FLEX_AXIS[name] = ax
-            FLEX_SWING[name] = ax.cross(Vector((0.0, 1.0, 0.0))).normalized()
-    print("BUILD ejes de flexion medidos en %d falanges" % len(FLEX_AXIS))
-
-
-def measure_curl_signs(arm, meshes: list, side: str) -> dict:
-    """Signo de la flexion de cada falange: positivo = hacia la palma.
-
-    Se decide con la MALLA, no con una suposicion: se aplica una flexion ligera
-    con los dos signos y se mira cual acerca las puntas a la superficie de la
-    palma."""
-    names = {"hand.%s" % side, "palm.%s" % side}
-    palm_pts = []
-    for mesh in meshes:
-        idx2name = {g.index: g.name for g in mesh.vertex_groups}
-        mesh_w = mesh.matrix_world
-        for v in mesh.data.vertices:
-            if not v.groups:
-                continue
-            g = max(v.groups, key=lambda x: x.weight)
-            if idx2name.get(g.group) in names and g.weight > 0.5:
-                palm_pts.append(mesh_w @ v.co)
-    best = 1.0
-    best_d = None
-    for s in (1.0, -1.0):
-        clear_fingers(arm, side)
-        update()
-        v = list(ZERO_VEC)
-        for f in FINGERS:
-            v[FINGERS.index(f) * 3:FINGERS.index(f) * 3 + 3] = list(CURL["light"][f])
-        v[12:16] = list(THUMB["light"])
-        for name, q in finger_rots(side, tuple(v), ZERO_VEC, {n: s for n in FLEX_AXIS
-                                                              if n.endswith("." + side)}).items():
-            pb = arm.pose.bones.get(name)
-            if pb is not None:
-                pb.rotation_mode = "QUATERNION"
-                pb.rotation_quaternion = q
-        update()
-        tot = 0.0
-        for f in FINGERS:
-            tip = finger_joints(arm, side, f)[-1]
-            tot += min((tip - p).length for p in palm_pts)
-        tip = thumb_joints(arm, side)[-1]
-        tot += min((tip - p).length for p in palm_pts)
-        print("BUILD signo %s: s=%+d distancia punta-palma=%.4f" % (side, int(s), tot))
-        if best_d is None or tot < best_d:
-            best_d = tot
-            best = s
-    clear_fingers(arm, side)
-    update()
-    print("BUILD signo %s elegido: %+d (%.4f m)" % (side, int(best), best_d))
-    return {n: best for n in FLEX_AXIS if n.endswith("." + side)}
-
-
-def finger_rots(side: str, vec: tuple, rest: tuple, signs: dict) -> dict:
-    """Rotacion local (quaternion) de cada falange para la flexion ABSOLUTA `vec`
-    medida desde la flexion `rest`.  Lo usan por igual los clips (que la escriben
-    como `matrix_basis`) y el bind (que la hornea en la pose de reposo)."""
-    out = {}
-    i = 0
-    for f in FINGERS:
-        for j, name in enumerate(finger_bones(side, f)):
-            ang = math.radians(vec[i + j] - rest[i + j]) * signs.get(name, 1.0)
-            out[name] = Quaternion(FLEX_AXIS[name], ang)
-        i += 3
-    for j, name in enumerate(thumb_bones(side)):
-        ang = math.radians(vec[12 + j] - rest[12 + j]) * signs.get(name, 1.0)
-        q = Quaternion(FLEX_AXIS[name], ang)
-        sw = math.radians(vec[16 + j] - rest[16 + j])
-        if abs(sw) > 1e-9:
-            q = Quaternion(FLEX_SWING[name], sw) @ q
-        out[name] = q
-    return out
-
-
-def apply_fingers(arm, side: str, vec: tuple, signs: dict, rest: tuple) -> None:
-    """Escribe la flexion ABSOLUTA `vec` como delta respecto de la del bind."""
-    for name, q in finger_rots(side, vec, rest, signs).items():
-        pb = arm.pose.bones.get(name)
-        if pb is not None:
-            pb.rotation_mode = "QUATERNION"
-            pb.rotation_quaternion = q
-
-
-def clear_fingers(arm, side: str) -> None:
-    for name in list(FLEX_AXIS):
-        if not name.endswith("." + side):
-            continue
-        pb = arm.pose.bones.get(name)
-        if pb:
-            pb.rotation_mode = "QUATERNION"
-            pb.rotation_quaternion = Quaternion()
-
-
-# ===========================================================================
-# medida de la boca del puño
-# ===========================================================================
-def measure_socket(arm, side: str, preset: str, signs: dict) -> tuple:
-    """Atajo por nombre de preset (el vector se congela tras el ajuste)."""
-    out = measure_socket_vec(arm, side, curl_vec(preset), signs)
-    clear_fingers(arm, side)
-    update()
-    return out
-
-
-def measure_socket_vec(arm, side: str, vec: tuple, signs: dict) -> tuple:
-    """Mide EN LA MALLA un marco rigido del puño: centro del tunel, eje del
-    tunel (normal del plano de flexion de los cuatro dedos) y normal palmar
-    (direccion en la que se mueven las puntas al cerrar).  Devuelve el marco en
-    el espacio LOCAL del hueso `hand.<side>` (que no se mueve: solo se cierran
-    los dedos) mas la direccion del hueso `hand` dentro de esa boca.
-
-    El marco local es INVARIANTE al cambio de pose de reposo, que es justo lo
-    que hace falta cuando el bind se reescribe."""
-    clear_fingers(arm, side)
-    update()
-    palm = palm_normal(arm, side)
-
-    apply_fingers(arm, side, vec, signs, ZERO_VEC)
-    update()
-
-    joints = []
-    normals = []
-    for f in FINGERS:
-        pts = finger_joints(arm, side, f)
-        joints += pts
-        n = (pts[1] - pts[0]).cross(pts[2] - pts[1])
-        if n.length < 1e-9:
-            n = (pts[2] - pts[0]).cross(pts[3] - pts[1])
-        if n.length > 1e-9:
-            normals.append(n.normalized())
-    axis = Vector()
-    for n in normals:
-        if n.dot(normals[0]) < 0.0:
-            n = -n
-        axis += n
-    axis.normalize()
-
-    center = sum(joints, Vector()) / len(joints)
-
-    hand = arm.pose.bones["hand.%s" % side]
-    ## Signo del eje: el tunel va del MEÑIQUE al INDICE, asi con la empuñadura
-    ## vertical el indice queda arriba (que es como se agarra una pistola).
-    ref = (arm.pose.bones["f_index.01.%s" % side].head
-           - arm.pose.bones["f_pinky.01.%s" % side].head)
-    if axis.dot(ref) < 0.0:
-        axis = -axis
-    f_arm = frame_matrix(center, axis, palm)
-    f_local = hand.matrix.inverted() @ f_arm
-    d_local = (f_arm.to_3x3().inverted() @ (hand.matrix.to_3x3()
-               @ Vector((0.0, 1.0, 0.0)))).normalized()
-    print("BUILD boca %s: tunel=(%.4f,%.4f,%.4f) eje=(%.3f,%.3f,%.3f) palma=(%.3f,%.3f,%.3f)"
-          % (side, center.x, center.y, center.z, axis.x, axis.y, axis.z,
-             palm.x, palm.y, palm.z))
-    print("      radio del tunel=%.4f m | mano Y en la boca=(%.3f,%.3f,%.3f)" % (
-        max((p - center - axis * (p - center).dot(axis)).length for p in joints),
-        d_local.x, d_local.y, d_local.z))
-    ## NO se abre la mano aqui: el que mide la malla necesita el puño cerrado.
-    return f_local, d_local, f_arm
-
-
-# ===========================================================================
-# pose
-# ===========================================================================
-def grip_report(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHTree) -> None:
-    """Informe POR DEDO del contacto con la empuñadura, medido sobre la malla ya
-    colocada.  Es el numero que dice si el puño agarra o solo lo parece."""
-    clear_fingers(arm, side)
-    update()
-    f_local, d_local, f_arm = measure_socket_vec(arm, side, curl_vec("grip"), signs)
-    pads = pad_points(arm, meshes, base, side, f_arm)
-    clear_fingers(arm, side)
-    update()
-    sock = grip_socket(side)
-    print("BUILD informe de agarre (%s), holgura a la superficie del arma:" % side)
-    for key in ("f_index", "f_middle", "f_ring", "f_pinky", "thumb", "palm"):
-        if key not in pads:
-            continue
-        vals = [(surf_gap(bvh, sock @ c), c) for c in pads[key]]
-        g, worst = min(vals, key=lambda t: t[0])
-        pos = sock @ worst
-        print("   %-9s %+7.2f mm  (%3d puntos)  peor en arma=(%+.4f,%+.4f,%+.4f)"
-              % (key, 1000.0 * g, len(pads[key]), pos.x, pos.y, pos.z))
-
-
-def _cost_of(gaps: dict) -> float:
-    """Coste del ajuste, con el criterio del dueño: LA MANO SE POSA, NO SE EMPUJA.
-
-    Donde antes se buscaba "0 a -1 mm" (tocar hundiendo un pelo) ahora se busca
-    AIRE PEQUENO Y POSITIVO: 0 a +2 mm.  Un dedo a 1 mm del lomo delantero no se
-    ve; un dedo hundido 0,3 mm en el arma es una deformacion que se ve.  Asi que
-    la penetracion se castiga 40:1 y el aire solo se prefiere pequeño (0,05:1),
-    de forma que el minimo cae justo por fuera de la superficie.
-
-    La PALMA y el PULGAR no entran: se apoyan donde los deje la pose.  Se probo a
-    exigirles tambien "no hundirse" y el optimizador resolvia alejando la mano
-    15 mm de la empuñadura (una mano flotando, peor que el problema).  El unico
-    punto que se hunde es el pliegue del pulgar en la espalda (un vertice del
-    web), y se declara en el informe."""
-    def cost(g):
-        return 40.0 * (-g) if g < 0.0 else 0.05 * g
-
-    def no_sink(g):
-        ## Solo castiga HUNDIRSE: el aire es gratis.  No empuja nada a tocar.
-        return 40.0 * (-g) if g < 0.0 else 0.0
-
-    return (cost(gaps["f_middle"]) + cost(gaps["f_ring"]) + cost(gaps["f_pinky"])
-            + no_sink(gaps["f_index"]))
-
-
-def _gaps_for(arm, meshes: list, base: dict, side: str, signs: dict, bvh: BVHTree,
-              vec: tuple, s0: Matrix, combos: list) -> list:
-    """Holguras de (dloc, roll) para una flexion `vec` dada.
-
-    `measure_socket_vec` y `pad_points` solo dependen de `vec`, asi que se pagan
-    UNA vez por flexion y no por candidato.  La holgura se mide sobre TODA la
-    yema: recortarla a los puntos mas cercanos infravalora el hundimiento real."""
-    clear_fingers(arm, side)
-    update()
-    _, _, f_arm = measure_socket_vec(arm, side, vec, signs)
-    pads = pad_points(arm, meshes, base, side, f_arm)
-    clear_fingers(arm, side)
-    update()
-    out = []
-    for dloc, roll in combos:
-        rot = Matrix.Rotation(math.radians(roll), 3, "Y")
-        gaps = {}
-        for key, pts in pads.items():
-            g = 9.9
-            for c in pts:
-                g = min(g, surf_gap(bvh, s0 @ (rot @ c + dloc)))
-            gaps[key] = g
-        out.append((gaps, dloc, roll))
-    return out
-
-
-def fit_grip(arm, meshes: list, base: dict, signs: dict, side: str, bvh: BVHTree) -> dict:
-    """Coloca el puño RIGIDAMENTE sobre la empuñadura: SOLO busca el
-    desplazamiento y el giro de la boca.
-
-    Lo que NO hace, a proposito: no busca la flexion de los dedos.  La flexion
-    sale de `CURL` (pose autora, con la referencia visual del donante que ya
-    sujeta una pistola) y no se toca para "cuadrar" el contacto.  Buscar la
-    flexion hasta que las yemas entren en el arma es lo que deformaba la mano;
-    el dueño lo vio y lo rechazo.  Aqui la mano se POSA: si un dedo queda a
-    1-2 mm del lomo delantero, se queda asi.
-
-    Busqueda en dos pasadas (gruesa y fina): la superficie es suave y el mismo
-    minimo sale 10x mas barato."""
-    global GRIP_OFFSET, GRIP_ROLL
-    s0 = frame_matrix(GRIP_CENTER, GRIP_AXIS, GRIP_PALM[side])
-    s0b = s0.to_3x3()
-    vec = curl_vec("grip")
-    best = None
-
-    def consider(combos, tag):
-        nonlocal best
-        for gaps, dloc, roll in _gaps_for(arm, meshes, base, side, signs, bvh,
-                                          vec, s0, combos):
-            score = _cost_of(gaps)
-            if best is None or score < best["score"]:
-                best = {"score": score, "dloc": dloc, "roll": roll, "gaps": gaps}
-        print("BUILD ajuste %-6s -> score=%.4f  holguras(mm) medio=%+.2f anular=%+.2f "
-              "menique=%+.2f indice=%+.2f palma=%+.2f"
-              % (tag, best["score"], 1000 * best["gaps"]["f_middle"],
-                 1000 * best["gaps"]["f_ring"], 1000 * best["gaps"]["f_pinky"],
-                 1000 * best["gaps"]["f_index"], 1000 * best["gaps"]["palm"]))
-
-    consider([(Vector((dx, 0.0, dz)), roll)
-              for dz in (0.014, 0.008, 0.002, -0.004, -0.010, -0.016)
-              for dx in (-0.010, -0.004, 0.002, 0.008)
-              for roll in (-24.0, -12.0, 0.0, 12.0, 24.0)], "grueso")
-    bd, br = best["dloc"], best["roll"]
-    consider([(bd + Vector((dx, 0.0, dz)), br + roll)
-              for dz in (-0.003, 0.0, 0.003)
-              for dx in (-0.002, 0.0, 0.002)
-              for roll in (-5.0, 0.0, 5.0)], "fino")
-
-    GRIP_OFFSET = s0b @ best["dloc"]
-    GRIP_ROLL = best["roll"]
-    print("BUILD ajuste: dloc=%s roll=%+.0f score=%.4f (flexion NO se busca: viene de CURL)"
-          % ([round(v, 4) for v in best["dloc"]], best["roll"], best["score"]))
-    return best
-
-
-class Pose:
-    def __init__(self) -> None:
-        self.r_socket = grip_socket("R")
-        self.l_socket = grip_socket("L")
-        self.r_sh = SHOULDER_R.copy()
-        self.l_sh = SHOULDER_L.copy()
-        self.r_pole = POLE_R.copy()
-        self.l_pole = POLE_L.copy()
-        self.r_curl = curl_vec(REST_CURL["R"])
-        self.l_curl = curl_vec(REST_CURL["L"])
-        ## Contragiro del conjunto brazo en espacio del arma (matriz de rotacion
-        ## alrededor del origen del arma).  Lo usa Inspect: el arma se gira -83
-        ## grados sobre su vertical para ensenar la ventana de expulsion, y los
-        ## brazos, que cuelgan del mismo BodyGive, se giran con ella.  Contragirar
-        ## el hombro deja el antebrazo apuntando abajo en el mundo otra vez.
-        self.counter = None
-
-
-def set_world(arm, name: str, m: Matrix) -> None:
-    pb = arm.pose.bones[name]
-    pb.rotation_mode = "QUATERNION"
-    pb.matrix = m
-    update()
-
-
-def apply_pose(arm, pose: Pose, sockets: dict, signs: dict) -> None:
-    """Escribe la pose en el rig.  Padres antes que hijos y `update()` entre
-    asignaciones: `pose_bone.matrix` se resuelve contra el padre VIVO.
-
-    Este donante NO tiene clavicula: el hombro es la CABEZA del hueso
-    `upper_arm`, y se coloca escribiendo su matriz completa (traslacion
-    incluida), exactamente igual que hacia el constructor anterior con su hueso
-    `shoulder`.  `chest` y `root` se quedan en reposo."""
-    for side in ("R", "L"):
-        sock = b_mat(pose.r_socket if side == "R" else pose.l_socket)
-        hand_m = sock @ sockets[side][0].inverted()
-        sh_g = pose.r_sh if side == "R" else pose.l_sh
-        pole_g = pose.r_pole if side == "R" else pose.l_pole
-        if pose.counter is not None:
-            sh_g = pose.counter @ sh_g
-            pole_g = pose.counter @ pole_g
-        sh = b_point(sh_g)
-        pole = b_point(pole_g)
-        W = hand_m.translation.copy()
-        E = solve_elbow(sh, W, UP_LEN, FORE_LEN, pole)
-        set_world(arm, "upper_arm.%s" % side, frame_matrix(sh, (E - sh).normalized(), pole))
-        set_world(arm, "forearm.%s" % side, frame_matrix(E, (W - E).normalized(), pole))
-        palm = arm.pose.bones.get("palm.%s" % side)
-        if palm is not None:
-            palm.rotation_mode = "QUATERNION"
-            palm.rotation_quaternion = Quaternion()
-            palm.location = Vector()
-        set_world(arm, "hand.%s" % side, hand_m)
-        apply_fingers(arm, side, pose.r_curl if side == "R" else pose.l_curl,
-                      signs[side], curl_vec(REST_CURL[side]))
-
-
-def reset_pose(arm) -> None:
-    for pb in arm.pose.bones:
-        pb.rotation_mode = "QUATERNION"
-        pb.location = Vector()
-        pb.rotation_quaternion = Quaternion()
-        pb.scale = Vector((1.0, 1.0, 1.0))
-    update()
-
-
-# ===========================================================================
-# bind: la pose de reposo del GLB es la de Idle t=0
-# ===========================================================================
-def propagate_rigid(arm, base: dict, targets: dict, root_name: str,
-                    local_rot: dict | None = None) -> None:
-    """Reparte la pose por los hijos de `root_name` EN ORDEN padre->hijo.
-
-    Cada hueso se compone desde SU PADRE, no desde la raiz:
-        T_hijo = T_padre * (B_padre^-1 * B_hijo) * q_local
-    Componer todos desde la raiz colocaba las falanges como si la mano estuviera
-    abierta: la flexion del padre no llegaba al hijo y el bind salia con los
-    dedos estirados."""
-    order = []
-    queue = [root_name]
-    while queue:
-        n = queue.pop(0)
-        for c in arm.data.bones[n].children:
-            order.append(c.name)
-            queue.append(c.name)
-    for name in order:
-        parent = arm.data.bones[name].parent.name
-        T = targets[parent] @ base[parent].inverted() @ base[name]
-        q = (local_rot or {}).get(name)
-        if q is not None:
-            T = T @ q.to_matrix().to_4x4()
-        targets[name] = T
-
 
 def bake_bind(arm, meshes: list, targets: dict) -> None:
     """Reescribe la pose de reposo con `targets` (espacio del arma) y REBAKEA la
@@ -1176,12 +359,16 @@ def bake_bind(arm, meshes: list, targets: dict) -> None:
         eb = ebs.get(name)
         if eb is None:
             continue
-        length = eb.length
-        head = T.translation.copy()
-        tail = head + (T.to_3x3() @ Vector((0.0, 1.0, 0.0))).normalized() * length
-        eb.head = head
-        eb.tail = tail
-        eb.align_roll(T.to_3x3() @ Vector((0.0, 0.0, 1.0)))
+        ## La LONGITUD se conserva (no afecta al skinning) y el resto se escribe
+        ## con la matriz entera: con donantes que traen la escala metida en el
+        ## bind, ir por cabeza/cola/roll no reproduce la matriz pedida.
+        R = T.to_3x3().normalized()
+        M = R.to_4x4()
+        M.translation = T.translation
+        ## La cola NO se toca despues: reasignarla recalcula el roll y entonces
+        ## `matrix_local` deja de reproducir la matriz pedida (la longitud no
+        ## afecta al skinning ni al glTF, que no guarda longitudes de hueso).
+        eb.matrix = M
     bpy.ops.object.mode_set(mode="OBJECT")
     update()
 
@@ -1195,473 +382,17 @@ def bake_bind(arm, meshes: list, targets: dict) -> None:
     print("BUILD bind: desviacion maxima de la pose de reposo = %.2e" % worst)
     assert worst < 1e-4, "BUILD ABORTA: el bind no reproduce la pose pedida"
 
-
-# ===========================================================================
-# canales
-# ===========================================================================
-def smooth(x: float) -> float:
-    x = min(max(x, 0.0), 1.0)
-    return x * x * (3.0 - 2.0 * x)
-
-
-class Track:
-    """Trayectoria de la boca de una mano: claves (t, Matrix, vector de flexion)
-    con interpolacion suave de traslacion, slerp de rotacion y lerp de dedos."""
-
-    def __init__(self, keys):
-        self.keys = keys
-
-    def at(self, t: float):
-        ks = self.keys
-        if t <= ks[0][0]:
-            return ks[0][1], ks[0][2]
-        if t >= ks[-1][0]:
-            return ks[-1][1], ks[-1][2]
-        for i in range(len(ks) - 1):
-            t0, m0, c0 = ks[i]
-            t1, m1, c1 = ks[i + 1]
-            if t0 <= t <= t1:
-                k = smooth((t - t0) / (t1 - t0)) if t1 > t0 else 1.0
-                return blend_matrix(m0, m1, k), lerp_vec(c0, c1, k)
-        return ks[-1][1], ks[-1][2]
-
-
-IDLE_L_POS = Vector((-0.215, -0.565, 0.135))
-L_OUT_LEFT = Vector((-0.305, -0.455, 0.075))
-L_UNDER = Vector((-0.040, -0.250, 0.030))
-L_RELEASE = Vector((-0.055, -0.036, 0.024))
-
-## Direccion del hueso `hand` y pista de palma para las poses libres (la mano no
-## agarra nada): la izquierda cuelga hacia abajo-adelante con la palma al cuerpo.
-L_FREE_DIR = Vector((-0.18, -0.88, -0.44))
-L_FREE_PALM = Vector((0.94, -0.28, 0.18))
-## Al pasar por detras del arma (transiciones) la mano apunta mas al morro.
-L_MID_DIR = Vector((0.30, -0.55, -0.78))
-
-MAG_INSERT_FROM = 0.170   # constante de Glock.gd
-MAG_FREE = 0.070          # GlockWeapon.MAG_TRAVEL
-
-
-def build_tracks(sockets: dict) -> dict:
-    d_local = sockets["L"][1]
-
-    def free_at(pos, hand_dir=None, palm=None):
-        return socket_from_dir(pos, hand_dir or L_FREE_DIR, palm or L_FREE_PALM, d_local)
-
-    relay = [
-        (0.00, support_socket(), curl_vec("grip")),
-        (0.13, free_at(L_OUT_LEFT), curl_vec("relax")),
-        (0.22, free_at(L_RELEASE + Vector((0.0, -0.01, -0.01)),
-                       Vector((0.42, -0.30, -0.86)), Vector((0.86, 0.30, -0.40))),
-         curl_vec("point")),
-        (0.28, free_at(L_RELEASE, Vector((0.42, -0.30, -0.86)), Vector((0.86, 0.30, -0.40))),
-         curl_vec("point")),
-        (0.40, free_at(L_UNDER, L_MID_DIR), curl_vec("point")),
-        (0.52, mag_socket(0.030), curl_vec("mag")),
-        (0.62, mag_socket(MAG_FREE), curl_vec("grip")),
-        (0.78, free_at(L_OUT_LEFT), curl_vec("relax")),
-        (0.94, mag_socket(MAG_INSERT_FROM + 0.012), curl_vec("mag")),
-        (1.02, mag_socket(MAG_INSERT_FROM), curl_vec("mag")),
-        (1.22, mag_socket(MAG_INSERT_FROM * 0.30), curl_vec("mag")),
-        (1.40, mag_socket(0.0), curl_vec("mag")),
-    ]
-    reload_keys = relay + [
-        (1.52, mag_socket(-0.012), curl_vec("grip")),
-        (1.62, free_at(L_UNDER + Vector((0.0, -0.03, 0.02)), L_MID_DIR), curl_vec("relax")),
-        (1.72, free_at(L_OUT_LEFT, L_MID_DIR), curl_vec("relax")),
-        (2.10, support_socket(), curl_vec("grip")),
-    ]
-    empty_keys = relay + [
-        (1.48, mag_socket(-0.012), curl_vec("mag")),
-        (1.58, slide_socket(0.0, lift=0.010), curl_vec("slide")),
-        (1.66, slide_socket(-SLIDE_TRAVEL, lift=0.010), curl_vec("slide")),
-        (1.72, slide_socket(-SLIDE_TRAVEL, lift=0.010), curl_vec("slide")),
-        (1.80, slide_socket(-SLIDE_TRAVEL * 0.35, lift=0.012), curl_vec("slide")),
-        (1.94, free_at(L_UNDER, L_MID_DIR), curl_vec("relax")),
-        (2.35, support_socket(), curl_vec("grip")),
-    ]
-    inspect_keys = [
-        (0.00, support_socket(), curl_vec("grip")),
-        (0.07, free_at(L_UNDER, L_MID_DIR), curl_vec("relax")),
-        (0.13, slide_socket(0.0, lift=0.008), curl_vec("slide")),
-        (0.22, slide_socket(-0.012, lift=0.008), curl_vec("slide")),
-        (0.30, slide_socket(-SLIDE_TRAVEL, lift=0.008), curl_vec("slide")),
-        (0.62, slide_socket(-SLIDE_TRAVEL, lift=0.008), curl_vec("slide")),
-        (1.20, slide_socket(-SLIDE_TRAVEL, lift=0.008), curl_vec("slide")),
-        (1.26, slide_socket(-SLIDE_TRAVEL * 0.30, lift=0.012), curl_vec("slide")),
-        (1.40, free_at(L_UNDER, L_MID_DIR), curl_vec("relax")),
-        (1.70, free_at(L_OUT_LEFT), curl_vec("relax")),
-        (2.00, support_socket(), curl_vec("grip")),
-    ]
-    return {
-        "Reload": Track(reload_keys),
-        "ReloadEmpty": Track(empty_keys),
-        "Inspect": Track(inspect_keys),
-    }
-
-
-# ===========================================================================
-# poses por clip
-# ===========================================================================
-IDLE_D_LOCAL = Vector((0.0, 0.0, 1.0))
-
-
-def idle_pose(t: float, tracks: dict | None = None) -> Pose:
-    p = Pose()
-    ph = 2.0 * math.pi * t / 3.0
-    breath = math.sin(ph)
-    ## Respiracion: el arma tambien respira (PoseRoot), asi que la mano se queda
-    ## PLANTADA en la empuñadura y lo que se mueve es el hombro y el codo.
-    p.r_sh = SHOULDER_R + Vector((0.0, 0.0016 * breath, 0.0010 * math.sin(2.0 * ph)))
-    p.l_sh = SHOULDER_L + Vector((0.0, 0.0014 * breath, 0.0))
-    p.r_socket = grip_socket("R", roll_deg=0.30 * breath)
-    if tracks is None:
-        ## AGARRE A DOS MANOS: la izquierda se apoya en la empuñadura (encima de
-        ## la derecha) y respira con ella.  Antes colgaba fuera de cuadro.
-        m = support_socket()
-        m.translation = m.translation + Vector((0.0006 * breath, 0.0,
-                                                0.0010 * math.sin(ph + 1.0)))
-        p.l_socket = m
-        p.l_curl = curl_vec("grip")
-    return p
-
-
-def make_clip_fn(name: str, tracks: dict):
-    if name == "Idle":
-        def fn(t):
-            return idle_pose(t)
-        return fn
-    if name == "Fire":
-        def fn(t):
-            p = idle_pose(0.0)
-            ## El arma la mueve GlockRecoil (pico ~0.06 s, 5.7 grados de cabeceo).
-            ## El brazo absorbe una fraccion, con retardo y con vuelta.
-            kick = 0.0
-            ks = [(0.000, 0.0), (0.018, 0.15), (0.055, 1.0), (0.100, 0.55),
-                  (0.150, -0.10), (0.200, 0.03), (0.260, 0.0)]
-            if t <= ks[0][0]:
-                kick = ks[0][1]
-            elif t >= ks[-1][0]:
-                kick = ks[-1][1]
-            else:
-                for i in range(len(ks) - 1):
-                    if ks[i][0] <= t <= ks[i + 1][0]:
-                        kick = ks[i][1] + (ks[i + 1][1] - ks[i][1]) * smooth(
-                            (t - ks[i][0]) / (ks[i + 1][0] - ks[i][0]))
-                        break
-            rot = Matrix.Rotation(math.radians(2.2) * kick, 4, Vector((1.0, 0.0, 0.0)))
-            m = p.r_socket @ rot
-            m.translation = m.translation + Vector((0.0, 0.0011 * kick, 0.0016 * kick))
-            p.r_socket = m
-            p.r_sh = SHOULDER_R + Vector((0.0005 * kick, -0.0012 * kick, 0.0022 * kick))
-            m2 = p.l_socket.copy()
-            m2.translation = m2.translation + Vector((0.0, 0.0016 * kick, 0.0022 * kick))
-            p.l_socket = m2
-            p.l_sh = SHOULDER_L + Vector((0.0, -0.0008 * kick, 0.0014 * kick))
-            return p
-        return fn
-    track = tracks[name]
-    dur = {"Reload": 2.10, "ReloadEmpty": 2.35, "Inspect": 2.00}[name]
-
-    def fn(t):
-        p = idle_pose(0.0)
-        sock, curl = track.at(t)
-        p.l_socket = sock
-        p.l_curl = curl
-        ## El hombro izquierdo acompaña al brazo: sube y va al centro mientras
-        ## la mano trabaja en el arma, y vuelve al colgar.  Sin esto el codo se
-        ## rompe en cuanto la mano sube al brocal.
-        up = min(1.0, max(0.0, (t - 0.04) / 0.26))
-        if t > dur - 0.30:
-            up *= max(0.0, (dur - t) / 0.30)
-        p.l_sh = SHOULDER_L + Vector((0.030, 0.020, -0.030)) * up
-        return p
-    return fn
-
-
-# ===========================================================================
-# main
-# ===========================================================================
-def parse_args() -> argparse.Namespace:
-    argv = sys.argv
-    argv = argv[argv.index("--") + 1:] if "--" in argv else []
-    p = argparse.ArgumentParser()
-    p.add_argument("--out", default=str(OUT))
-    p.add_argument("--donor", default=str(DONOR))
-    p.add_argument("--bind-only", type=int, default=0)
-    p.add_argument("--grip-report", type=int, default=0,
-                   help="1 = informe por dedo del contacto con la empuñadura")
-    p.add_argument("--verify", type=int, default=0)
-    p.add_argument("--verify-only", default="", help="valida un GLB ya escrito y sale")
-    p.add_argument("--tex", type=int, default=1024,
-                   help="lado al que se lleva TODA textura mayor que el (0 = no tocar)")
-    ## El hombro (cabeza de `upper_arm`) y el pole del codo son los dos mandos
-    ## con los que se encuadra el brazo en ADS: en ADS el arma se centra con el
-    ## ojo, asi que el antebrazo tiene que salir por abajo-derecha en vez de
-    ## apuntar a la camara.  Se pueden probar sin editar el fichero.
-    p.add_argument("--shoulder-r", default="", help="x,y,z en espacio del arma")
-    p.add_argument("--shoulder-l", default="")
-    p.add_argument("--pole-r", default="")
-    p.add_argument("--support-slide", type=float, default=None)
-    p.add_argument("--support-roll", type=float, default=None)
-    p.add_argument("--support-off", default="")
-    p.add_argument("--pole-l", default="")
-    p.add_argument("--grip-slide", type=float, default=0.0)
-    p.add_argument("--grip-roll", type=float, default=0.0)
-    p.add_argument("--grip-off", default="0,0,0")
-    return p.parse_args(argv)
-
-
-def load_donor(donor: Path) -> tuple:
-    """Importa el donante y devuelve (armadura, mallas, matriz de mundo)."""
-    reset_scene()
-    objs = import_gltf(donor)
-    arm = next(o for o in objs if o.type == "ARMATURE")
-    meshes = [o for o in objs if o.type == "MESH"
-              and any(m.type == "ARMATURE" for m in o.modifiers)]
-    meshes.sort(key=lambda o: o.name)
-    assert len(meshes) in (1, 2), "BUILD ABORTA: %d mallas skinned" % len(meshes)
-    print("BUILD donante:", donor.name, "| armadura", arm.name,
-          "| mallas", [m.name for m in meshes])
-    world = arm.matrix_world.copy()
-    strip_donor(arm, meshes, world)
-    return arm, meshes, world
-
-
-def prepare(arm, meshes: list, world: Matrix) -> None:
-    """Del import crudo al rig metrico con la pose del autor como reposo."""
-    global TIP_LOCAL
-    TIP_LOCAL = measure_tips(arm)
-    strip_leaves(arm)
-    rename_bones(arm, meshes)
-    normalize_world(arm, meshes, world)
-    ## REBASE: el bind del donante es una T-pose y su POSE es la de primera
-    ## persona.  Se hornea la pose del autor como nuevo reposo para que el rig
-    ## sea un rig normal (reposo == lo que se ve) y metrico.
-    targets = {pb.name: pb.matrix.copy() for pb in arm.pose.bones}
-    bake_bind(arm, meshes, targets)
-    TIP_LOCAL = {canonical(k) or k: v for k, v in TIP_LOCAL.items()}
-    drop_extra_uvs(meshes)
-    reset_pose(arm)
-    for mesh in meshes:
-        for poly in mesh.data.polygons:
-            poly.use_smooth = True
-        if hasattr(mesh.data, "use_auto_smooth"):
-            mesh.data.use_auto_smooth = True
-            mesh.data.auto_smooth_angle = math.radians(45.0)
-    print("BUILD tras preparar: %d huesos, %d mallas, tris=%d" % (
-        len(arm.data.bones), len(meshes),
-        sum(sum(len(p.vertices) - 2 for p in m.data.polygons) for m in meshes)))
-
-
-def main() -> None:
-    args = parse_args()
-    if args.verify_only:
-        verify(Path(args.verify_only))
-        return
-    out = Path(args.out)
-    if not out.is_absolute():
-        out = REPO / out
-    donor = Path(args.donor)
-    if not donor.is_absolute():
-        donor = REPO / donor
-    if not donor.exists():
-        raise SystemExit(
-            "BUILD ABORTA: falta el donante %s\n"
-            "  Es CC-BY-4.0 de BAMEN, 'FREE [FPS Arms] GameReady - RIGGED'\n"
-            "  https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f\n"
-            "  y NO esta en el repo (downloads/ es gitignored)." % donor)
-
-    global GRIP_CENTER, GRIP_AXIS, IDLE_D_LOCAL, UP_LEN, FORE_LEN
-    global SHOULDER_R, SHOULDER_L, POLE_R, POLE_L
-    global SUPPORT_SLIDE, SUPPORT_ROLL, SUPPORT_OFF
-    if args.support_slide is not None:
-        SUPPORT_SLIDE = args.support_slide
-    if args.support_roll is not None:
-        SUPPORT_ROLL = args.support_roll
-    if args.support_off:
-        SUPPORT_OFF = Vector([float(x) for x in args.support_off.split(",")])
-    for _name, _val in (("SHOULDER_R", args.shoulder_r), ("SHOULDER_L", args.shoulder_l),
-                        ("POLE_R", args.pole_r), ("POLE_L", args.pole_l)):
-        if _val:
-            _v = Vector([float(x) for x in _val.split(",")])
-            if _name == "SHOULDER_R":
-                SHOULDER_R = _v
-            elif _name == "SHOULDER_L":
-                SHOULDER_L = _v
-            elif _name == "POLE_R":
-                POLE_R = _v
-            else:
-                POLE_L = _v
-    GRIP_CENTER = GRIP_CENTER + GRIP_AXIS * args.grip_slide \
-        + Vector([float(v) for v in args.grip_off.split(",")])
-
-    arm, meshes, world = load_donor(donor)
-    prepare(arm, meshes, world)
-    UP_LEN = arm.data.bones["upper_arm.R"].length
-    FORE_LEN = arm.data.bones["forearm.R"].length
-    print("BUILD longitudes: upper_arm=%.4f forearm=%.4f" % (UP_LEN, FORE_LEN))
-
-    ## La malla se evalua por el modificador de armadura: apagarlo durante el
-    ## autoreado acelera el depsgraph.  Se vuelve a encender antes de exportar
-    ## (si no, el glTF pierde la piel).
-    mods = []
-    for mesh in meshes:
-        m = next((x for x in mesh.modifiers if x.type == "ARMATURE"), None)
-        if m is not None:
-            m.show_viewport = False
-            mods.append(m)
-
-    # --- signos y bocas -----------------------------------------------------
-    reset_pose(arm)
-    measure_flex_axes(arm)
-    signs = {s: measure_curl_signs(arm, meshes, s) for s in ("R", "L")}
-    bvh = gun_grip_bvh()
-    base0 = {b.name: b.matrix_local.copy() for b in arm.data.bones}
-    fit = fit_grip(arm, meshes, base0, signs["R"], "R", bvh)
-    print("BUILD ajuste del puño: desplazamiento=%s  giro=%+.0f deg  "
-          "holguras(mm) medio=%+.1f anular=%+.1f meñique=%+.1f indice=%+.1f palma=%+.1f"
-          % ([round(v, 4) for v in fit["dloc"]], fit["roll"],
-             1000 * fit["gaps"]["f_middle"], 1000 * fit["gaps"]["f_ring"],
-             1000 * fit["gaps"]["f_pinky"], 1000 * fit["gaps"]["f_index"],
-             1000 * fit["gaps"]["palm"]))
-    sockets = {}
-    for s in ("R", "L"):
-        clear_fingers(arm, s)
-        update()
-        sockets[s] = measure_socket(arm, s, "grip", signs[s])
-        clear_fingers(arm, s)
-        update()
-    reset_pose(arm)
-    IDLE_D_LOCAL = sockets["L"][1]
-    ## El informe va ANTES de rehornear el bind: despues, las matrices de reposo
-    ## que usa la medida ya no son las del donante.
-    if args.grip_report:
-        for _s in ("R", "L"):
-            grip_report(arm, meshes, base0, _s, signs[_s], bvh)
-    print("BUILD signos R:", {k: int(v) for k, v in sorted(signs["R"].items())})
-
-    # --- bind = Idle t=0 ----------------------------------------------------
-    bind = idle_pose(0.0)
-    base = {b.name: b.matrix_local.copy() for b in arm.data.bones}
-    targets = dict(base)
-    for side in ("R", "L"):
-        sock = b_mat(bind.r_socket if side == "R" else bind.l_socket)
-        hand_m = sock @ sockets[side][0].inverted()
-        sh = b_point(bind.r_sh if side == "R" else bind.l_sh)
-        pole = b_point(bind.r_pole if side == "R" else bind.l_pole)
-        W = hand_m.translation.copy()
-        E = solve_elbow(sh, W, UP_LEN, FORE_LEN, pole)
-        targets["upper_arm.%s" % side] = frame_matrix(sh, (E - sh).normalized(), pole)
-        targets["forearm.%s" % side] = frame_matrix(E, (W - E).normalized(), pole)
-        targets["hand.%s" % side] = hand_m
-        ## El bind tiene que tener los dedos YA cerrados: la flexion de reposo
-        ## entra como rotacion local de cada falange.
-        propagate_rigid(arm, base, targets, "hand.%s" % side,
-                        finger_rots(side, curl_vec(REST_CURL[side]), ZERO_VEC, signs[side]))
-    bake_bind(arm, meshes, targets)
-    _g2b = GUN_TO_BLENDER.inverted()
-    for _side in ("R", "L"):
-        _sock = b_mat(bind.r_socket if _side == "R" else bind.l_socket)
-        _hand = _sock @ sockets[_side][0].inverted()
-        _sh = b_point(bind.r_sh if _side == "R" else bind.l_sh)
-        _pole = b_point(bind.r_pole if _side == "R" else bind.l_pole)
-        _W = _hand.translation.copy()
-        _E = solve_elbow(_sh, _W, UP_LEN, FORE_LEN, _pole)
-        print("BUILD debug brazo %s: hombro(arma)=%s codo(arma)=%s muñeca(arma)=%s | "
-              "f_local.t=%s" % (
-                  _side, [round(x, 3) for x in (_g2b @ _sh)],
-                  [round(x, 3) for x in (_g2b @ _E)],
-                  [round(x, 3) for x in (_g2b @ _W)],
-                  [round(x, 3) for x in sockets[_side][0].translation]))
-
-    # --- clips --------------------------------------------------------------
-    if not args.bind_only:
-        tracks = build_tracks(sockets)
-        if arm.animation_data is None:
-            arm.animation_data_create()
-        arm.animation_data.action = None
-        for act in list(bpy.data.actions):
-            bpy.data.actions.remove(act)
-        for name in ("Idle", "Fire", "Reload", "ReloadEmpty", "Inspect"):
-            dur = {"Idle": 3.00, "Fire": 0.26, "Reload": 2.10,
-                   "ReloadEmpty": 2.35, "Inspect": 2.00}[name]
-            fn = make_clip_fn(name, tracks)
-            act = bpy.data.actions.new(name)
-            act.use_fake_user = True
-            arm.animation_data.action = act
-            n = int(round(dur * FPS))
-            for f in range(n + 1):
-                apply_pose(arm, fn(f / FPS), sockets, signs)
-                for pb in arm.pose.bones:
-                    pb.keyframe_insert("location", frame=f, group=pb.name)
-                    pb.keyframe_insert("rotation_quaternion", frame=f, group=pb.name)
-            for fc in act.fcurves:
-                for kp in fc.keyframe_points:
-                    kp.interpolation = "LINEAR"
-            print("BUILD clip %-12s %d frames (%.2f s) curvas=%d"
-                  % (name, n + 1, dur, len(act.fcurves)))
-        arm.animation_data.action = bpy.data.actions["Idle"]
-
-    # --- NLA: el exportador glTF nombra las animaciones con la PISTA NLA, no
-    #     con la accion, asi que no puede quedar ninguna.
-    ad = arm.animation_data
-    if ad is not None:
-        for track in list(ad.nla_tracks):
-            print("BUILD fuera pista NLA:", track.name)
-            ad.nla_tracks.remove(track)
-
-    for m in mods:
-        m.show_viewport = True
-
-    if args.tex > 0:
-        for img in bpy.data.images:
-            if img.size[0] and max(img.size) > args.tex:
-                print("BUILD textura %s %s -> %d" % (img.name, tuple(img.size), args.tex))
-                img.scale(args.tex, args.tex)
-
-    arm.name = "ArmsRig"
-    arm.data.name = "ArmsRig"
-    for mesh in meshes:
-        mesh.name = "Arms_" + mesh.name
-    out.parent.mkdir(parents=True, exist_ok=True)
-    activate(arm)
-    bpy.ops.export_scene.gltf(
-        filepath=str(out),
-        export_format="GLB",
-        use_selection=False,
-        export_apply=False,
-        export_animations=not args.bind_only,
-        export_animation_mode="ACTIONS",
-        export_nla_strips=False,
-        export_frame_range=False,
-        export_force_sampling=True,
-        export_frame_step=1,
-        export_bake_animation=False,
-        export_skins=True,
-        export_yup=True,
-        export_image_format="AUTO",
-        export_optimize_animation_size=False,
-        export_anim_single_armature=True,
-        export_influence_nb=4,
-    )
-    print("BUILD escrito: %s (%.1f KB)" % (out, out.stat().st_size / 1024.0))
-    if args.verify:
-        verify(out)
-
-
-# ===========================================================================
-# verificacion del GLB: se PARSEA el archivo, no se le pregunta a Blender
-# ===========================================================================
-CLIPS = {"Idle": 3.00, "Fire": 0.26, "Reload": 2.10, "ReloadEmpty": 2.35,
-         "Inspect": 2.00}
-TRI_MIN, TRI_MAX = 8000, 20000
-
+def reset_pose(arm) -> None:
+    for pb in arm.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+        pb.location = Vector()
+        pb.rotation_quaternion = Quaternion()
+        pb.scale = Vector((1.0, 1.0, 1.0))
+    update()
 
 def glb_json(data: bytes) -> dict:
     n = struct.unpack("<I", data[12:16])[0]
     return json.loads(data[20:20 + n])
-
 
 def glb_bin(data: bytes) -> bytes:
     """Trozo BIN del GLB.  Los `byteOffset` de los bufferViews son relativos a
@@ -1676,12 +407,355 @@ def glb_bin(data: bytes) -> bytes:
         off += 8 + length
     return b""
 
-
 def png_size(blob: bytes) -> tuple:
     if blob[:8] != b"\x89PNG\r\n\x1a\n":
         return (0, 0)
     w, h = struct.unpack(">II", blob[16:24])
     return (w, h)
+
+
+# ===========================================================================
+# donante DJMaesen: nombres, cadenas y medida del puño
+# ===========================================================================
+DJ_FINGERS = ("f_index", "f_middle", "f_ring", "f_pinky")
+FINGERS = DJ_FINGERS  # `pad_points` viene del builder de BAMEN y usa este nombre
+
+
+def thumb_bones(side: str) -> list:
+    return thumb_chain(side)
+
+
+def canonical(name: str) -> str | None:
+    """Nombre canonico de un hueso del donante, o None si hay que tirarlo."""
+    if name == "_rootJoint":
+        return "root"
+    m = re.match(r"^([LR])_(arm|elbow|forearm|wrist|palm)_\d+$", name)
+    if m:
+        side = m.group(1)
+        return {"arm": "upper_arm", "elbow": "elbow", "forearm": "forearm",
+                "wrist": "hand", "palm": "palm"}[m.group(2)] + "." + side
+    m = re.match(r"^([LR])_(thumb|point|middle|ring|pink)(\d)_\d+$", name)
+    if m:
+        side, i = m.group(1), int(m.group(3))
+        if m.group(2) == "thumb":
+            return "thumb.%02d.%s" % (i, side)
+        f = {"point": "f_index", "middle": "f_middle", "ring": "f_ring",
+             "pink": "f_pinky"}[m.group(2)]
+        return "%s.%02d.%s" % (f, i, side)
+    return None
+
+
+def chain(side: str, finger: str) -> list:
+    return ["%s.%02d.%s" % (finger, i, side) for i in (1, 2, 3, 4)]
+
+
+def thumb_chain(side: str) -> list:
+    return ["thumb.%02d.%s" % (i, side) for i in (1, 2, 3, 4)]
+
+
+def palm_normal(arm, side: str) -> Vector:
+    """Normal palmar a partir de la quiralidad: Y_mano x (indice -> menique)."""
+    hand = arm.pose.bones["hand.%s" % side]
+    ydir = (arm.matrix_world.to_3x3() @ hand.matrix.to_3x3()
+            @ Vector((0.0, 1.0, 0.0))).normalized()
+    idx = head_world(arm, "f_index.01.%s" % side)
+    pnk = head_world(arm, "f_pinky.01.%s" % side)
+    n = ydir.cross(pnk - idx).normalized()
+    return n if side == "R" else -n
+
+
+def head_world(arm, name: str) -> Vector:
+    return arm.matrix_world @ arm.pose.bones[name].head
+
+
+def fist_frame(arm, side: str) -> Matrix:
+    """Marco rigido del puño MEDIDO EN METROS (espacio de mundo).
+
+    El donante trae la armadura a x100 y la malla al mismo factor: medir en
+    espacio de armadura da un tunel de 6 m de radio y todas las holguras salen
+    multiplicadas por 100.  El mundo es el unico espacio donde esto son metros."""
+    joints = []
+    normals = []
+    for f in DJ_FINGERS:
+        pts = [head_world(arm, n) for n in chain(side, f)]
+        joints += pts
+        n = (pts[1] - pts[0]).cross(pts[2] - pts[1])
+        if n.length < 1e-9:
+            n = (pts[2] - pts[0]).cross(pts[3] - pts[1])
+        if n.length > 1e-9:
+            normals.append(n.normalized())
+    axis = Vector()
+    for n in normals:
+        if n.dot(normals[0]) < 0.0:
+            n = -n
+        axis += n
+    axis.normalize()
+    center = sum(joints, Vector()) / len(joints)
+    ref = (head_world(arm, "f_index.01.%s" % side)
+           - head_world(arm, "f_pinky.01.%s" % side))
+    if axis.dot(ref) < 0.0:
+        axis = -axis
+    return frame_matrix(center, axis, palm_normal(arm, side))
+
+
+# ===========================================================================
+# muestreo del donante: la pose, relativa a SU pistola, fotograma a fotograma
+# ===========================================================================
+def load_donor(donor: Path) -> tuple:
+    reset_scene()
+    objs = import_gltf(donor)
+    arm = next(o for o in objs if o.type == "ARMATURE")
+    meshes = [o for o in objs if o.type == "MESH"
+              and any(m.type == "ARMATURE" for m in o.modifiers)]
+    assert len(meshes) == 1, "BUILD ABORTA: %d mallas skinned (se esperaba 1)" % len(meshes)
+    mesh = meshes[0]
+    gun = next((o for o in objs if o.name == "pistol"), None)
+    assert gun is not None, "BUILD ABORTA: el donante no trae el nodo `pistol`"
+    print("BUILD donante:", donor.name, "| armadura", arm.name, "| malla", mesh.name,
+          "| nodo pistola", gun.name)
+    return arm, mesh, gun
+
+
+def strip_donor(arm, mesh, gun, world: Matrix) -> None:
+    """Deja SOLO la armadura, la malla de brazos y el nodo de la pistola (que
+    hace falta para medir el movimiento del arma del donante)."""
+    keep = {arm, mesh, gun}
+    for obj in list(bpy.data.objects):
+        if obj not in keep and obj.parent is not None and obj.parent not in keep:
+            continue
+    for obj in list(bpy.data.objects):
+        if obj.type != "MESH" or obj is mesh:
+            continue
+        print("BUILD fuera malla ajena:", obj.name)
+        bpy.data.objects.remove(obj, do_unlink=True)
+    arm.parent = None
+    arm.matrix_world = world.copy()
+    arm.matrix_parent_inverse = Matrix.Identity(4)
+    mesh.parent = arm
+    mesh.matrix_parent_inverse = Matrix.Identity(4)
+    update()
+
+
+def rename_bones(arm, mesh) -> None:
+    activate(arm)
+    bpy.ops.object.mode_set(mode="EDIT")
+    ebs = arm.data.edit_bones
+    mapping = {}
+    for name in list(ebs.keys()):
+        new = canonical(name)
+        assert new is not None, "BUILD ABORTA: hueso sin nombre canonico %s" % name
+        mapping[name] = new
+    for old, new in mapping.items():
+        if old != new:
+            ebs[old].name = new
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for vg in mesh.vertex_groups:
+        if vg.name in mapping:
+            vg.name = mapping[vg.name]
+    print("BUILD huesos: %d (deform %d)" % (
+        len(arm.data.bones), sum(1 for b in arm.data.bones if b.use_deform)))
+
+
+def drop_extra_uvs(mesh) -> None:
+    while len(mesh.data.uv_layers) > 1:
+        n = mesh.data.uv_layers[-1].name
+        mesh.data.uv_layers.remove(mesh.data.uv_layers[-1])
+        print("BUILD fuera capa UV:", n)
+
+
+def sample_source(arm, gun, frames: list) -> dict:
+    """Fotografia la pose del donante RELATIVA A SU PISTOLA en cada fotograma.
+
+    El donante anima la pistola por su cuenta (se ladea, se le mueve la corredera)
+    y los brazos por la suya: son objetos independientes.  Lo que sirve para
+    NUESTRO juego es la pose de los brazos RELATIVA al arma, porque en runtime el
+    arma la mueve `Glock.gd` y los brazos cuelgan de `BodyGive`.  Por eso se
+    divide por la matriz del nodo `pistol` en cada fotograma."""
+    scene = bpy.context.scene
+    out = {}
+    for f in sorted(set(frames)):
+        scene.frame_set(f)
+        update()
+        g = gun.matrix_world.copy()
+        gi = g.inverted()
+        out[f] = {pb.name: gi @ (arm.matrix_world @ pb.matrix) for pb in arm.pose.bones}
+    print("BUILD donante muestreado: %d fotogramas x %d huesos"
+          % (len(out), len(next(iter(out.values())))))
+    return out
+
+
+def shorten_bone_tails(arm) -> None:
+    """El donante trae longitudes de hueso a x100 (hasta 34 m).  La longitud no
+    afecta al skinning (solo importan cabeza, orientacion y roll), pero deja el
+    esqueleto legible y evita colas absurdas en el GLB."""
+    activate(arm)
+    bpy.ops.object.mode_set(mode="EDIT")
+    ebs = arm.data.edit_bones
+    for b in arm.data.bones:
+        if len(b.children) != 1:
+            continue
+        ch = b.children[0]
+        d = (ch.head_local - b.head_local).length
+        if d > 1e-4:
+            e = ebs[b.name]
+            z = e.z_axis.copy()
+            e.tail = e.head + (e.tail - e.head).normalized() * d
+            e.align_roll(z)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    update()
+
+
+def apply_targets(arm, targets: dict) -> None:
+    """Escribe TODOS los huesos, padres antes que hijos."""
+    order = []
+    stack = [b for b in arm.data.bones if b.parent is None]
+    while stack:
+        b = stack.pop(0)
+        order.append(b.name)
+        stack += list(b.children)
+    for name in order:
+        m = targets.get(name)
+        if m is None:
+            continue
+        pb = arm.pose.bones[name]
+        pb.rotation_mode = "QUATERNION"
+        pb.matrix = m
+        update()
+
+
+
+# ===========================================================================
+# colocacion RIGIDA sobre NUESTRA Glock (nada de hundir la malla)
+# ===========================================================================
+def _cost_of(gaps: dict) -> float:
+    """Coste del ajuste, con el criterio del dueño: LA MANO SE POSA, NO SE EMPUJA.
+
+    Se busca AIRE PEQUEÑO Y POSITIVO (0 a +2 mm), no contacto.  Un dedo a 1 mm
+    del lomo delantero no se ve; un dedo hundido 0,3 mm en el arma es una
+    deformacion que se ve.  Penetracion 40:1; el aire solo se prefiere pequeño
+    (0,05:1) para que el minimo caiga justo por fuera de la superficie.  La
+    palma no entra: se apoya donde la deje la pose."""
+    def cost(g):
+        return 40.0 * (-g) if g < 0.0 else 0.05 * g
+
+    return (cost(gaps["f_middle"]) + cost(gaps["f_ring"]) + cost(gaps["f_pinky"])
+            + 2.0 * max(0.0, -gaps["f_index"]))
+
+
+def _gaps_for(arm, mesh, base: dict, bvh: BVHTree, pads: dict, s0: Matrix,
+              combos: list) -> list:
+    out = []
+    for dloc, roll in combos:
+        rot = Matrix.Rotation(math.radians(roll), 3, "Y")
+        gaps = {}
+        for key, pts in pads.items():
+            g = 9.9
+            for c in pts:
+                g = min(g, surf_gap(bvh, s0 @ (rot @ c + dloc)))
+            gaps[key] = g
+        out.append((gaps, dloc, roll))
+    return out
+
+
+def fit_placement(arm, mesh, base: dict, bvh: BVHTree, F_world: Matrix) -> tuple:
+    """Busca SOLO el desplazamiento y el giro de la boca: la pose la trae el
+    donante, no se toca."""
+    s0 = frame_matrix(GRIP_CENTER, GRIP_AXIS, GRIP_PALM["R"])
+    pads = pad_points(arm, [mesh], base, "R", F_world)
+    best = None
+
+    def consider(combos, tag):
+        nonlocal best
+        for gaps, dloc, roll in _gaps_for(arm, mesh, base, bvh, pads, s0, combos):
+            score = _cost_of(gaps)
+            if best is None or score < best["score"]:
+                best = {"score": score, "dloc": dloc, "roll": roll, "gaps": gaps}
+        print("BUILD ajuste %-6s -> score=%.4f  holguras(mm) medio=%+.2f anular=%+.2f "
+              "menique=%+.2f indice=%+.2f palma=%+.2f"
+              % (tag, best["score"], 1000 * best["gaps"]["f_middle"],
+                 1000 * best["gaps"]["f_ring"], 1000 * best["gaps"]["f_pinky"],
+                 1000 * best["gaps"]["f_index"], 1000 * best["gaps"]["palm"]))
+
+    consider([(Vector((dx, 0.0, dz)), roll)
+              for dz in (0.020, 0.012, 0.004, -0.004, -0.012, -0.020)
+              for dx in (-0.014, -0.006, 0.002, 0.010)
+              for roll in (-24.0, -12.0, 0.0, 12.0, 24.0)], "grueso")
+    bd, br = best["dloc"], best["roll"]
+    consider([(bd + Vector((dx, 0.0, dz)), br + roll)
+              for dz in (-0.004, 0.0, 0.004)
+              for dx in (-0.003, 0.0, 0.003)
+              for roll in (-6.0, 0.0, 6.0)], "fino")
+    ## La MISMA composicion que usa la medida de holguras: s0 @ (rot @ c + dloc).
+    ## Reconstruirla al reves (rotar despues de trasladar) colocaba la mano en
+    ## otro sitio y el informe no cuadraba con el ajuste.
+    m = s0 @ Matrix.Translation(best["dloc"]) @ Matrix.Rotation(math.radians(best["roll"]), 4, "Y")
+    print("BUILD ajuste: dloc=%s roll=%+.0f score=%.4f (la pose NO se busca: viene del donante)"
+          % ([round(v, 4) for v in best["dloc"]], best["roll"], best["score"]))
+    return m, best
+
+
+def grip_report(arm, mesh, base: dict, bvh: BVHTree, F_world: Matrix, socket: Matrix) -> None:
+    """Informe por pieza de la holgura a la superficie del arma (mm).
+
+    `socket` es la boca YA AJUSTADA (con su desplazamiento y giro): usar la boca
+    nominal daria un informe que no cuadra con el ajuste."""
+    pads = pad_points(arm, [mesh], base, "R", F_world)
+    s0 = socket
+    print("BUILD informe de agarre (R), holgura a la superficie del arma:")
+    for key in ("f_index", "f_middle", "f_ring", "f_pinky", "thumb", "palm"):
+        if key not in pads:
+            continue
+        vals = [(surf_gap(bvh, s0 @ c), c) for c in pads[key]]
+        g, worst = min(vals, key=lambda t: t[0])
+        print("   %-9s %+7.2f mm  (%3d puntos)" % (key, 1000.0 * g, len(pads[key])))
+
+
+# ===========================================================================
+# clips
+# ===========================================================================
+## Ventanas del donante (fotogramas de `allanimations`) para cada gesto.  Es una
+## LECTURA del strip, no una etiqueta del autor: el donante trae una sola tira de
+## 211 fotogramas con el disparo y las dos recargas, sin nombres.  Se midio la
+## distancia mano izquierda-mano derecha para localizar los cuatro tramos en que
+## la izquierda se suelta del arma (~20-40, ~76-100, ~125-148, ~150-192) y se
+## miraron fotogramas sueltos.  Lo que NO esta verificado es que el asiento del
+## cargador caiga en nuestro hito de 1,40 s: el donante lo hace a su ritmo.
+WINDOWS = {"Reload": (16, 104), "ReloadEmpty": (104, 192), "Inspect": (40, 120)}
+CLIPS = {"Idle": 3.00, "Fire": 0.26, "Reload": 2.10, "ReloadEmpty": 2.35, "Inspect": 2.00}
+
+
+def clip_targets(A: dict, frame: int, Tg: Matrix, extra_root: Matrix | None) -> dict:
+    T = b_mat(Tg)
+    out = {name: T @ A[frame][name] for name in A[frame]}
+    if extra_root is not None:
+        out["root"] = extra_root @ out["root"]
+    return out
+
+
+def breath_matrix(amount: float) -> Matrix:
+    return (Matrix.Rotation(math.radians(0.35 * amount), 4, Vector((1.0, 0.0, 0.0)))
+            @ Matrix.Rotation(math.radians(0.25 * amount), 4, Vector((0.0, 0.0, 1.0))))
+
+
+def twitch_matrix(kick: float) -> Matrix:
+    m = Matrix.Rotation(math.radians(1.6 * kick), 4, Vector((1.0, 0.0, 0.0)))
+    m.translation = Vector((0.0, 0.0016 * kick, 0.0022 * kick))
+    return m
+
+
+def warp(name: str, t: float) -> int:
+    if name in ("Idle", "Fire"):
+        return 0
+    f0, f1 = WINDOWS[name]
+    d = CLIPS[name]
+    return int(round(f0 + (f1 - f0) * min(max(t / d, 0.0), 1.0)))
+
+
+# ===========================================================================
+# verificacion del GLB: se PARSEA el fichero, no se le pregunta a Blender
+# ===========================================================================
+TRI_MIN, TRI_MAX = 4000, 24000
+BONE_MIN, BONE_MAX = 30, 60
 
 
 def verify(path: Path) -> None:
@@ -1700,10 +774,9 @@ def verify(path: Path) -> None:
     meshes = gltf.get("meshes", [])
     prims = [(m.get("name"), p) for m in meshes for p in m["primitives"]]
     tris = sum(gltf["accessors"][p["indices"]]["count"] // 3 for _, p in prims)
-    print("  meshes    :", [m.get("name") for m in meshes], "prims:", len(prims),
-          "tris:", tris)
-    if len(meshes) > 2:
-        bad("mas de 2 mallas")
+    print("  meshes    :", [m.get("name") for m in meshes], "prims:", len(prims), "tris:", tris)
+    if not (1 <= len(meshes) <= 2):
+        bad("numero de mallas fuera de 1-2")
     if not (TRI_MIN <= tris <= TRI_MAX):
         bad("triangulos fuera de [%d, %d]" % (TRI_MIN, TRI_MAX))
     for name, p in prims:
@@ -1713,14 +786,13 @@ def verify(path: Path) -> None:
             [round(v, 3) for v in acc["max"]]))
     mats = gltf.get("materials", [])
     print("  materiales:", [m.get("name") for m in mats])
-    if len(mats) > 2:
-        bad("mas de 2 materiales")
+    if not (1 <= len(mats) <= 2):
+        bad("numero de materiales fuera de 1-2")
     for im in gltf.get("images", []):
         bv = gltf["bufferViews"][im["bufferView"]]
         start = bv.get("byteOffset", 0)
-        blob = blob_all[start:start + bv["byteLength"]]
-        w, h = png_size(blob)
-        print("  imagen    : %-34s %dx%d bytes=%d mime=%s"
+        w, h = png_size(blob_all[start:start + bv["byteLength"]])
+        print("  imagen    : %-30s %dx%d bytes=%d mime=%s"
               % (im.get("name"), w, h, bv["byteLength"], im.get("mimeType")))
         if w == 0:
             bad("no se pudo leer el tamaño de %s" % im.get("name"))
@@ -1731,18 +803,12 @@ def verify(path: Path) -> None:
     if len(skins) != 1:
         bad("se esperaba exactamente 1 skin")
     joints = [gltf["nodes"][j].get("name", "") for s in skins for j in s["joints"]]
-    end = [j for j in joints if "_end" in j or j.endswith("_end")]
+    end = [j for j in joints if "_end" in j]
     print("  huesos    :", len(joints), "| hojas _end:", end or "ninguna")
     if end:
         bad("quedan huesos hoja _end")
-    if not (40 <= len(joints) <= 50):
-        bad("numero de huesos fuera de [40, 50]")
-    for s in skins:
-        for j in s["joints"]:
-            nd = gltf["nodes"][j]
-            for c in nd.get("children", []):
-                if gltf["nodes"][c].get("name", "") not in joints:
-                    bad("hueso %s tiene un hijo que no es joint" % nd.get("name"))
+    if not (BONE_MIN <= len(joints) <= BONE_MAX):
+        bad("numero de huesos fuera de [%d, %d]" % (BONE_MIN, BONE_MAX))
     for a in gltf.get("animations", []):
         tmax = max(gltf["accessors"][s["input"]]["max"][0] for s in a["samplers"])
         want = CLIPS.get(a["name"])
@@ -1752,10 +818,9 @@ def verify(path: Path) -> None:
         if want is None or abs(tmax - want) >= 1e-3:
             bad("clip %s con duracion %.4f" % (a["name"], tmax))
     names = sorted(a["name"] for a in gltf.get("animations", []))
-    want = sorted(CLIPS)
+    if names != sorted(CLIPS):
+        bad("los clips no son exactamente %s" % sorted(CLIPS))
     print("  nombres   :", names)
-    if names != want:
-        bad("los clips no son exactamente %s" % want)
     scene = gltf["scenes"][gltf.get("scene", 0)]
     for root in scene["nodes"]:
         nd = gltf["nodes"][root]
@@ -1767,6 +832,184 @@ def verify(path: Path) -> None:
     print("VERIFY", "OK" if ok else "FALLO")
     if not ok:
         raise SystemExit(1)
+
+
+
+# ===========================================================================
+# main
+# ===========================================================================
+def parse_args() -> argparse.Namespace:
+    argv = sys.argv
+    argv = argv[argv.index("--") + 1:] if "--" in argv else []
+    p = argparse.ArgumentParser()
+    p.add_argument("--out", default=str(OUT))
+    p.add_argument("--donor", default=str(DONOR))
+    p.add_argument("--bind-only", type=int, default=0)
+    p.add_argument("--grip-report", type=int, default=0)
+    p.add_argument("--verify", type=int, default=0)
+    p.add_argument("--verify-only", default="")
+    p.add_argument("--tex", type=int, default=1024)
+    p.add_argument("--grip-slide", type=float, default=0.0)
+    p.add_argument("--grip-off", default="0,0,0")
+    return p.parse_args(argv)
+
+
+def main() -> None:
+    args = parse_args()
+    if args.verify_only:
+        verify(Path(args.verify_only))
+        return
+    out = Path(args.out)
+    if not out.is_absolute():
+        out = REPO / out
+    donor = Path(args.donor)
+    if not donor.is_absolute():
+        donor = REPO / donor
+    if not donor.exists():
+        raise SystemExit(
+            "BUILD ABORTA: falta el donante %s\n"
+            "  Es CC-BY-4.0 de DJMaesen, 'animated pistol',\n"
+            "  https://sketchfab.com/3d-models/animated-pistol-bd896167e7ca44f19597d3afe6a8d83f\n"
+            "  y NO esta en el repo (downloads/ es gitignored).  Descomprime el ZIP en\n"
+            "  downloads/models/djmaesen_animated_pistol/extracted/." % donor)
+
+    global GRIP_CENTER, GRIP_AXIS
+    GRIP_CENTER = GRIP_CENTER + GRIP_AXIS * args.grip_slide \
+        + Vector([float(v) for v in args.grip_off.split(",")])
+
+    arm, mesh, gun = load_donor(donor)
+    world = arm.matrix_world.copy()
+    strip_donor(arm, mesh, gun, world)
+    rename_bones(arm, mesh)
+    drop_extra_uvs(mesh)
+
+    # --- la pose la trae el donante, relativa a SU pistola -------------------
+    act = max(bpy.data.actions, key=lambda a: len(a.fcurves))
+    if arm.animation_data is None:
+        arm.animation_data_create()
+    arm.animation_data.action = act
+    f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+    print("BUILD accion del donante: %s  frames %d..%d  curvas=%d"
+          % (act.name, f0, f1, len(act.fcurves)))
+    A = sample_source(arm, gun, list(range(f0, f1 + 1)))
+    bpy.context.scene.frame_set(f0)
+    update()
+    ## `fist_frame` devuelve el marco en espacio de ARMADURA: ahi viven la pose y
+    ## la malla del donante (las dos al mismo factor), asi que es el unico sitio
+    ## donde `pad_points` puede medir.  El mundo se obtiene aplicando la matriz
+    ## del objeto, que NO se toca hasta despues de hornear.
+    F_world = fist_frame(arm, "R")
+    g0 = gun.matrix_world.copy()
+    print("BUILD tunel del donante (mundo) centro=%s radio=%.4f m"
+          % ([round(x, 4) for x in F_world.translation],
+             max((head_world(arm, n) - F_world.translation).length
+                 for f in DJ_FINGERS for n in chain("R", f))))
+    # --- colocacion rigida sobre NUESTRA Glock ------------------------------
+    ## El ajuste se mide con la POSE CRUDA del donante (la accion sigue puesta):
+    ## es la unica consistente con su reposo, que es lo que usa `pad_points`.
+    bvh = gun_grip_bvh()
+    base = {b.name: b.matrix_local.copy() for b in arm.data.bones}
+    bpy.context.scene.frame_set(f0)
+    update()
+    s0c, best = fit_placement(arm, mesh, base, bvh, F_world)
+    if args.grip_report:
+        grip_report(arm, mesh, base, bvh, F_world, s0c)
+    ## Ahora si se suelta la accion: si siguiera puesta, cada `frame_set`/`update`
+    ## reescribiria la pose que acabamos de componer.
+    arm.animation_data.action = None
+    reset_pose(arm)
+    F_local = g0.inverted() @ F_world
+    Tg = s0c @ F_local.inverted()
+
+    # --- bind = Idle t=0 ----------------------------------------------------
+    bind = clip_targets(A, f0, Tg, breath_matrix(0.0))
+    bake_bind(arm, [mesh], bind)
+    ## AHORA si: con la malla y el reposo ya metricos, los objetos a identidad.
+    ## El donante trae la armadura y la malla a 0.01 y los huesos a x100; hornear
+    ## el bind lo deja todo en metros, y limpiar el transform del objeto es lo
+    ## que hace que el nodo raiz del GLB salga en IDENTIDAD.
+    for obj in (arm, mesh):
+        obj.parent = None if obj is arm else arm
+        obj.matrix_basis = Matrix.Identity(4)
+        obj.matrix_parent_inverse = Matrix.Identity(4)
+    update()
+    shorten_bone_tails(arm)
+
+    # --- clips --------------------------------------------------------------
+    if not args.bind_only:
+        if arm.animation_data is None:
+            arm.animation_data_create()
+        for old in list(bpy.data.actions):
+            bpy.data.actions.remove(old)
+        for name in ("Idle", "Fire", "Reload", "ReloadEmpty", "Inspect"):
+            dur = CLIPS[name]
+            act_new = bpy.data.actions.new(name)
+            act_new.use_fake_user = True
+            arm.animation_data.action = act_new
+            n = int(round(dur * FPS))
+            for f in range(n + 1):
+                t = f / FPS
+                if name == "Idle":
+                    extra = breath_matrix(math.sin(2.0 * math.pi * t / dur))
+                elif name == "Fire":
+                    kick = 0.0
+                    ks = [(0.000, 0.0), (0.018, 0.15), (0.055, 1.0), (0.100, 0.55),
+                          (0.150, -0.10), (0.200, 0.03), (0.260, 0.0)]
+                    for i in range(len(ks) - 1):
+                        if ks[i][0] <= t <= ks[i + 1][0]:
+                            k = (t - ks[i][0]) / (ks[i + 1][0] - ks[i][0])
+                            kick = ks[i][1] + (ks[i + 1][1] - ks[i][1]) * (k * k * (3 - 2 * k))
+                            break
+                    extra = twitch_matrix(kick)
+                else:
+                    extra = breath_matrix(0.25 * math.sin(2.0 * math.pi * t / dur))
+                apply_targets(arm, clip_targets(A, warp(name, t), Tg, extra))
+                for pb in arm.pose.bones:
+                    pb.keyframe_insert("location", frame=f, group=pb.name)
+                    pb.keyframe_insert("rotation_quaternion", frame=f, group=pb.name)
+            for fc in act_new.fcurves:
+                for kp in fc.keyframe_points:
+                    kp.interpolation = "LINEAR"
+            print("BUILD clip %-12s %d frames (%.2f s) curvas=%d"
+                  % (name, n + 1, dur, len(act_new.fcurves)))
+        arm.animation_data.action = bpy.data.actions["Idle"]
+
+    ad = arm.animation_data
+    if ad is not None:
+        for track in list(ad.nla_tracks):
+            print("BUILD fuera pista NLA:", track.name)
+            ad.nla_tracks.remove(track)
+
+    # --- fuera la pistola del donante y sus nodos ---------------------------
+    for obj in list(bpy.data.objects):
+        if obj.type == "MESH" or obj is arm:
+            continue
+        if obj.type in ("EMPTY",):
+            print("BUILD fuera nodo del donante:", obj.name)
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+    if args.tex > 0:
+        for img in bpy.data.images:
+            if img.size[0] and max(img.size) > args.tex:
+                print("BUILD textura %s %s -> %d" % (img.name, tuple(img.size), args.tex))
+                img.scale(args.tex, args.tex)
+
+    arm.name = "ArmsRig"
+    arm.data.name = "ArmsRig"
+    mesh.name = "Arms_DJ"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    activate(arm)
+    bpy.ops.export_scene.gltf(
+        filepath=str(out), export_format="GLB", use_selection=False, export_apply=False,
+        export_animations=not args.bind_only, export_animation_mode="ACTIONS",
+        export_nla_strips=False, export_frame_range=False, export_force_sampling=True,
+        export_frame_step=1, export_bake_animation=False, export_skins=True,
+        export_yup=True, export_image_format="AUTO",
+        export_optimize_animation_size=False, export_anim_single_armature=True,
+        export_influence_nb=4)
+    print("BUILD escrito: %s (%.1f KB)" % (out, out.stat().st_size / 1024.0))
+    if args.verify:
+        verify(out)
 
 
 if __name__ == "__main__":

@@ -169,6 +169,54 @@ light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 12.0
 omni_range = 17.0
 
+[node name="LampBackLeft14" type="OmniLight3D" parent="Lighting"]
+position = Vector3(-5, 3.30, 14)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackRight14" type="OmniLight3D" parent="Lighting"]
+position = Vector3(5, 3.30, 14)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackLeft26" type="OmniLight3D" parent="Lighting"]
+position = Vector3(-5, 3.30, 26)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackRight26" type="OmniLight3D" parent="Lighting"]
+position = Vector3(5, 3.30, 26)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackLeft38" type="OmniLight3D" parent="Lighting"]
+position = Vector3(-5, 3.30, 38)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackRight38" type="OmniLight3D" parent="Lighting"]
+position = Vector3(5, 3.30, 38)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackLeft50" type="OmniLight3D" parent="Lighting"]
+position = Vector3(-5, 3.30, 50)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
+[node name="LampBackRight50" type="OmniLight3D" parent="Lighting"]
+position = Vector3(5, 3.30, 50)
+light_color = Color(1, 0.96, 0.88, 1)
+light_energy = 11.0
+omni_range = 16.0
+
 [node name="PostReflection" type="ReflectionProbe" parent="."]
 position = Vector3(0, 1.9, -1.5)
 size = Vector3(10, 4, 12)

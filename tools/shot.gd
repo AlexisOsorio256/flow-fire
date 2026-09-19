@@ -105,6 +105,22 @@ func _place() -> void:
 			# Delante de la mesa de cargadores, a la distancia de agarre.
 			p.global_position = Vector3(1.9, 0.05, -2.6)
 			_aim(0.0, -0.34)
+		"muro":
+			# A 3,5 m del muro de tablones que hay en z=-12: de cerca se ve si es
+			# madera o un agujero negro.
+			p.global_position = Vector3(-2.5, 0.05, -8.5)
+			_aim(0.0, -0.06)
+		"girado":
+			# El mismo sitio pero mirando al OTRO lado (180 grados). Sirve para
+			# saber de una vez en que direccion esta el rango: si el contenido
+			# aparece aqui y no alli, el personaje nace del reves.
+			p.global_position = Vector3(2.0, 0.05, 0.5)
+			_aim(PI, -0.02)
+		"delante":
+			# Mirando de frente a los blancos grandes que hay a 6 y 8 m: es el
+			# encuadre que dice si de verdad hay algo que disparar delante.
+			p.global_position = Vector3(0.0, 0.05, -2.5)
+			_aim(0.0, -0.05)
 		"downrange":
 			# Desde el puesto mirando al fondo: es el encuadre de juego real.
 			p.global_position = Vector3(2.0, 0.05, 0.5)

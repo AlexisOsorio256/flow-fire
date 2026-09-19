@@ -230,17 +230,30 @@ def join(name: str, objects, root, meters_per_tile: float):
 # Dimensiones del rango (en metros, espacio Godot; el eje largo es Y de Blender)
 # ---------------------------------------------------------------------------
 HALF_W = 12.0        # ancho total 24 m
-Z0 = 6.0             # pared de atras (detras del tirador)
-Z1 = -66.0           # pared del fondo
+Z0 = 6.0             # pared de atras (detras del tirador), en espacio GODOT
+Z1 = -66.0           # pared del fondo, en espacio GODOT
 LENGTH = Z0 - Z1     # 72 m
 HEIGHT = 4.2
 BAY = 3.6            # modulo de losa / vano estructural
-CENTER_Y = (Z0 + Z1) * 0.5  # Blender +Y = Godot -Z
 
 
 def gz(godot_z: float) -> float:
-    """Godot -Z -> Blender +Y."""
+    """Godot -Z -> Blender +Y. Es la UNICA conversion de eje largo."""
     return -godot_z
+
+
+# LA OBRA VIVE EN Y DE BLENDER, Y SE DERIVA CON `gz()`.
+# El error que tenia esto: el piso, los muros, el techo, las vigas, los canales
+# y las luminarias usaban Z0/Z1 DIRECTAMENTE como Y de Blender, mientras que la
+# trampa de balas SI usaba `gz()`. Como `gz()` niega, la obra quedo construida
+# en la mitad contraria: el suelo y las paredes en un lado, y las estaciones y
+# la trampa en el otro. Medido sobre el GLB: no habia ni un vertice de pared
+# entre Godot z=-20 y z=-60, y por eso el fondo del rango era un vacio negro.
+BY_BACK = gz(Z0)          # Y de Blender de la pared de atras  (-6  = Godot +6)
+BY_FAR = gz(Z1)           # Y de Blender de la pared del fondo (+66 = Godot -66)
+BY_LEN = BY_FAR - BY_BACK
+BY_MID = (BY_BACK + BY_FAR) * 0.5
+CENTER_Y = BY_MID         # Blender +Y = Godot -Z
 
 
 def build() -> None:
@@ -316,7 +329,7 @@ def build() -> None:
     # ----------------------------------------------------------------- piso
     # Losa de hormigon en paños de BAY con junta fresada: la junta es una
     # ranura de 12 mm que atrapa sombra y da la escala del suelo de un vistazo.
-    for index, gy in enumerate(frange(Z1 + BAY * 0.5, Z0, BAY)):
+    for index, gy in enumerate(frange(BY_BACK + BAY * 0.5, BY_FAR, BAY)):
         floor.append(add_box(
             "Slab", (0.0, gz(gy), -0.15),
             (HALF_W * 2 - 0.10, BAY - 0.024, 0.30), concrete_floor, 0.010,
@@ -335,20 +348,20 @@ def build() -> None:
     # ser una sabana.
     panels = int(LENGTH / BAY)
     for index in range(panels):
-        y = Z1 + BAY * (index + 0.5)
+        y = BY_BACK + BAY * (index + 0.5)
         for sign, x in ((-1.0, -HALF_W + 0.15), (1.0, HALF_W - 0.15)):
             wall.append(add_box(
                 "Wall panel", (x, y, HEIGHT * 0.5),
                 (0.30, BAY - 0.024, HEIGHT), concrete_wall, 0.012,
             ))
-    wall.append(add_box("Back wall", (0.0, Z0 - 0.15, HEIGHT * 0.5), (HALF_W * 2, 0.30, HEIGHT), concrete_wall, 0.012))
+    wall.append(add_box("Back wall", (0.0, BY_BACK + 0.15, HEIGHT * 0.5), (HALF_W * 2, 0.30, HEIGHT), concrete_wall, 0.012))
     # Techo: forjado con casetones. El nervio visto cada BAY da la retícula.
-    wall.append(add_box("Ceiling slab", (0.0, CENTER_Y, HEIGHT + 0.10), (HALF_W * 2, LENGTH, 0.20), concrete_wall, 0.008))
+    wall.append(add_box("Ceiling slab", (0.0, BY_MID, HEIGHT + 0.10), (HALF_W * 2, LENGTH, 0.20), concrete_wall, 0.008))
     for index in range(panels + 1):
-        y = Z1 + BAY * index
+        y = BY_BACK + BAY * index
         wall.append(add_box("Ceiling rib", (0.0, y, HEIGHT - 0.09), (HALF_W * 2 - 0.10, 0.16, 0.18), concrete_wall, 0.008))
     for x in (-HALF_W + 0.20, HALF_W - 0.20):
-        wall.append(add_box("Ceiling spine", (x, CENTER_Y, HEIGHT - 0.09), (0.14, LENGTH, 0.18), concrete_wall, 0.008))
+        wall.append(add_box("Ceiling spine", (x, BY_MID, HEIGHT - 0.09), (0.14, LENGTH, 0.18), concrete_wall, 0.008))
 
     # --------------------------------------------------------- zocalo y canal
     for sign_x in (-1.0, 1.0):
@@ -364,13 +377,13 @@ def build() -> None:
         # Soportes de la bandeja: dan ritmo vertical a un muro larguisimo.
         for index in range(0, panels, 2):
             metal.append(add_box(
-                "Tray bracket", (base_x - sign_x * 0.06, Z1 + BAY * index, 3.30),
+                "Tray bracket", (base_x - sign_x * 0.06, BY_BACK + BAY * index, 3.30),
                 (0.26, 0.08, 0.26), steel, 0.006,
             ))
 
     # --------------------------------------------------------------- vigas
     for index in range(panels + 1):
-        y = Z1 + BAY * index
+        y = BY_BACK + BAY * index
         # Dos tramos laterales, no una viga de lado a lado: cruzando el pasillo
         # la viga se come el encuadre del tirador.
         for side in (-1.0, 1.0):
@@ -384,7 +397,7 @@ def build() -> None:
     # reales viven en la escena de Godot, que es quien decide cuantas y con
     # sombra.
     for index in range(panels):
-        y = Z1 + BAY * (index + 0.5)
+        y = BY_BACK + BAY * (index + 0.5)
         for x in (-5.4, 5.4):
             metal.append(add_box("Luminaire housing", (x, y, HEIGHT - 0.17), (1.90, 0.30, 0.10), steel, 0.010))
             light.append(add_box("Luminaire diffuser", (x, y, HEIGHT - 0.225), (1.74, 0.24, 0.035), luminaire, 0.008))

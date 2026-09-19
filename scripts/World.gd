@@ -113,9 +113,63 @@ func _build_props() -> void:
     _make_drum(-6.8, -25.0)
     _make_drum(7.2, -27.0)
 
-    # Pladur/yeso penetrable: entrada, salida y paso de bala visibles.
+    # ---------------------------------------------------- QUE HAYA QUE DISPARAR
+    # Peticion del dueño: "no le puedo disparar a nada porque no hay nada".
+    # Tenia razon y era literal: lo mas cercano estaba a 8 m y TODA la mitad de
+    # atras del rango (z > 0, 66 m de pasillo) estaba vacia, asi que caminar
+    # hacia atras era caminar por una nave en obra. Esto no son "estaciones de
+    # medida" -- esas siguen siendo las de `_build_targets` -- es material para
+    # tener algo delante a cualquier distancia y en cualquier direccion.
+    # Todo reutiliza los constructores que ya existen, con su material real
+    # (lata = thin_shell de aluminio, caja = pino hueco, bidon = acero).
+    # Fila de latas a 2 m del puesto: lo primero que se ve al levantar el arma.
+    for i in range(5):
+        _make_can(Vector3(-3.2 + i * 1.6, 0.061, -5.6))
+    # Y blancos GRANDES a 6 y 8 m, que es lo que se echa en falta de verdad:
+    # una lata a 6 m son 14 px y no se ve. Tres de acero (chispa y suena) y dos
+    # de papel (agujero limpio) delante de las narices, sin tener que ir a
+    # buscarlos a 18 m.
+    for i in range(3):
+        _make_steel_target(-2.0 + i * 2.0, -6.0)
+    for i in range(2):
+        _make_paper_target(-1.0 + i * 2.0, -8.0)
+    # Otra fila a 7 m, esta vez sobre una tabla baja: obliga a apuntar.
+    _make_plank_wall(5.6, -7.2, deg_to_rad(0.0))
+    for i in range(3):
+        _make_can(Vector3(5.0 + i * 0.6, 0.061, -7.4))
+    # NADA DETRAS DE LA LINEA DE TIRO. El dueño lo dijo sin rodeos: "no tiene
+    # sentido que se pongan esas cosas asi, es hacia atras". Tenia razon: el
+    # rango se dispara hacia -Z y poner material a la espalda del tirador no es
+    # un rango, es almacen. Todo lo que hay para disparar esta DELANTE.
+
+    # ------------------------------------------------- EL PASILLO, LLENO
+    # Peticion del dueño: "todo lo bueno para tirarle -- madera, latas, botes,
+    # paredes para traspasar -- va en el pasillo grande y bien iluminado, para
+    # divertirme". Va TODO delante de la linea de tiro, de 3 m a 55 m, para que
+    # se pueda caminar hacia el fondo disparando sin quedarse sin nada. La otra
+    # mitad del rango se queda vacia (lo pidio asi) pero con luz.
+    # Nada de geometria nueva: se reutilizan los constructores que ya existen.
+    _make_plank_wall(4.6, -10.5, deg_to_rad(-9.0))
+    _make_plank_wall(-5.2, -17.0, deg_to_rad(12.0))
+    _make_plank_wall(5.4, -30.0, deg_to_rad(-7.0))
+    _make_plank_wall(-5.0, -42.0, deg_to_rad(6.0))
     _make_drywall_panel(Vector3(-8.6, 0.0, -14.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
     _make_drywall_panel(Vector3(8.6, 0.0, -18.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
+    _make_drywall_panel(Vector3(-8.0, 0.0, -33.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
+    _make_drywall_panel(Vector3(8.0, 0.0, -44.0), Vector2(2.6, 2.4), deg_to_rad(0.0))
+    # Bidones de acero repartidos por todo el pasillo: son los que suenan.
+    for z in [-8.6, -16.0, -21.0, -29.0, -38.0, -47.0]:
+        _make_drum(-6.6 if int(z) % 2 == 0 else 6.6, z)
+    # Torres de cajas de pino (huecas, se atraviesan): a varias distancias.
+    for z in [-7.0, -19.0, -26.0, -34.0, -45.0]:
+        for level in range(2):
+            _make_crate(Vector3(3.4, 0.35 * level, z), 0.35)
+    # Latas: el caso de prueba de `thin_shell`. Sueltas por el suelo y de pie
+    # sobre los bidones, de cerca a lejos.
+    for i in range(6):
+        _make_can(Vector3(-4.4 + i * 0.55, 0.061, -3.7))
+    for z in [-9.0, -13.0, -20.0, -23.0, -31.0, -36.0, -40.0, -48.0, -53.0]:
+        _make_can(Vector3(-1.2 + float(z) * 0.05, 0.061, z))
 
     # Latas: cascara fina penetrable sobre el bidon de x=6.6 y en el suelo. Son
     # el caso de prueba de `thin_shell`: la bala las atraviesa perdiendo casi
