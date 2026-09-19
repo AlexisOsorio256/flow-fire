@@ -174,17 +174,20 @@ Distancias medidas sobre `World.gd` (la línea de tiro es z = 0):
 - **35 m**: 3 blancos de papel (agrupación);
 - **50 m**: 1 placa de acero (caída y cero).
 
-La sala es interior. Las once luminarias de `RangeShell.tscn` llegan hasta los
-57 m, de modo que las estaciones de 35 y 50 m están iluminadas (antes la luz
-terminaba en 22 m y esas dos quedaban a oscuras). Las luminarias son la fuente directa,
-el ambiente está controlado y no hay sol atravesando el techo. La iluminación
-privada del viewmodel es tenue y sólo evita que la Glock y los brazos
-desaparezcan; las luces del mundo también alcanzan la capa del viewmodel.
+La sala es interior. `RangeShell.tscn` contiene **12 OmniLight3D de relleno**
+distribuidas hasta z = -57 m y **1 SpotLight3D con sombra** sobre el puesto. Las
+estaciones de 35 y 50 m quedan dentro de la cobertura del conjunto; no hay sol
+atravesando el techo. El ambiente está controlado y la iluminación privada del
+viewmodel es tenue: sólo evita que la Glock y los brazos desaparezcan; las luces
+del mundo también alcanzan la capa del viewmodel.
 
 ## Audio
 
-Los WAV hero son secos y los masters permanecen fuera del importador en
-`assets/audio/source/`. La única sala es el bus `Range`:
+Los WAV de runtime viven en `assets/audio/`. Las fuentes que reconstruyen
+disparos e impactos viven en `downloads/`, ignorado por Git y fuera del
+importador de Godot; `assets/audio/source/` conserva únicamente el excerpt de
+G36C que todavía usa el Foley de cargador y lleva `.gdignore`. La única sala
+es el bus `Range`:
 
 ```text
 Weapons ─┐
@@ -354,17 +357,6 @@ Lo que sí es sólido: los brazos añaden **+27.456 primitivas y +4 draw calls**
 (13.728 triángulos, 2 materiales, 6 texturas de 1K). Si algún día hay que
 recortar, lo primero es la resolución de las texturas (1K → 512 en brazos, que
 ocupan menos del 15% del alto de cuadro), no la geometría de la mano.
-
-Los brazos actuales (13.728 triángulos, 2 materiales, 6 texturas de 1K) cuestan
-**+3,6 ms por frame (~7%)**, +27.456 primitivas y +4 draw calls, medidos como dos
-pasadas del MISMO build. Con el asset anterior (7.056 triángulos, 1 material,
-textura de 512²) la diferencia caía dentro del ruido entre pasadas. Es el precio
-de que la mano se lea como una mano, y se paga: en una Intel HD 520 supone pasar
-de 19,3 a 18,0 FPS, y el encargo es explícito en que la fidelidad perceptual
-manda sobre el coste mientras el coste esté medido. **Está medido y declarado, no
-supuesto**; si algún día molesta, lo primero que hay que tocar es la resolución de
-las texturas (1K → 512 en brazos, que ocupan menos del 15% del alto de cuadro),
-no la geometría de la mano.
 
 Para regenerar los assets Blender:
 
