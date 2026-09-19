@@ -238,8 +238,11 @@ el torque por el punto de impacto. `Target` y `Crate` no inventan callbacks de
 balística.
 
 La tabla única mantiene separados `steel`, `aluminum`, `gypsum`, `pine`,
-`paper` y `concrete`. ImpactFX conserva perfiles, decals, partículas y audio
-distintos para esos materiales.
+`paper` y `concrete`. ImpactFX conserva perfil, decal y partículas distintos para
+cada uno, y audio propio para **acero, aluminio, pino, yeso y hormigón**. El
+`paper` es la única excepción y está declarada: reutiliza la muestra del pino a
+−10 dB, porque queda fuera de los materiales que el laboratorio pide diferenciar
+y a 18 m lo que domina es la llegada del proyectil (`CREDITS_AUDIO.md`).
 
 El proyectil nace en `Muzzle`, alineado con el ánima; fogonazo y humo usan la
 misma dirección. El cero de miras es paralelo y explícito. La dispersión es
