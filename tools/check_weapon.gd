@@ -267,10 +267,32 @@ func _check_arms(vm: Node3D) -> int:
 		for child in node.get_children():
 			stack.append(child)
 	var tris := 0
+	## Presupuesto de MATERIALES y de TEXTURA. El contrato de produccion no es
+	## solo poligonos: 1-2 materiales y ~1K. Sin esto, un asset podia pasar el
+	## check con seis materiales de 4K y el contrato estaba roto en silencio.
+	var mats := {}
+	var max_tex := 0
 	for mesh_instance in meshes:
 		for surface in range(mesh_instance.mesh.get_surface_count()):
 			var indices: PackedInt32Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
 			tris += indices.size() / 3
+			var mat := mesh_instance.mesh.surface_get_material(surface)
+			if mat is BaseMaterial3D:
+				mats[mat.resource_name if mat.resource_name != "" else str(mat.get_instance_id())] = true
+				for tex in [(mat as BaseMaterial3D).albedo_texture,
+						(mat as BaseMaterial3D).normal_texture,
+						(mat as BaseMaterial3D).roughness_texture,
+						(mat as BaseMaterial3D).metallic_texture]:
+					if tex is Texture2D:
+						max_tex = maxi(max_tex, maxi((tex as Texture2D).get_width(),
+							(tex as Texture2D).get_height()))
+	print("brazos: materiales=", mats.size(), " textura mayor=", max_tex, "px")
+	if mats.size() < 1 or mats.size() > 2:
+		bad += 1
+		print("FALLO: materiales de brazo fuera de contrato (1-2): ", mats.size())
+	if max_tex > 1024:
+		bad += 1
+		print("FALLO: textura de brazo mayor de 1K: ", max_tex, "px")
 	if skeleton == null:
 		bad += 1
 		print("FALLO: los brazos no traen Skeleton3D")
