@@ -307,6 +307,12 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
 - `tools/build_impacts.py` / `tools/measure_impacts.py`: reconstruyen y miden los
   seis impactos, uno por material y por grabación distinta.
 
+Las fuentes que los builders de audio necesitan de verdad son **siete MP3 de
+grabación y cuatro WAV de impacto**: los archivos grandes de `downloads/`
+(la librería completa de sonido de armas, los volcados de investigación) no hacen
+falta para reconstruir nada y se han borrado. Comprobado después del barrido:
+reejecutar los dos builders da los mismos WAV, byte a byte.
+
 De los builders de assets, los dos de audio están verificados
 **reejecutándolos y comparando bytes**: los cinco `shot_*.wav` y los seis
 `impact_*.wav` + `ricochet.wav` salen idénticos byte a byte, así que son
