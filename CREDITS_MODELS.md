@@ -167,3 +167,13 @@ proyecto los usó y cualquiera puede recuperarlos desde Git.
 - **OWK 19 Pistol 9mm (G19) — OKgamedev**, CC-BY 4.0.
 - **Desert Eagle — ELIZION**, CC-BY 4.0
   (https://sketchfab.com/3d-models/desert-eagle-cabde59f5cf24effaf80536e35d04e95).
+- **Brazos — Drillimpact** (`assets/models/fps_arms.glb`, hasta el commit
+  `cc74c60`). "PSX First Person Arms" de **Drillimpact** —
+  https://drillimpact.itch.io/psx-first-person-arms-free. Licencia, textual de la
+  pagina del autor: *"License: This asset is released under CC0 (Public
+  Domain)."*, confirmada por el autor en los comentarios de la misma pagina
+  ("Yes CC0"). **CC0 1.0 Universal**: no obligaba a atribuir; se le daba igualmente
+  por cortesia. **Retirado del runtime** porque su mano es de grado PSX: el puño
+  se leia como una masa lisa, que es exactamente lo que el dueño pidio corregir
+  (donante de 1.176 tris, 7.056 tras subdividir Catmull-Clark x1, textura de
+  512², 47 huesos). El asset y su builder viven en la historia de Git.
