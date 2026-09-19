@@ -220,10 +220,12 @@ para que ningún tiro suene flojo). En la mezcla el estampido domina sobre los
 impactos y es el pico más alto del proyecto.
 
 
-**Headroom, medido en vez de supuesto.** A la cadencia máxima (~13 tiros/s) se
-solapan unos cinco estampidos de 382 ms. Sumando los WAV reales con su ganancia
-de mezcla, **alineados y sin decorrelación** (o sea, el caso peor absoluto,
-porque en el juego el tono varía ±3,5 % y los picos no suman en fase):
+**Headroom, medido en vez de supuesto.** Como prueba de estrés acústica se
+simulan hasta ~13 disparos/s y, por tanto, unos cinco estampidos de 382 ms
+solapados. **Eso NO describe el funcionamiento semiautomático real con el
+gatillo sostenido**; es un límite artificial para comprobar margen de mezcla.
+Los WAV se suman alineados y sin decorrelación (caso peor absoluto, porque en el
+juego el tono varía y los picos no suman en fase):
 
 ```text
 una sola voz ...................... pico  -7,62 dBFS
