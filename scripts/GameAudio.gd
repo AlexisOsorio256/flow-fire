@@ -148,12 +148,10 @@ const SHOT_STREAMS: Array[AudioStream] = [
 # maxima, el sitio para arreglarlo es el bus, no estos WAV.
 const SHOT_DB := -6.5
 
-# Voces simultáneas del arma: cada disparo son 3 voces (blast + tope + bateria).
-# El blast DRY dura 360 ms (crack+cuerpo, ver `tools/build_shot.py --dry`),
-# así que a la cadencia máxima de la pistola (~13 tiros/s con el gatillo
-# mantenido) viven a la vez ~6 blasts y ~3 golpes de mecánica. Con 8 voces se
-# cortaban las colas más viejas justo a esa cadencia; 16 las deja enteras y
-# sigue siendo un puñado de reproductores.
+# Voces simultáneas del arma. El presupuesto de 16 se conserva por margen ante
+# solapamientos de blast + mecánica; la prueba offline de ~13 tiros/s es un
+# stress test de mezcla, NO una afirmación de que la G19 semiautomática dispare
+# continuamente con el gatillo sostenido.
 const MAX_WEAPON_VOICES := 16
 const VOICE_FADE := 0.06
 
