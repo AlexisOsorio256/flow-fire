@@ -28,6 +28,3 @@ captures/*
 # Material de trabajo: fuentes de audio/modelos descargadas para esta pasada.
 # No es parte del juego (771 MB); se versiona su procedencia en CREDITS_*.md.
 downloads/
-assets/models/range_shell_*.png
-assets/models/range_shell_*.jpg.import
-assets/models/range_shell_*.png.import
