@@ -103,17 +103,18 @@ comprobado por `tools/check_weapon.tscn`:
 
 | qué | valor |
 |---|---|
-| mallas | 1 (`ArmsMesh`) |
-| triángulos | 7.056 |
-| materiales | 1 (`Arms`, solo `baseColorTexture`) |
-| textura | 1, 512² (`arms_01`); Godot la extrae a `fps_arms_arms_01.png` al importar |
-| huesos | 47, todos deform, sin IK ni helpers |
+| mallas | 2 (brazo y mano) |
+| triángulos | 13.728 |
+| materiales | 2 (`FPS_Arm`, `FPS_Hand`), con baseColor, metallicRoughness y normal |
+| texturas | 6, todas 1024²; Godot las extrae a `fps_arms_FPS_*.png` al importar |
+| huesos | 42, todos deform, sin IK ni helpers, con nombres legibles (`forearm.R`, `palm.L`…) |
 | clips | `Idle` 3,00 s · `Fire` 0,26 s · `Reload` 2,10 s · `ReloadEmpty` 2,35 s · `Inspect` 2,00 s |
-| tamaño | 2,6 MB |
+| tamaño | 8,0 MB |
 
 Su origen, licencia y builder están en `CREDITS_MODELS.md`; el builder
-reproducible es `tools/build_arms.py` (necesita el donante CC0, que **no** está
-en el repo).
+reproducible es `tools/build_arms.py` (necesita el donante de BAMEN, que **no**
+está en el repo y es **CC-BY-4.0**, o sea que **exige atribución**: la cadena de
+crédito que pide el autor está literal en `CREDITS_MODELS.md`).
 
 **El asset se autora en el espacio del arma** (el mismo sistema que
 `g19_pistol.glb`: +Y arriba, −Z al morro, origen en la raíz del arma) con la mano

@@ -84,6 +84,17 @@ def parse_args() -> argparse.Namespace:
     ## encuadre roto, para depurar.
     p.add_argument("--gunspace", type=int, default=1,
                    help="1 (por defecto) = vista eye fiel al juego; 0 = encuadre roto antiguo, solo para depurar")
+    ## El banco nacio con un sujeto de 0,6 m y tres area lights de 90/32/45 W:
+    ## a la distancia de orbita del puño (0,13-0,26 m) el clay sale QUEMADO y no
+    ## se puede juzgar ni el agarre ni los dedos. `--exposure` (paradas) y
+    ## `--light` (multiplicador) dejan bajarlo sin tocar el encuadre. Con los
+    ## valores por defecto el comportamiento es el de siempre.
+    p.add_argument("--exposure", type=float, default=0.0,
+                   help="paradas de exposicion (negativo = menos luz de escena)")
+    p.add_argument("--light", type=float, default=1.0,
+                   help="multiplicador de la energia de las tres luces")
+    p.add_argument("--mask", type=int, default=0,
+                   help="1 = arma en rojo y brazos en verde (mide cobertura)")
     return p.parse_args(argv)
 
 
@@ -164,6 +175,24 @@ def neutral_material() -> bpy.types.Material:
     return mat
 
 
+def flat_material(name: str, color: tuple) -> bpy.types.Material:
+    """Material de EMISION plano: para medir cobertura hay que poder separar
+    "pixel de arma" de "pixel de brazo" sin dudas.  Con el clay de siempre los
+    dos son claros y del mismo orden de luminancia, asi que una mascara por
+    brillo confunde mano y pistola (se probo: daba 2% de cobertura donde el
+    brazo tapaba media corredera).  Rojo y verde puros no se confunden."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    emi = nt.nodes.new("ShaderNodeEmission")
+    emi.inputs[0].default_value = (color[0], color[1], color[2], 1.0)
+    emi.inputs[1].default_value = 1.0
+    nt.links.new(emi.outputs[0], out.inputs[0])
+    return mat
+
+
 def clayskin() -> bpy.types.Material:
     mat = bpy.data.materials.new("Banca_Piel")
     mat.use_nodes = True
@@ -181,17 +210,18 @@ def apply_clay(objects: list, mat, keep=()) -> None:
         obj.data.materials.append(mat)
 
 
-def setup_world() -> None:
+def setup_world(light_scale: float = 1.0, exposure: float = 0.0) -> None:
     scn = bpy.context.scene
     scn.render.engine = "BLENDER_EEVEE"
     scn.render.film_transparent = False
     scn.render.resolution_x = 960
     scn.render.resolution_y = 960
     scn.view_settings.view_transform = "Standard"
+    scn.view_settings.exposure = exposure
     world = bpy.data.worlds.new("Banca")
     world.use_nodes = True
     world.node_tree.nodes["Background"].inputs[0].default_value = (0.22, 0.23, 0.25, 1.0)
-    world.node_tree.nodes["Background"].inputs[1].default_value = 0.85
+    world.node_tree.nodes["Background"].inputs[1].default_value = 0.85 * light_scale
     scn.world = world
     for name, loc, energy, size in (
         ("Key", (0.45, 0.75, 0.55), 90.0, 0.5),
@@ -199,7 +229,7 @@ def setup_world() -> None:
         ("Rim", (0.05, 0.45, -0.75), 45.0, 0.5),
     ):
         light = bpy.data.lights.new(name, "AREA")
-        light.energy = energy
+        light.energy = energy * light_scale
         light.size = size
         node = bpy.data.objects.new(name, light)
         node.location = loc
@@ -274,7 +304,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     frame = json.loads(Path(args.frame).read_text())
     reset()
-    setup_world()
+    setup_world(args.light, args.exposure)
 
     FIX = (Matrix.Rotation(math.radians(-90.0), 4, "X") if args.gunspace
            else Matrix.Identity(4))
@@ -315,7 +345,20 @@ def main() -> None:
         if args.action:
             apply_action(args.action, args.action_frame)
 
-    if args.clay:
+    if args.mask:
+        ## Modo MEDIDA: arma roja, brazos verdes, mundo negro y sin luces.  Con
+        ## emision plana el pixel dice exactamente que superficie gano el
+        ## z-buffer, que es lo unico que permite medir "el brazo tapa el arma".
+        apply_clay(gun_roots, flat_material("Mask_Arma", (1.0, 0.0, 0.0)))
+        if arms_holder is not None:
+            apply_clay([o for o in bpy.data.objects if o.type == "MESH"
+                        and any(m.type == "ARMATURE" for m in o.modifiers)],
+                       flat_material("Mask_Brazos", (0.0, 1.0, 0.0)))
+        for o in [o for o in bpy.data.objects if o.type == "LIGHT"]:
+            bpy.data.objects.remove(o, do_unlink=True)
+        bg = bpy.context.scene.world.node_tree.nodes["Background"]
+        bg.inputs[1].default_value = 0.0
+    elif args.clay:
         skin = clayskin()
         apply_clay(gun_roots, neutral_material())
         if arms_holder is not None:
@@ -336,17 +379,36 @@ def main() -> None:
         body_give.matrix_world = xform_from_json(entry["PoseRoot/BodyGive"]) @ FIX
         bpy.context.view_layer.update()
 
-        grip_pos = Vector((0, 0, 0))
-        if "grip" in entry:
-            grip_local = (xform_from_json(entry["Weapon"]).inverted()
-                          @ xform_from_json(entry["grip"]).translation)
-            grip_pos = gun_holder.matrix_world @ (FIX @ grip_local)
+        ## El blanco de las orbitas del puño es el NODO `Grip` del arma
+        ## importada, no una reconstruccion a mano desde el JSON: la version
+        ## anterior aplicaba FIX dos veces y las camaras de puño acababan
+        ## mirando a la corredera en vez de a la empuñadura (se veia el arma
+        ## entera y la mano por el borde).  El nodo es exacto por construccion.
+        bpy.context.view_layer.update()
+        grip_node = None
+        for obj in bpy.data.objects:
+            if obj.name.split(".")[0].lower() in ("grip", "gripnode"):
+                grip_node = obj
+                break
+        if grip_node is not None:
+            grip_pos = grip_node.matrix_world.translation.copy()
+        else:
+            grip_pos = Vector((0, 0, 0))
+            if "grip" in entry:
+                grip_local = (xform_from_json(entry["Weapon"]).inverted()
+                              @ xform_from_json(entry["grip"]).translation)
+                grip_pos = gun_holder.matrix_world @ (FIX @ grip_local)
+            print("BANCA aviso: el arma no trae nodo Grip; blanco reconstruido")
         fov = 60.0 if state == "ads" else 82.0
         cams = {
             "eye": make_camera("eye", Vector((0, 0, 0)), Vector((0, 0, -1)), fov, (960, 540)),
-            "3q": make_camera("3q", orbit(grip_pos, -42.0, 24.0, 0.20), grip_pos, 42.0, (960, 960)),
-            "side": make_camera("side", orbit(grip_pos, -90.0, 6.0, 0.26), grip_pos, 42.0, (960, 960)),
-            "top": make_camera("top", orbit(grip_pos, -20.0, 72.0, 0.22), grip_pos, 42.0, (960, 960)),
+            "3q": make_camera("3q", orbit(grip_pos, -42.0, 24.0, 0.38), grip_pos, 42.0, (960, 960)),
+            "side": make_camera("side", orbit(grip_pos, -90.0, 6.0, 0.42), grip_pos, 42.0, (960, 960)),
+            "top": make_camera("top", orbit(grip_pos, -20.0, 72.0, 0.40), grip_pos, 42.0, (960, 960)),
+            ## `hand`: primer plano del puño (es el juez del agarre).  `back`:
+            ## desde atras, que es donde se ve si la palma apoya en la espalda.
+            "hand": make_camera("hand", orbit(grip_pos, -35.0, 18.0, 0.26), grip_pos, 40.0, (960, 960)),
+            "back": make_camera("back", orbit(grip_pos, 150.0, 16.0, 0.36), grip_pos, 42.0, (960, 960)),
         }
         for view in [v for v in args.views.split(",") if v]:
             cam = cams.get(view)

@@ -250,7 +250,10 @@ func mount_arms() -> bool:
 	arms_player.animation_finished.connect(_on_clip_finished)
 	play_clip(CLIP_IDLE, true)
 	_apply_viewmodel_layer(arms_rig)
-	print("BRAZOS montados: 1 malla, clips=", arms_player.get_animation_list(),
+	## Los numeros se CUENTAN, no se escriben: este print decia "1 malla" fijo y
+	## el asset siguiente trajo dos. Un log que afirma lo que no ha medido es la
+	## misma mentira que un README desactualizado, solo que la lee menos gente.
+	print("BRAZOS montados: mallas=", _mesh_count(), " clips=", arms_player.get_animation_list(),
 		" huesos=", _bone_count())
 	return true
 
@@ -287,6 +290,18 @@ func play_clip(clip: String, restart := false) -> void:
 func _on_clip_finished(clip: StringName) -> void:
 	if String(clip).ends_with(CLIP_FIRE):
 		play_clip(CLIP_IDLE, true)
+
+
+func _mesh_count() -> int:
+	var stack: Array = [arms_rig]
+	var total := 0
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+			total += 1
+		for child in node.get_children():
+			stack.append(child)
+	return total
 
 
 func _bone_count() -> int:
