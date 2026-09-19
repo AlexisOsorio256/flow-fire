@@ -276,8 +276,9 @@ func start_reload(incoming_rounds: int = 0) -> bool:
 	_slide_release_sounded = false
 	aim = false
 	trigger_held = false
-	viewmodel.play_reload(reload_empty)
-	# Sin Foley de manos inexistentes: solo mecanica visible.
+	# Sin mano no hay microgesto que disparar: la mecanica visible es la del
+	# arma (corredera, cargador, gatillo). Si algun dia vuelve un brazo que
+	# aguante una captura, aqui es donde se le pide el clip de recarga.
 	viewmodel.set_magazine_visible(true)
 	viewmodel.set_magazine_tumble(0.0)
 	_emit_ammo()
@@ -328,7 +329,6 @@ func _fire() -> void:
 	slide_vel += SLIDE_IMPULSE
 	shot_pulse = 1.0
 	recoil.kick_shot()
-	viewmodel.play_fire()
 	GameAudio.play_shot()
 
 	# Bala por el anima: nace en la boca y sale con la dispersion mecanica
@@ -537,8 +537,7 @@ func inspect_weapon() -> void:
 	inspect_elapsed = 0.0
 	inspect_locked = false
 	inspect_released = false
-	viewmodel.play_inspect()
-	# Sin manos que suenen: la inspeccion es solo corredera.
+	# Sin manos que suenen ni que gesticulen: la inspeccion es solo corredera.
 
 
 func _update_inspect(delta: float) -> void:

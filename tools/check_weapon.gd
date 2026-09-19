@@ -70,33 +70,27 @@ func _ready() -> void:
 		failures += 1
 		print("FALLO: falta una pieza obligatoria o un punto del GLB canonico")
 	print("piezas obligatorias: Frame/Slide/Barrel/Trigger/Magazine + Muzzle/EjectionPort/SightRear/SightFront/Grip/Magwell")
-	if vm.get("right_hand") == null:
+	# El viewmodel va SIN MANO, y es una decision: el brazo que montaba tapaba
+	# el arma y el fogonazo, o sea que era peor que no tener mano. Este check
+	# comprueba lo que SI tiene que cumplir (el arma sola, que es la que vende
+	# el producto) y deja constancia de que no hay mano, para que nadie la
+	# busque donde no esta.
+	if vm.get("right_hand") != null:
 		failures += 1
-		print("FALLO: falta RightHand en BodyGive")
-	else:
-		var hand_meshes := _mesh_nodes(vm.get("right_hand"))
-		var hand_tris := 0
-		for mesh_instance: MeshInstance3D in hand_meshes:
-			for surface in range(mesh_instance.mesh.get_surface_count()):
-				var indices: PackedInt32Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
-				hand_tris += indices.size() / 3
-		var skeletons := _nodes_of_type(vm.get("right_hand"), Skeleton3D)
-		var bone_count := 0
-		for sk in skeletons:
-			bone_count += (sk as Skeleton3D).get_bone_count()
-		var has_animation := _contains_type(vm.get("right_hand"), AnimationPlayer)
-		print("mano derecha: mallas=", hand_meshes.size(), " triangulos=", hand_tris,
-			" huesos=", bone_count, " animaciones=", int(has_animation))
-		var anim_names: Array = []
-		for ap in _nodes_of_type(vm.get("right_hand"), AnimationPlayer):
-			anim_names.append_array((ap as AnimationPlayer).get_animation_list())
-		if hand_meshes.size() != 1 or hand_tris < 2000 or hand_tris > 6000 \
-				or bone_count < 20 or bone_count > 40 \
-				or not anim_names.has("Idle") or not anim_names.has("Fire") \
-				or not anim_names.has("Reload") or not anim_names.has("ReloadEmpty") \
-				or not anim_names.has("Inspect"):
-			failures += 1
-			print("FALLO: RightHand debe ser 1 malla 2-6k tris, rig 20-40 huesos, clips Idle/Fire/Reload/ReloadEmpty/Inspect")
+		print("FALLO: el viewmodel no debe montar mano (se retiro por mediocre)")
+	var weapon_meshes := _mesh_nodes(weapon)
+	var weapon_tris := 0
+	for mesh_instance: MeshInstance3D in weapon_meshes:
+		if mesh_instance.mesh == null:
+			continue
+		for surface in range(mesh_instance.mesh.get_surface_count()):
+			var indices: PackedInt32Array = mesh_instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
+			weapon_tris += indices.size() / 3
+	print("arma sola: mallas=", weapon_meshes.size(), " triangulos=", weapon_tris,
+		" mano=no")
+	if weapon_meshes.is_empty() or weapon_tris < 3000:
+		failures += 1
+		print("FALLO: el arma debe traer su geometria (>=3k tris)")
 
 	var sight_axis: Vector3 = (weapon.sight_front.global_position - weapon.sight_rear.global_position).normalized()
 	var up: Vector3 = weapon.slide.global_transform.basis.y.normalized()

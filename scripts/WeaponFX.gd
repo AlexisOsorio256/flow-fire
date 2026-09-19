@@ -153,11 +153,14 @@ func pop_flash() -> void:
 	core_mesh.rotation = Vector3(0.0, 0.0, roll)
 	# La aleatoriedad es de gesto, no un fogonazo que cambia de escala a cada
 	# tiro: la nube siempre muere a la misma distancia de la boca.
-	# Escala 1,35x sobre la malla de 26 mm (~35 mm): en sala luminosa a 0,6 m
-	# el halo tiene que asomar por los cantos de la corredera para leerse.
-	var s := randf_range(1.28, 1.42)
-	flash_mesh.scale = Vector3(s, randf_range(1.25, 1.45), randf_range(1.25, 1.40))
-	core_mesh.scale = Vector3.ONE * randf_range(1.15, 1.30)
+	#
+	# ESCALA REMEDIDA EN CAPTURA: con 1,35x sobre la malla de 26 mm el fogonazo
+	# salia de ~35 mm, y en la captura se leia como un punto naranja. Un fogonazo
+	# real de 9 mm en interior mide 100-150 mm y sobre todo ES DIRECCIONAL: sale
+	# por delante de la boca. 3,2x da ~83 mm de gas con el nucleo por dentro.
+	var s := randf_range(3.0, 3.4)
+	flash_mesh.scale = Vector3(s, randf_range(2.9, 3.3), randf_range(3.0, 3.4))
+	core_mesh.scale = Vector3.ONE * randf_range(2.3, 2.7)
 	_gas_mat.albedo_color = Color.WHITE
 	_core_mat.emission_energy_multiplier = CORE_EMISSION
 	flash_mesh.visible = true

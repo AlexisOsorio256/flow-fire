@@ -46,7 +46,6 @@ extends Node3D
 ## sobre un rig de capsulas; al cambiar la malla habrian dejado de valer.
 const GRIP_POS := Vector3(0.0, 0.0, 0.0)
 const GRIP_ROT := Vector3(0.0, 0.0, 0.0)
-const HAND_MODEL := "res://assets/models/right_hand.glb"
 ## Pose de cadera (verificada en :0).
 ## Estilo bodycam: derecha-abajo-lejos para que el arma no tape los blancos.
 ## CALIBRADO con la pistola en metros reales: la distancia al ojo es la de un
@@ -77,8 +76,6 @@ var pose_root: Node3D
 var body_give: Node3D
 var weapon_grip: Node3D
 var weapon_socket: Node3D
-var right_hand: Node3D
-var hand_player: AnimationPlayer
 
 # --- arma ------------------------------------------------------------------
 var weapon: GlockWeapon
@@ -133,32 +130,30 @@ func mount() -> bool:
 	weapon.name = "Weapon"
 	weapon_socket.add_child(weapon)
 	if not weapon.build():
-		push_error("Viewmodel detenido: el GLB canonico de Glock no monto")
+		push_error("Viewmodel detenido: el GLB canonico de Glock no monta")
 		weapon.queue_free()
 		weapon = null
 		return false
-	var hand_scene := load(HAND_MODEL) as PackedScene
-	if hand_scene == null:
-		push_error("Falta el asset obligatorio de mano derecha: " + HAND_MODEL)
-		weapon.queue_free()
-		weapon = null
-		return false
-	right_hand = hand_scene.instantiate()
-	right_hand.name = "RightHand"
-	body_give.add_child(right_hand)
-	body_give.move_child(right_hand, 0)
-	_apply_hand_material(right_hand)
-	right_hand.position = GRIP_POS
-	right_hand.rotation = GRIP_ROT
-	hand_player = _find_player(right_hand)
-	if hand_player != null and hand_player.has_animation("Idle"):
-		hand_player.play("Idle")
+	# SIN MANO. Y es una decision, no un olvido.
+	#
+	# El viewmodel montaba un brazo `right_hand.glb` que resulto ser PEOR que no
+	# tener mano: un antebrazo mal orientado y demasiado cerca de la camara tapa
+	# el arma y el fogonazo, que es justo lo que este producto vende. La
+	# constitucion es explicita: un asset malo no se conserva por el trabajo ya
+	# hecho, y no se sigue puliendo basura. Se retira.
+	#
+	# Lo que queda es un viewmodel de SOLO ARMA, que es una presentacion honesta
+	# y muy comun. Cuando haya un brazo que aguante una captura, se vuelve a
+	# montar aqui: `body_give` sigue existiendo y sigue siendo su sitio.
+	#
+	# El arma sigue siendo el hero asset y nadie le escribe transforms: lo mueve
+	# `WeaponSocket` (recoil) y `BodyGive` (cesion). El pivot del retroceso se
+	# toma del Grip medido en el GLB.
 	weapon_grip.position = GRIP_POS
 	weapon_grip.rotation = GRIP_ROT
 	muzzle = weapon.muzzle
 	ejection_port = weapon.ejection_port
 	_apply_viewmodel_layer(weapon)
-	_apply_viewmodel_layer(right_hand)
 	if recoil != null:
 		recoil.set_pivot(weapon.grip_pivot())
 	return true
@@ -177,51 +172,6 @@ func _find_player(root_node: Node) -> AnimationPlayer:
 
 ## Gesto Fire horneado (latigazo de muneca 0,2 s sobre el agarre). Lo llama
 ## Glock al disparar; si no hay player la mano sigue estatica y no se rompe.
-func play_fire() -> void:
-	if hand_player != null and hand_player.has_animation("Fire"):
-		hand_player.play("Fire", 0.03)
-		if hand_player.has_animation("Idle"):
-			hand_player.queue("Idle")
-
-
-## Coreografia de recarga/inspeccion sobre el agarre (tiempos = mecanica).
-## La pose GRUESA la pone el codigo; los huesos solo aprietan/rotan.
-func play_reload(empty: bool) -> void:
-	if hand_player == null:
-		return
-	var clip := "ReloadEmpty" if empty else "Reload"
-	if hand_player.has_animation(clip):
-		hand_player.play(clip, 0.08)
-		if hand_player.has_animation("Idle"):
-			hand_player.queue("Idle")
-
-
-func play_inspect() -> void:
-	if hand_player != null and hand_player.has_animation("Inspect"):
-		hand_player.play("Inspect", 0.08)
-		if hand_player.has_animation("Idle"):
-			hand_player.queue("Idle")
-
-
-func _apply_hand_material(root_node: Node) -> void:
-	# El GLB conserva un único material; este override fija su respuesta mate
-	# bajo los Omni del rango para que la mano siga siendo secundaria y no se
-	# queme como una superficie blanca en la capa de viewmodel.
-	var glove := StandardMaterial3D.new()
-	glove.albedo_color = Color(0.020, 0.024, 0.030)
-	glove.metallic = 0.0
-	glove.roughness = 0.94
-	glove.metallic_specular = 0.12
-	var stack: Array = [root_node]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		if node is GeometryInstance3D:
-			(node as GeometryInstance3D).material_override = glove
-		for child in node.get_children():
-			stack.append(child)
-
-
-## Cargador fuera del brocal, en metros (0 asentado). Lo decide Glock.gd.
 func set_magazine_offset(offset_m: float) -> void:
 	if weapon != null:
 		weapon.set_magazine_offset(offset_m)
