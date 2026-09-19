@@ -155,14 +155,20 @@ metadatos balísticos. Sus colisiones, ReflectionProbe y luminarias viven en
 
 `World.gd` conserva únicamente las estaciones funcionales:
 
-- mesa al puesto: 4 cargadores físicos de 15 (única fuente de recarga, se
-  regeneran solos: es un banco de pruebas, no un inventario);
-- cerca de 5 m: latas y objetos ligeros;
-- 10–15 m: madera, cajas, bidones y drywall penetrable;
-- 18 m: papel;
-- 27 m: acero y ángulos;
-- 35 m: agrupación;
-- 50 m: caída y cero.
+Distancias medidas sobre `World.gd` (la línea de tiro es z = 0):
+
+- mesa de cargadores al puesto: **1,4 m** — 4 cargadores físicos de 15, única
+  fuente de recarga; se regeneran solos porque es un banco de pruebas, no un
+  inventario;
+- **8–11 m**: barreras, muro de tablones de pino, torre de 4 cajas y bidones;
+- **9,5–13,7 m**: latas, de pie sobre el bidón de 6,6 m y en el suelo (el caso
+  de prueba de `thin_shell`);
+- **14 y 18 m**: paneles de pladur penetrable, con entrada, salida y paso
+  visibles;
+- **18 m**: 5 blancos de papel;
+- **27 m**: 3 placas de acero;
+- **35 m**: 3 blancos de papel (agrupación);
+- **50 m**: 1 placa de acero (caída y cero).
 
 La sala es interior. Las luminarias de `RangeShell.tscn` son la fuente directa,
 el ambiente está controlado y no hay sol atravesando el techo. La iluminación
