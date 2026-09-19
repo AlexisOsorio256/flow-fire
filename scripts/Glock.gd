@@ -245,10 +245,18 @@ func force_fire_once() -> void:
 		_fire()
 
 
-func start_reload(incoming_rounds: int = 0) -> bool:
-	if reloading or incoming_rounds <= 0:
+## El arma PUEDE aceptar una recarga? No cambia nada: es la pregunta que hay
+## que hacer antes de gastar un cargador de la mesa (ver Player.try_reload_from_table).
+func can_reload() -> bool:
+	if reloading or inspecting:
 		return false
 	if chamber > 0 and mag >= MAG_SIZE:
+		return false
+	return true
+
+
+func start_reload(incoming_rounds: int = 0) -> bool:
+	if not can_reload() or incoming_rounds <= 0:
 		return false
 	pending_mag_rounds = incoming_rounds
 	reloading = true

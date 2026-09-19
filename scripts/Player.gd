@@ -136,10 +136,19 @@ func _input(event: InputEvent) -> void:
 
 ## Recarga desde la mesa: la UNICA fuente de cargadores. Sin cargador fisico
 ## (lejos o mesa vacia) no hay recarga; el HUD ya dice MESA n.
+##
+## ORDEN ESTRICTO: preguntar si hay cargador -> preguntar si el ARMA acepta la
+## recarga -> y solo entonces consumir. Si se consume antes de la segunda
+## pregunta, un `start_reload` rechazado (recarga ya en curso, cargador lleno)
+## se lleva el cargador de la mesa sin recargar nada.
 func try_reload_from_table() -> void:
     if weapon == null or world == null:
         return
-    var rounds: int = world.try_take_mag(global_position)
+    if not world.can_take_mag(global_position):
+        return
+    if not weapon.can_reload():
+        return
+    var rounds: int = world.consume_mag()
     if rounds <= 0:
         return
     weapon.start_reload(rounds)

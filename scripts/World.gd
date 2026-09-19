@@ -14,14 +14,23 @@ var drywall_mat: StandardMaterial3D
 var can_mat: StandardMaterial3D
 var table_mat: StandardMaterial3D
 var mag_prop_mat: StandardMaterial3D
-## Municion fisica: 4 cargadores de 15 sobre la mesa, nada de reserva magica.
+## Municion de LABORATORIO: 4 cargadores de 15 sobre la mesa y se regeneran.
 ## El arma no tiene `reserve`; la recarga consume uno de aqui al acercarse.
+##
+## La mesa es un BANCO DE PRUEBAS, no un inventario: el objetivo es poder probar
+## la Glock indefinidamente. Por eso los cargadores vuelven solos tras
+## TABLE_REGEN_S sin haber usado la mesa. No hay economia, ni compra, ni
+## contador global: un reloj y cuatro posiciones.
 const TABLE_MAGS_MAX := 4
 const TABLE_MAG_ROUNDS := 15
 const TABLE_POS := Vector3(1.8, 0.0, -1.4)
 const TABLE_REACH := 1.6
+## Segundos sin tocar la mesa hasta que vuelve a estar llena. Uno a uno, no de
+## golpe: se ve reaparecer el que falta, que es mas honesto que un salto.
+const TABLE_REGEN_S := 6.0
 var table_mags := TABLE_MAGS_MAX
 var _mag_props: Array[Node3D] = []
+var _regen_clock := 0.0
 
 
 func build() -> void:
@@ -356,6 +365,21 @@ func _make_steel_target(x: float, z: float) -> void:
 
 ## Mesa de cargadores: la fuente fisica de municion. Sin inventario ni manager:
 ## 4 cuerpos sobre la mesa, cada uno 15. Acercarse + R consume uno.
+func _process(delta: float) -> void:
+    # Regeneracion de la mesa: un cargador cada TABLE_REGEN_S, solo si falta
+    # alguno. Determinista y visible: reaparece donde estaba.
+    if table_mags < TABLE_MAGS_MAX:
+        _regen_clock += delta
+        if _regen_clock >= TABLE_REGEN_S:
+            _regen_clock = 0.0
+            table_mags += 1
+            var prop: Node3D = _mag_props[table_mags - 1]
+            if is_instance_valid(prop):
+                prop.visible = true
+    else:
+        _regen_clock = 0.0
+
+
 func _build_mag_table() -> void:
     var table := StaticBody3D.new()
     table.name = "MagTable"
@@ -386,26 +410,50 @@ func _build_mag_table() -> void:
             table.add_child(leg)
     _mag_props.clear()
     for i in range(TABLE_MAGS_MAX):
-        var prop := MeshInstance3D.new()
+        var prop := Node3D.new()
         prop.name = "TableMag%d" % (i + 1)
-        var bm := BoxMesh.new()
-        bm.size = Vector3(0.028, 0.11, 0.05)
-        bm.material = mag_prop_mat
-        prop.mesh = bm
-        prop.position = Vector3(-0.21 + i * 0.14, 0.83, 0.0)
+        # Silueta de cargador de G19: cuerpo, base y labios. Una caja de 28 mm
+        # no se lee como cargador a un metro de distancia; estas tres piezas si,
+        # y siguen siendo 3 mallas minusculas.
+        var body := _mag_piece(Vector3(0.026, 0.098, 0.037), Vector3(0.0, 0.0, 0.0))
+        prop.add_child(body)
+        var base := _mag_piece(Vector3(0.030, 0.012, 0.044), Vector3(0.0, -0.053, 0.002))
+        prop.add_child(base)
+        var lips := _mag_piece(Vector3(0.022, 0.012, 0.032), Vector3(0.0, 0.053, -0.004))
+        prop.add_child(lips)
+        prop.position = Vector3(-0.21 + i * 0.14, 0.845, 0.0)
+        prop.rotation.z = deg_to_rad(-8.0)
         table.add_child(prop)
         _mag_props.append(prop)
 
 
-## Toma un cargador de la mesa si el jugador esta a su alcance. Devuelve sus
-## cartuchos (15) o 0 si no hay (lejos o mesa vacia). Es la UNICA forma de
-## recargar: sin cargador fisico no hay recarga.
-func try_take_mag(player_pos: Vector3) -> int:
+## Una pieza del cargador de la mesa, con el material unico de la mesa.
+func _mag_piece(size: Vector3, offset: Vector3) -> MeshInstance3D:
+    var mi := MeshInstance3D.new()
+    var bm := BoxMesh.new()
+    bm.size = size
+    bm.material = mag_prop_mat
+    mi.mesh = bm
+    mi.position = offset
+    return mi
+
+
+## Se PUEDE tomar un cargador? No consume nada: es la pregunta que hay que
+## hacer ANTES de tocar el inventario. Antes solo existia `try_take_mag`, que
+## restaba primero y devolvia las balas despues, asi que `start_reload` podia
+## fallar (recarga en curso, cargador lleno) con el cargador YA gastado: se
+## perdia municion sin recargar. Ahora se valida y luego se consume.
+func can_take_mag(player_pos: Vector3) -> bool:
+    return table_mags > 0 and player_pos.distance_to(TABLE_POS) <= TABLE_REACH
+
+
+## Consume un cargador de la mesa y devuelve sus cartuchos. SOLO se llama
+## despues de `can_take_mag` y de que el arma haya aceptado la recarga.
+func consume_mag() -> int:
     if table_mags <= 0:
         return 0
-    if player_pos.distance_to(TABLE_POS) > TABLE_REACH:
-        return 0
     table_mags -= 1
+    _regen_clock = 0.0
     if _mag_props.size() > table_mags:
         var prop: Node3D = _mag_props[table_mags]
         if is_instance_valid(prop):
