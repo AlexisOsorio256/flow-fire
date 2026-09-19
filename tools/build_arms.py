@@ -372,15 +372,27 @@ def bake_bind(arm, meshes: list, targets: dict) -> None:
     bpy.ops.object.mode_set(mode="OBJECT")
     update()
 
-    worst = 0.0
+    ## Se compara lo que de verdad manda en el skinning: la CABEZA (traslacion) y
+    ## los EJES del hueso.  Comparar la 4x4 entera mezcla la longitud (que no
+    ## afecta) y la escala que el donante trae metida en el bind.
+    worst_head, worst_axis, worst_name = 0.0, 0.0, ""
     for name, T in targets.items():
         b = arm.data.bones.get(name)
         if b is None:
             continue
-        got = b.matrix_local
-        worst = max(worst, max(abs(got[i][j] - T[i][j]) for i in range(4) for j in range(4)))
-    print("BUILD bind: desviacion maxima de la pose de reposo = %.2e" % worst)
-    assert worst < 1e-4, "BUILD ABORTA: el bind no reproduce la pose pedida"
+        dh = (b.head_local - T.translation).length
+        Ra, Rb = b.matrix_local.to_3x3(), T.to_3x3()
+        da = max((Ra.col[i].normalized() - Rb.col[i].normalized()).length for i in range(3))
+        if dh > worst_head or da > worst_axis:
+            if dh > worst_head:
+                worst_head = dh
+            if da > worst_axis:
+                worst_axis = da
+            worst_name = name
+    print("BUILD bind: desviacion maxima cabeza=%.2e m  ejes=%.2e  (peor: %s)"
+          % (worst_head, worst_axis, worst_name))
+    assert worst_head < 1e-4 and worst_axis < 1e-3, \
+        "BUILD ABORTA: el bind no reproduce la pose pedida (%s)" % worst_name
 
 def reset_pose(arm) -> None:
     for pb in arm.pose.bones:
