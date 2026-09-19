@@ -281,6 +281,13 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
   decae) para que "suena flojo" no sea una opinión.
 - `tools/build_impacts.py` / `tools/measure_impacts.py`: reconstruyen y miden los
   seis impactos, uno por material y por grabación distinta.
+
+De los builders de assets, los dos de audio están verificados
+**reejecutándolos y comparando bytes**: los cinco `shot_*.wav` y los seis
+`impact_*.wav` + `ricochet.wav` salen idénticos byte a byte, así que son
+reconstrucciones de verdad y no andamiaje de migración. Además imprimen su tabla
+de medidas al construir, para que "suena flojo" no sea una opinión. Los de
+brazos y rango no se han reejecutado byte a byte en esta pasada.
 - `tools/make_weapon_sounds.py`: sintetiza el Foley que no existe grabado
   (reset del gatillo, caída del cargador, roce del brocal, retén).
 
