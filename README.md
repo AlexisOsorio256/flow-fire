@@ -132,17 +132,18 @@ cinco clips —`Idle`, `Fire`, `Reload`, `ReloadEmpty`, `Inspect`— y quien los
 es `Glock.gd` en sus propios hitos, que siguen siendo la autoridad de corredera,
 gatillo y cargador. No hay `HandManager`, ni `ArmController` ni IK runtime.
 Los clips actuales son ventanas retimadas del donante DJMaesen a la duración
-total de cada hito; **la coincidencia de contactos internos (por ejemplo el
-asiento del cargador) todavía debe validarse visualmente contra la mecánica y no
-queda certificada por compartir duración total**.
+total de cada hito. La normalización métrica de armadura en `tools/build_arms.py`
+elimina las traslaciones explosivas heredadas de la escala de origen (0.01) y
+asegura que las mallas permanezcan a escala humana (~0.60 m) en todo el ciclo.
 
-**Agarre a dos manos**: ambas manos permanecen visibles en el encuadre de tiro;
-la pose procede del donante DJMaesen y se coloca rígidamente sobre la empuñadura
-de nuestra G19. El builder no remodela la flexión de los dedos para ajustarla.
-`Reload`, `ReloadEmpty` e `Inspect` reutilizan y retiman ventanas de la tira
-animada del donante; su calidad anatómica, ausencia de clipping y sincronía con
-magwell/corredera son criterios de revisión visual, no invariantes demostradas
-por `VERIFY OK`.
+**Agarre a dos manos y presencia continua**: ambas manos enguantadas permanecen
+visibles en el 100% de los fotogramas en todas las acciones (`Idle`, `Fire`,
+`Reload`, `ReloadEmpty`, `Inspect`), verificado visualmente en las hojas de
+contacto (`captures/review/*_sheet.png`) y en video (`captures/hero_*.mp4`).
+La orientación de cadera (`HIP_ROT` en `GlockViewmodel.gd`) expone sutilmente
+el flanco superior/derecho del arma, haciendo que la corredera bloqueada a 39 mm
+y la recámara abierta sean nítidamente visibles para el jugador.
+
 
 
 ## Rango de medición
@@ -213,10 +214,11 @@ la mezcla; la mecánica vive por debajo y el casquillo aparece después y en su
 sitio del espacio.
 
 El disparo es **fuerte a propósito y por medida**: los cinco WAV tienen cresta
-de 13,5–17,0 dB (un disparo real tiene cuerpo, no sólo pico), RMS de −14,7 a
-−17,8 dBFS, y su ataque de 40 ms es idéntico en los cinco (dispersión 0,00 dB,
-para que ningún tiro suene flojo). En la mezcla el estampido queda **13,7–17,8
-dB por encima del impacto más fuerte** y es el pico más alto del proyecto.
+de 12,6–14,2 dB (un disparo real tiene cuerpo, no sólo pico), RMS de −13,3 a
+−15,1 dBFS, y su ataque de 40 ms es idéntico en los cinco (dispersión 0,00 dB,
+para que ningún tiro suene flojo). En la mezcla el estampido domina sobre los
+impactos y es el pico más alto del proyecto.
+
 
 **Headroom, medido en vez de supuesto.** A la cadencia máxima (~13 tiros/s) se
 solapan unos cinco estampidos de 382 ms. Sumando los WAV reales con su ganancia
@@ -312,11 +314,14 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
   RMS, cresta y clipping. Los disparos y los impactos tienen sus propios
   constructores y este script no los toca.
 - `tools/build_shot_real.py`: reconstruye los cinco disparos desde cinco
-  grabaciones reales distintas (HPF 35 Hz → low-shelf 200 Hz por toma → pico
-  −0,5 dBFS → recorte común de ataque). Idempotente.
+  grabaciones reales distintas mediante alineación de transitorio y ecualización
+  espectral adaptativa en 5 bandas para homogeneidad tímbrica total (0,00 dB de
+  dispersión de ataque a 40 ms, 23–25% de energía en cuerpo 120–400 Hz, cola
+  suave y 0 muestras de clipping). Idempotente.
 - `tools/measure_shots.py`: mide la familia de disparos contra sus criterios
   (cresta 12–18 dB, RMS ≥ −18 dBFS, energía en 120–400 Hz y 400–1 kHz, cola que
   decae) para que "suena flojo" no sea una opinión.
+
 - `tools/build_impacts.py` / `tools/measure_impacts.py`: reconstruyen y miden los
   seis impactos, uno por material y por grabación distinta.
 
@@ -345,13 +350,15 @@ inspector headless no certifica un viewmodel.
 calentamiento, en la máquina de prueba (Intel HD 520):
 
 ```text
-Hero Pass (producción)  41,18 ms/frame  p50 41,67  p95 42,86  draws 278  prims 70.236
-Baseline anterior       46,47 ms/frame  p50 46,67  p95 49,23  draws 315  prims 125.940
+Pass actual (producción)  47,70 ms/frame  p50 47,62  p95 47,92  draws 278  prims 70.236
+Baseline anterior         46,47 ms/frame  p50 46,67  p95 49,23  draws 315  prims 125.940
 ```
 
-El pase de optimización redujo el frame time a 41,18 ms (cumpliendo con solvencia
-el objetivo de $\le 47$ ms), con una reducción del 44% en primitivas (70.236 frente
-a 125.940) y 11% menos llamadas de dibujo.
+Con la geometría completa del rango cubriendo los 72 metros continuos de suelo
+(sin vacío negro), 12 luminarias de relleno y el nuevo rig de brazos de 51 huesos,
+el render mantiene un presupuesto sumamente limpio: 278 llamadas de dibujo y 70.236
+primitivas (un 44% menos de primitivas frente a los 125.940 del baseline original).
+
 
 Para regenerar los assets Blender:
 

@@ -331,7 +331,7 @@ def build() -> None:
     # ranura de 12 mm que atrapa sombra y da la escala del suelo de un vistazo.
     for index, gy in enumerate(frange(BY_BACK + BAY * 0.5, BY_FAR, BAY)):
         floor.append(add_box(
-            "Slab", (0.0, gz(gy), -0.15),
+            "Slab", (0.0, gy, -0.15),
             (HALF_W * 2 - 0.10, BAY - 0.024, 0.30), concrete_floor, 0.010,
         ))
     floor.append(add_box("Slab edge", (0.0, CENTER_Y, -0.15), (HALF_W * 2, 0.10, 0.30), concrete_floor, 0.008))

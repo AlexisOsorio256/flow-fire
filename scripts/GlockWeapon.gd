@@ -272,12 +272,14 @@ func _breech_face(part: Node3D, bore: Vector3) -> Variant:
 			var mi := n as MeshInstance3D
 			# A espacio del Barrel por cadena de padres (vale anidado y sin
 			# globales asentados).
-			var xform := mi.transform
-			var par := mi.get_parent()
-			while par != null and par != part:
-				if par is Node3D:
-					xform = (par as Node3D).transform * xform
-				par = par.get_parent()
+			var xform := Transform3D.IDENTITY
+			if mi != part:
+				xform = mi.transform
+				var par := mi.get_parent()
+				while par != null and par != part:
+					if par is Node3D:
+						xform = (par as Node3D).transform * xform
+					par = par.get_parent()
 			for s in range(mi.mesh.get_surface_count()):
 				for v in mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
 					verts.append(xform * v)

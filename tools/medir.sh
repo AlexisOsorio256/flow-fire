@@ -12,6 +12,7 @@
 # un multiplo del vsync (se midio 133,333 ms con el juego casi vacio: eso era
 # contencion, no render, e invalidaba la medida).
 set -u
+export PATH="$HOME/.local/bin:$PATH"
 cd "$(dirname "$0")/.."
 MODO="${1:-base}"
 DISP="${BENCH_DISPLAY:-:0}"

@@ -32,12 +32,11 @@ func _ready() -> void:
 	## "24 x 4,6 x 72 m" escrito a mano, asi que cuando el asset dejo de medir eso
 	## el check seguia afirmando lo mismo y parecia que el fallo estaba dentro de
 	## rango. Un check que no imprime lo que mide no se puede creer.
-	## La banda es la del asset ACTUAL (24,0 x 4,7 x 132,1 m): el corredor mide
-	## 132 m de fondo y las estaciones funcionales llegan a 50 m. Se declara la
-	## medida real en vez de estrechar el rango a un numero viejo.
+	## La banda es la del asset corregido (24,0 x 4,7 x 72,2 m): el corredor mide
+	## 72 m de fondo (+6 m a -66 m) con el piso cubriendo la totalidad del rango.
 	print("RangeShell mallas=", meshes.size(), " materiales=", materials.size(),
 		" bounds=", bounds.size.snapped(Vector3(0.001, 0.001, 0.001)),
-		" (banda 24 x 4,7 x 132 m)")
+		" (banda 24 x 4,7 x 72 m)")
 	if meshes.size() < 3 or meshes.size() > 8:
 		failures += 1
 		print("FALLO: RangeShell debe mantenerse en pocas mallas")
@@ -46,7 +45,7 @@ func _ready() -> void:
 		print("FALLO: RangeShell tiene una tabla de materiales fuera de alcance")
 	if bounds.size.x < 23.0 or bounds.size.x > 25.0 \
 			or bounds.size.y < 4.3 or bounds.size.y > 5.0 \
-			or bounds.size.z < 128.0 or bounds.size.z > 136.0:
+			or bounds.size.z < 70.0 or bounds.size.z > 74.0:
 		failures += 1
 		print("FALLO: dimensiones del rango fuera del instrumento, medido ",
 			bounds.size.snapped(Vector3(0.01, 0.01, 0.01)))

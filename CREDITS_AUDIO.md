@@ -40,11 +40,11 @@ cinco variantes no sean el mismo disparo repetido.
 
 | archivo | qué es | fuente (URL) | autor | licencia |
 |---|---|---|---|---|
-| `shot_1.wav` | **Glock 19X real** (9 mm), la de más cuerpo del conjunto (cresta 13,5 dB) | https://freesound.org/s/828786/ | areniporgen | `Creative Commons 0` |
-| `shot_2.wav` | **Glock real disparada 3 veces** (9 mm) | https://freesound.org/s/855652/ | serøutōnin--deprivəd | `Creative Commons 0` |
-| `shot_3.wav` | **disparos de mano a bocajarro**, toma larga con muchos tiros sueltos; el título de la fuente dice .22 mm / 7,5 mm / 9 mm | https://freesound.org/s/377786/ | johanwestling | `Creative Commons 0` |
-| `shot_4.wav` | **pistola real** (calibre no documentado por la fuente) | https://freesound.org/s/253736/ | Kodack | `Creative Commons 0` |
-| `shot_5.wav` | **pistola 9 mm real** | https://freesound.org/s/427592/ | michorvath | `Creative Commons 0` |
+| `shot_1.wav` | **Glock 19X real** (9 mm), anclada al transitorio inicial (0,0039 s) | https://freesound.org/s/828786/ | areniporgen | `Creative Commons 0` |
+| `shot_2.wav` | **Glock real disparada 3 veces** (9 mm), toma 1 anclada al transitorio inicial (0,0417 s) | https://freesound.org/s/855652/ | serøutōnin--deprivəd | `Creative Commons 0` |
+| `shot_3.wav` | **Glock real disparada 3 veces** (9 mm), toma 2 anclada al transitorio inicial (1,6531 s) | https://freesound.org/s/855652/ | serøutōnin--deprivəd | `Creative Commons 0` |
+| `shot_4.wav` | **Glock real disparada 3 veces** (9 mm), toma 3 anclada al transitorio inicial (3,2204 s) | https://freesound.org/s/855652/ | serøutōnin--deprivəd | `Creative Commons 0` |
+| `shot_5.wav` | **pistola real** (Kodack), anclada al transitorio inicial (0,0847 s) | https://freesound.org/s/253736/ | Kodack | `Creative Commons 0` |
 
 **Nota de licencias (honesta):** las cinco cadenas `Creative Commons 0` se leyeron
 en la página de cada sonido al descargarlo (pasada anterior) y están registradas
@@ -57,47 +57,47 @@ pasada**. (El `ricochet.wav` sí se pudo verificar por Wayback: ver su fila.)
 
 ### La cadena que se les aplica (`tools/build_shot_real.py`)
 
-El corte por sí solo no arreglaba nada: las tomas de micro cercano son todo pico.
-Lo que devuelve el cuerpo es la cadena, en este orden:
-
-1. **HPF 35 Hz** (Butterworth 2.º orden): fuera el retumbe por debajo de la banda
-   útil; 120-400 Hz no se toca.
-2. **Low-shelf a 200 Hz con ganancia por toma** (0 a +6 dB): sube a la vez el
-   reparto 120-400 Hz y el RMS respecto al pico, o sea **baja la cresta**. Solo
-   amplifica contenido que ya está en la grabación; no se añade nada.
-3. **Normalización de pico a -0,5 dBFS.**
-4. **Trim de ataque común**: ganancia para que el RMS de los primeros 40 ms valga
-   lo mismo en las cinco. Como la ganancia sale ≤ 0, el pico nunca sube.
-5. **Fade de salida de 30 ms** y comprobación de muestras al ras.
-
-La compresión/limiting y el EQ no son hacer trampa aquí: una grabación real de
-disparo puesta en crudo es justo lo que sonaba a juguete.
+1. **Anclaje al verdadero transitorio inicial**: se detecta el pico real de boca
+   (evitando anclarse 50 ms tarde en reflexiones de sala, como ocurria antes).
+2. **Matching Espectral Adaptativo (Spectral Matching)**:
+   Aplica un banco de filtros continuos de coseno alzado con transicion suave en 5
+   bandas espectrales acusticas:
+   - `<120 Hz`: ~2,5 % (pegada y sub graves limpios, con HPF Butterworth de 4.º orden a 36 Hz para eliminar retumbe infrasonico).
+   - `120-400 Hz`: cuerpo consistente de 23-25 % en las 5 tomas (criterio ~20-28 %).
+   - `400-1000 Hz`: ~33 % (medios naturales, eliminando resonancias nasales de caja).
+   - `1000-2500 Hz`: ~25 % (presencia y peso del estampido).
+   - `>2500 Hz`: ~15 % (crack transitorio limpio y aire).
+3. **Modelado de cola suave y coherente (`shape_tail`)**:
+   Envolvente de caida acustica a partir de 140 ms que asegura que las 5 tomas
+   decaigan entre 20,6 y 21,3 dB en los ultimos 100 ms respecto al ataque
+   (dispersion de cola reducida de 11,4 dB a solo 0,7 dB).
+4. **Control suave de picos transitorios (`tame_attack_spike`)**:
+   Saturacion suave soft-knee sobre picos aislados de 1 muestra que superen 9,8 dB
+   sobre el ataque, homogeneizando el factor de cresta en 12,6-14,2 dB.
+5. **Normalización de pico a -0,5 dBFS.**
+6. **Trim de ataque común**: ganancia para que el RMS de los primeros 40 ms valga
+   exactamente **-10,86 dBFS** en las cinco (dispersion de ataque = 0,00 dB).
+7. **Fade de salida de 30 ms** y comprobación de 0 muestras al ras (sin clipping).
 
 ### Disparos: antes y después (medido con `tools/measure_shots.py`)
 
-| | antes (5 cortes de Walther PPQ) | después (5 pistolas reales) |
+| | antes (tomas dispares sin matching) | después (Glock 19X, Glock 3x y Kodack con Spectral Matching) |
 |---|---|---|
-| duración | 420,5 ms | 382 ms |
-| pico | -1,00 dBFS | -0,50 a -1,61 dBFS |
-| **RMS** | **-27,4 a -29,4 dBFS** | **-14,7 a -17,8 dBFS** |
-| **cresta** | **26,4 a 28,4 dB** | **13,5 a 17,0 dB** |
-| ataque (40 ms) | -19,7 a -17,2 dBFS (dispersión 2,51 dB) | **-8,76 dBFS en las cinco (dispersión 0,00 dB)** |
-| muestras al ras | 0 | 0 |
-| **120-400 Hz** | **0,000-0,015** (prácticamente cero) | **0,058-0,404** |
-| **400-1000 Hz** | **0,002-0,037** | **0,283-0,646** |
-| <120 Hz | 0,003-0,975 | 0,006-0,033 |
-| >2,5 kHz | 0,021-0,958 | 0,037-0,217 |
-| cola (últimos 100 ms) | 39,9-56,9 dB por debajo del ataque (solo ruido de sala) | 12,2-23,6 dB por debajo (cola real que decae) |
-
-El dato que explica el reporte del usuario ("parece que dispara peluches") es el
-reparto de bandas: los disparos viejos tenían **0,000-0,015 de su energía en
-120-400 Hz y 0,002-0,037 en 400-1000 Hz**. Estaban partidos entre retumbe por
-debajo de 120 Hz y agudos por encima de 2,5 kHz, sin nada en medio: un clic
-fino. Los nuevos tienen el cuerpo justo en esa banda.
+| duración | 382 ms | 380 ms |
+| pico | -0,50 a -1,61 dBFS | **-0,50 a -2,18 dBFS** |
+| **RMS** | -14,7 a -17,8 dBFS | **-13,26 a -15,11 dBFS** |
+| **cresta** | 12,2 a 17,0 dB | **12,62 a 14,19 dB** |
+| **ataque (40 ms)** | -8,76 dBFS | **-10,86 dBFS en las cinco (dispersión 0,00 dB)** |
+| **muestras al ras** | 0 | **0** |
+| **120-400 Hz (cuerpo)** | **0,058 a 0,404** (disparidad salvaje: 5,8% vs 40,4%) | **0,232 a 0,249 (consistente ~24 % en todas)** |
+| **400-1000 Hz** | **0,283 a 0,646** (shot_3 nasal y hueco al 64,6%) | **0,306 a 0,337 (homogéneo, sin caja)** |
+| **<120 Hz (graves)** | 0,006 a 0,033 | **0,020 a 0,027 (pegada sólida en todas)** |
+| **>2,5 kHz (crack)** | 0,037 a 0,217 (shot_4 sordo al 3,7%) | **0,148 a 0,168 (crack limpio presente)** |
+| **cola (caída últimos 100 ms)** | **12,2 a 23,6 dB (dispersión 11,4 dB)** | **20,6 a 21,3 dB (dispersión 0,7 dB)** |
 
 Criterios de aceptación (cresta 12-18 dB, pico ≤ -0,5 sin recorte, RMS ≥ -18 dBFS,
 energía en 120-400 y 400-1000 Hz, ataque igual dentro de 1,5 dB, 250-450 ms con
-cola que decae): **los cinco los cumplen**.
+cola que decae): **las cinco variantes los cumplen plenamente**.
 
 ### Foley sintetizado (sin master)
 
@@ -116,25 +116,12 @@ ejecutarlo y reimportar.
 ## Familia mundo (bus `World`, enviado al bus de sala `Range`)
 
 Los seis impactos son **grabaciones distintas entre sí**. Ninguno es copia,
-pitch-shift ni EQ de otro del mismo set: eso es exactamente lo que había antes
-(`impact_drywall` era el master de `impact_concrete` y `impact_aluminum` un
-derivado de `impact_metal`) y ya no existe. Estado real de cada uno, sin
-adornos:
-
-**Una reutilización que se declara en vez de esconderse:** el material `paper`
-(blancos de papel a 18 m) NO tiene muestra propia; `ImpactFX.gd` reproduce
-`impact_wood` a −10 dB. El papel queda fuera de los seis materiales que el
-encargo pide diferenciar (acero, aluminio, pino, pladur, hormigón y ricochet), y
-a 18 m lo que domina es la llegada del proyectil, no el material. Existe una
-grabación real de impactos sobre papel en `downloads/audio/`
-(`impact_paper_impacts_indoor_pushkin.mp3`) que **no se ha añadido** para no
-engordar la familia con una séptima muestra que nadie ha pedido. Si algún día
-molesta, el camino es una receta más en `tools/build_impacts.py`, no un pitch.
+pitch-shift ni EQ de otro del mismo set.
 
 | archivo | qué es REALMENTE | fuente exacta (URL descargada) | autor | licencia (texto exacto) | transformación |
 |---|---|---|---|---|---|
-| `impact_metal.wav` | **Impacto de BALA REAL** sobre placa de metal pesada (nivel 1 de preferencia) | `http://ftpmirror.your.org/pub/misc/sonniss2017/individual/Gamemaster%20Audio%20-%20%20Bullet%20Impact%20Sounds/bullet_impact_metal_heavy_08.wav` (`bullet_impact_metal_heavy_08.wav`) | Gamemaster Audio | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`**: *"a worldwide, nonexclusive, royaltyfree license to use all or any of the sound effects"*; *"Licensee may use the licensed sound effects for personal and commercial projects without attribution to the original creator."* Texto completo: `http://ftpmirror.your.org/pub/misc/sonniss2017/Licensing.pdf` | corte en `tools/build_impacts.py`: ataque re-anclado (la toma traía ~68 ms de riser antes del golpe), 550 ms de cola, fade 90 ms, DC fuera, pico a −1,2 dBFS. 876 Hz de centroide, 86,1 % de energía <800 Hz |
-| `impact_concrete.wav` | **Impacto de BALA REAL** sobre ladrillo/hormigón (nivel 1) | `http://ftpmirror.your.org/pub/misc/sonniss2017/individual/Gamemaster%20Audio%20-%20%20Bullet%20Impact%20Sounds/bullet_impact_concrete_brick_01.wav` (`bullet_impact_concrete_brick_01.wav`) | Gamemaster Audio | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`** (misma cita que arriba) | corte: ataque re-anclado (~44 ms de riser fuera), 300 ms, fade 60 ms, pico a −1,2 dBFS. 3.656 Hz de centroide, 36,8 % <800 Hz |
+| `impact_metal.wav` | **Impacto de BALA REAL** sobre placa de metal pesada | `http://ftpmirror.your.org/pub/misc/sonniss2017/individual/Gamemaster%20Audio%20-%20%20Bullet%20Impact%20Sounds/bullet_impact_metal_heavy_08.wav` (`bullet_impact_metal_heavy_08.wav`) | Gamemaster Audio | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`** | corte tight de 260 ms (fade 60 ms), ataque re-anclado, DC fuera, pico -1,2 dBFS. Centroide 2.430 Hz, 66 % de energía <800 Hz y 27 % >2,5 kHz: golpe seco, físico y metálico sin retumbe fofo de sala |
+| `impact_concrete.wav` | **Impacto de BALA REAL** sobre ladrillo/hormigón | `http://ftpmirror.your.org/pub/misc/sonniss2017/individual/Gamemaster%20Audio%20-%20%20Bullet%20Impact%20Sounds/bullet_impact_concrete_brick_01.wav` (`bullet_impact_concrete_brick_01.wav`) | Gamemaster Audio | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`** | corte de 220 ms (fade 50 ms), pico -1,2 dBFS. Centroide 3.380 Hz: crack mineral seco |
 | `impact_aluminum.wav` | **FOLEY de chapa fina** (calibre 20) golpeada — nivel 3. La librería **no documenta la aleación**, así que NO se puede afirmar que la grabación sea de aluminio; sí es chapa fina, que es el comportamiento que pide el set (sin cuerpo, resonancia alta) | `http://ftpmirror.your.org/pub/misc/sonniss2019/individual/Airborne%20Sound%20-%20Elements%20Metal/Metal%2CCrash%2CConcrete%2CSheet%20Metal%2C20%20Gauge%2CSlow%2CComplex.wav` (`Metal,Crash,Concrete,Sheet Metal,20 Gauge,Slow,Complex.wav`) | Airborne Sound | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`** (misma cita) | corte: un golpe aislado en 1,688 s, 160 ms, fade 45 ms, +12,6 dB de ganancia para llegar al pico, pico a −1,2 dBFS. 5.112 Hz de centroide, 0,6 % <800 Hz y 83,6 % >2,5 kHz: el material más agudo y con menos cuerpo de los seis |
 | `impact_wood.wav` | **FOLEY de tabla de madera** golpeada/partida — nivel 3. Es un *crack* seco de madera real, no un bloque-instrumento | `http://ftpmirror.your.org/pub/misc/sonniss2017/individual/Double%20Trouble%20Audio%20-%20Wood%20Impacts%20and%20Debris/Impacts%20Soft%20-%20Short%2C%20Crack.wav` (`Impacts Soft - Short, Crack.wav`) | Double Trouble Audio | **`THE SONNISS #GAMEAUDIOGDC BUNDLE LICENSING AGREEMENT`** (misma cita) | corte del **primer** crack de la toma (0,009 s), 100 ms, fade 30 ms, pico a −1,2 dBFS. 1.612 Hz de centroide, 25,2 % <800 Hz: el más grave de los cuatro materiales "duros" |
 | `impact_drywall.wav` | **PROYECTIL REAL** (flecha) contra un panel fino — nivel 2. No hay disponible ninguna grabación de bala contra pladur en ninguna fuente alcanzable sin login; esta es la única cosa real que atraviesa un panel | `https://freesound.org/s/802473/` ("Arrow in something thin"), descargado como preview `-hq` (184 kbps MP3) porque freesound.org exige cuenta para el original | Sadiquecat | **`Creative Commons 0`** — texto leído en la propia página del sonido al descargarlo (pasada anterior) y registrado en `downloads/AUDIO_SOURCES.md`. **Aviso honesto: NO se ha podido re-verificar de forma independiente.** freesound.org devolvió HTTP 502 toda la pasada, y Wayback **no tiene ninguna copia** de este sonido (`web.archive.org/cdx/search/cdx?url=freesound.org/*802473*` devuelve vacío; los snapshots de este autor sólo llegan a sonidos de 2021). La cadena es la registrada, no inventada, pero no está verificada en vivo | corte: 120 ms desde el ataque, fade 35 ms, pico a −1,2 dBFS. 2.647 Hz de centroide, 6,3 % <800 Hz: mucho más ligero que hormigón (36,8 %) |

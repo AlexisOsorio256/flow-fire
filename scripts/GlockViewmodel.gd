@@ -58,6 +58,13 @@ const GRIP_ROT := Vector3(0.0, 0.0, 0.0)
 ## queda coherente con el ADS (0,44 m). El encuadre real lo mide
 ## `tools/frame_probe.tscn`; este numero no se toca a ojo.
 const HIP_POS := Vector3(0.095, -0.011, -0.130)
+## Rotacion natural de la pose de cadera (dos manos thumbs-forward):
+## leve angulo de cabeceo (pitch negativo, morro abajo ~2.8 deg para ver la parte superior de la corredera),
+## guiñada (yaw positivo, morro a la izquierda ~3.8 deg para mostrar el perfil derecho y la ventana de expulsion),
+## y alabeo (roll negativo, cante hacia adentro ~2.0 deg).
+## Esto hace que el bloqueo de corredera (slide lock 39 mm atras) y la ventana abierta
+## se lean con total claridad y realismo desde el encuadre de cadera sin que la placa trasera los tape.
+const HIP_ROT := Vector3(deg_to_rad(-2.8), deg_to_rad(3.8), deg_to_rad(-2.0))
 ## Ojo -> mira trasera en ADS.
 const ADS_SIGHT_DISTANCE := 0.44
 ## Pose de recarga: el arma sube al centro-bajo, se canta hacia dentro para
@@ -415,7 +422,7 @@ func _apply_pose(delta: float) -> void:
 	var hip_pos := HIP_POS
 	var ads_pos := ads_offset
 	var sprint_pos := Vector3(0.05, -0.135, -0.02)
-	var hip_rot := Vector3.ZERO
+	var hip_rot := HIP_ROT
 	var ads_pose_rot := ads_rot
 	var sprint_rot := Vector3(deg_to_rad(-14.0), deg_to_rad(-5.0), deg_to_rad(5.0))
 

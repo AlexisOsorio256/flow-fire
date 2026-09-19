@@ -114,23 +114,23 @@ func _setup_environment() -> void:
     sky_mat.sky_top_color = Color(0.25, 0.32, 0.44)
     sky_mat.sky_horizon_color = Color(0.42, 0.38, 0.34)
     # Rebote del suelo: las normales hacia abajo (techo) muestrean este lado
-    # del cielo; en negro el techo no se leia nunca.
-    sky_mat.ground_bottom_color = Color(0.10, 0.10, 0.11)
-    sky_mat.ground_horizon_color = Color(0.28, 0.27, 0.26)
+    # del cielo; con un gris calido el techo y las vigas conservan detalle.
+    sky_mat.ground_bottom_color = Color(0.18, 0.18, 0.20)
+    sky_mat.ground_horizon_color = Color(0.34, 0.33, 0.32)
     sky.sky_material = sky_mat
     env.sky = sky
 
     # Sala cerrada: el ambiente es COLOR controlado, no cielo. El cielo solo
     # alimenta reflejos; la luz la ponen las luminarias con caida real.
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(0.62, 0.63, 0.68)
-    env.ambient_light_energy = 1.45
+    env.ambient_light_color = Color(0.64, 0.65, 0.70)
+    env.ambient_light_energy = 1.55
     env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
     env.tonemap_mode = Environment.TONE_MAPPER_ACES
-    env.tonemap_exposure = 1.05
+    env.tonemap_exposure = 1.18
     env.adjustment_enabled = true
-    env.adjustment_contrast = 1.05
-    env.adjustment_saturation = 1.0
+    env.adjustment_contrast = 1.00
+    env.adjustment_saturation = 1.02
     env.ssao_enabled = false
     env.ssil_enabled = false
     env.glow_enabled = true
@@ -146,9 +146,9 @@ func _setup_environment() -> void:
     env.set("glow_levels/3", 0.0)
     env.set("glow_levels/4", 0.0)
     env.fog_enabled = true
-    env.fog_light_color = Color(0.16, 0.16, 0.17)
-    env.fog_density = 0.010
-    env.fog_sky_affect = 0.25
+    env.fog_light_color = Color(0.46, 0.48, 0.52)
+    env.fog_density = 0.0035
+    env.fog_sky_affect = 0.15
     env.volumetric_fog_enabled = false
 
     environment_node.environment = env

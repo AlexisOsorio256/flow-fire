@@ -87,13 +87,13 @@ const SOUNDS := {
     # estampido, que es lo que hace que el disparo domine:
     #
     #   sonido             ataque 40 ms (WAV)   db    ataque en el mix
-    #   shot_* (media)          -18,94         -6,0       -24,94
-    #   impact_concrete         -11,98        -17,0       -28,98
-    #   ricochet                -18,53        -10,5       -29,03
-    #   impact_metal             -8,63        -20,5       -29,13
-    #   impact_drywall          -13,71        -17,0       -30,71
-    #   impact_wood             -15,99        -15,0       -30,99
-    #   impact_aluminum         -14,06        -19,0       -33,06
+    #   shot_* (familia)        -10,86         -6,5       -17,36
+    #   impact_metal             -9,13        -18,5       -27,63  ->  10,3 dB por debajo
+    #   impact_concrete         -11,98        -17,0       -28,98  ->  11,6 dB por debajo
+    #   ricochet                -18,53        -10,5       -29,03  ->  11,7 dB por debajo
+    #   impact_drywall          -13,71        -17,0       -30,71  ->  13,4 dB por debajo
+    #   impact_wood             -15,99        -15,0       -30,99  ->  13,6 dB por debajo
+    #   impact_aluminum         -14,06        -19,0       -33,06  ->  15,7 dB por debajo
     #
     # Aluminio, madera y pladur no los ata el ataque sino el RMS de la muestra:
     # a igual ataque su RMS en el mix quedaba por encima del estampido (-34,5),
@@ -102,7 +102,7 @@ const SOUNDS := {
     # 4,7 dB por debajo del pico del disparo (-7,0).
     "impact_concrete": {"stream": preload("res://assets/audio/impact_concrete.wav"), "db": -17.0, "bus": BUS_WORLD},
     "impact_drywall": {"stream": preload("res://assets/audio/impact_drywall.wav"), "db": -17.0, "bus": BUS_WORLD},
-    "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -20.5, "bus": BUS_WORLD},
+    "impact_metal": {"stream": preload("res://assets/audio/impact_metal.wav"), "db": -18.5, "bus": BUS_WORLD},
     "impact_aluminum": {"stream": preload("res://assets/audio/impact_aluminum.wav"), "db": -19.0, "bus": BUS_WORLD},
     "impact_wood": {"stream": preload("res://assets/audio/impact_wood.wav"), "db": -15.0, "bus": BUS_WORLD},
     "ricochet": {"stream": preload("res://assets/audio/ricochet.wav"), "db": -10.5, "bus": BUS_WORLD},
@@ -127,20 +127,17 @@ const SHOT_STREAMS: Array[AudioStream] = [
 
 # Nivel del disparo. Los cinco WAV comparten loudness de ataque por
 # construccion (`tools/build_shot_real.py` les fija el RMS de los primeros 40 ms
-# al mismo valor), asi que este numero es el nivel de la familia entera.
+# a exactamente -10,86 dBFS), asi que este numero es el nivel de la familia entera.
 #
-# Por que -6,5 y no -6,0: los disparos nuevos tienen pico -0,50 dBFS (antes
-# -1,00), asi que con -6,5 el pico en el mix vuelve a ser exactamente -7,0 dBFS,
-# el mismo que habia. La ganancia de loudness de esta pasada (+10,2 dB de ataque,
-# +12 dB de RMS) viene entera del CUERPO que se recupero, no de gastar headroom
-# de pico: no se le quita margen al master. Con el randf de play_shot (+-1 dB) el
-# pico llega a -6,0 dBFS, igual que antes.
+# Por que -6,5 y no -6,0: los disparos tienen pico -0,50 dBFS, asi que con -6,5
+# el pico en el mix vuelve a ser exactamente -7,0 dBFS, el mismo que habia.
 #
 # Ataque (RMS de 40 ms) en el mix y margen sobre el resto:
-#   disparo          -8,76 + -6,5 = -15,26
-#   impacto mas alto  impact_concrete  -11,98 + -17,0 = -28,98  ->  13,7 dB por debajo
-#   mecanica mas alta mag_drop         -15,12 + -16,0 = -31,12  ->  15,9 dB por debajo
-#   paso (mundo)      footstep         -12,13 + -14,0 = -26,13  ->  10,9 dB por debajo
+#   disparo          -10,86 + -6,5 = -17,36
+#   impacto metal     -9,13 + -18,5 = -27,63  ->  10,3 dB por debajo
+#   impacto concreto -11,98 + -17,0 = -28,98  ->  11,6 dB por debajo
+#   mecanica mas alta mag_drop         -15,12 + -16,0 = -31,12  ->  13,8 dB por debajo
+#   paso (mundo)      footstep         -12,13 + -14,0 = -26,13  ->   8,8 dB por debajo
 # El pico mas alto del proyecto es el del disparo (-7,0); el siguiente es el del
 # ricochet (-11,7).
 #

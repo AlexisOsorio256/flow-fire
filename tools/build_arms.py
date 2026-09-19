@@ -324,7 +324,7 @@ def pad_points(arm, meshes: list, base: dict, side: str, f_arm: Matrix,
             out.setdefault(tag, []).append(inv @ (W @ p))
     return out
 
-def bake_bind(arm, meshes: list, targets: dict) -> None:
+def bake_bind(arm, meshes: list, targets: dict, donor_scale: float = 0.01) -> None:
     """Reescribe la pose de reposo con `targets` (espacio del arma) y REBAKEA la
     malla para que siga viendose igual.
 
@@ -343,7 +343,8 @@ def bake_bind(arm, meshes: list, targets: dict) -> None:
                 T = targets.get(name)
                 if T is None or g.weight <= 0.0:
                     continue
-                acc += (T @ rest[name].inverted() @ v.co) * g.weight
+                diff = rest[name].inverted() @ v.co
+                acc += (T @ (donor_scale * diff)) * g.weight
                 total += g.weight
             verts.append(acc / total if total > 1e-9 else v.co.copy())
         flat = []
@@ -590,7 +591,12 @@ def sample_source(arm, gun, frames: list) -> dict:
         update()
         g = gun.matrix_world.copy()
         gi = g.inverted()
-        out[f] = {pb.name: gi @ (arm.matrix_world @ pb.matrix) for pb in arm.pose.bones}
+        f_dict = {}
+        for pb in arm.pose.bones:
+            cname = canonical(pb.name)
+            if cname:
+                f_dict[cname] = gi @ (arm.matrix_world @ pb.matrix)
+        out[f] = f_dict
     print("BUILD donante muestreado: %d fotogramas x %d huesos"
           % (len(out), len(next(iter(out.values())))))
     return out
@@ -618,20 +624,30 @@ def shorten_bone_tails(arm) -> None:
 
 
 def apply_targets(arm, targets: dict) -> None:
-    """Escribe TODOS los huesos, padres antes que hijos."""
+    """Escribe TODOS los huesos calculando la transformacion local respecto
+    al reposo del hueso y de su padre directo, evitando la acumulacion de offsets
+    locales que provocaba que los huesos explotaran a 30-80 metros."""
     order = []
     stack = [b for b in arm.data.bones if b.parent is None]
     while stack:
         b = stack.pop(0)
-        order.append(b.name)
+        order.append(b)
         stack += list(b.children)
-    for name in order:
-        m = targets.get(name)
-        if m is None:
+    for b in order:
+        M = targets.get(b.name)
+        if M is None:
             continue
-        pb = arm.pose.bones[name]
+        pb = arm.pose.bones[b.name]
         pb.rotation_mode = "QUATERNION"
-        pb.matrix = m
+        if b.parent is None:
+            basis = b.matrix_local.inverted() @ M
+        else:
+            p_name = b.parent.name
+            M_p = targets.get(p_name, arm.data.bones[p_name].matrix_local)
+            basis = b.matrix_local.inverted() @ b.parent.matrix_local @ M_p.inverted() @ M
+        pb.location = basis.to_translation()
+        pb.rotation_quaternion = basis.to_quaternion()
+        pb.scale = basis.to_scale()
     update()
 
 
@@ -732,13 +748,23 @@ def grip_report(arm, mesh, base: dict, bvh: BVHTree, F_world: Matrix, socket: Ma
 ## la izquierda se suelta del arma (~20-40, ~76-100, ~125-148, ~150-192) y se
 ## miraron fotogramas sueltos.  Lo que NO esta verificado es que el asiento del
 ## cargador caiga en nuestro hito de 1,40 s: el donante lo hace a su ritmo.
-WINDOWS = {"Reload": (16, 104), "ReloadEmpty": (104, 192), "Inspect": (40, 120)}
+WINDOWS = {
+    "Reload": (int(round(16 * FPS / 24.0)), int(round(104 * FPS / 24.0))),
+    "ReloadEmpty": (int(round(104 * FPS / 24.0)), int(round(192 * FPS / 24.0))),
+    "Inspect": (int(round(40 * FPS / 24.0)), int(round(120 * FPS / 24.0))),
+}
 CLIPS = {"Idle": 3.00, "Fire": 0.26, "Reload": 2.10, "ReloadEmpty": 2.35, "Inspect": 2.00}
 
 
 def clip_targets(A: dict, frame: int, Tg: Matrix, extra_root: Matrix | None) -> dict:
     T = b_mat(Tg)
-    out = {name: T @ A[frame][name] for name in A[frame]}
+    out = {}
+    for name, mat in A[frame].items():
+        m = T @ mat
+        R = m.to_3x3().normalized()
+        M = R.to_4x4()
+        M.translation = m.translation
+        out[name] = M
     if extra_root is not None:
         out["root"] = extra_root @ out["root"]
     return out
@@ -829,6 +855,15 @@ def verify(path: Path) -> None:
               % (a["name"], tmax, want, len(a["channels"]), flag))
         if want is None or abs(tmax - want) >= 1e-3:
             bad("clip %s con duracion %.4f" % (a["name"], tmax))
+        for ch in a.get("channels", []):
+            if ch.get("target", {}).get("path") == "translation":
+                sampler = a["samplers"][ch["sampler"]]
+                acc = gltf["accessors"][sampler["output"]]
+                for val in acc.get("min", []) + acc.get("max", []):
+                    if abs(val) > 1.5:
+                        node_idx = ch["target"].get("node", 0)
+                        node_name = gltf["nodes"][node_idx].get("name", "?") if node_idx < len(gltf.get("nodes", [])) else "?"
+                        bad("traslacion excesiva %.2f m en clip %s hueso %s" % (val, a["name"], node_name))
     names = sorted(a["name"] for a in gltf.get("animations", []))
     if names != sorted(CLIPS):
         bad("los clips no son exactamente %s" % sorted(CLIPS))
@@ -890,20 +925,35 @@ def main() -> None:
         + Vector([float(v) for v in args.grip_off.split(",")])
 
     arm, mesh, gun = load_donor(donor)
-    world = arm.matrix_world.copy()
-    strip_donor(arm, mesh, gun, world)
-    rename_bones(arm, mesh)
-    drop_extra_uvs(mesh)
+    root = bpy.data.objects.get("Root")
 
-    # --- la pose la trae el donante, relativa a SU pistola -------------------
-    act = max(bpy.data.actions, key=lambda a: len(a.fcurves))
+    # Asegurar que todas las acciones sincronizadas del donante estan activas
+    if root and "allanimations_Root" in bpy.data.actions:
+        if root.animation_data is None:
+            root.animation_data_create()
+        root.animation_data.action = bpy.data.actions["allanimations_Root"]
+
+    if gun and "allanimations_pistol" in bpy.data.actions:
+        if gun.animation_data is None:
+            gun.animation_data_create()
+        gun.animation_data.action = bpy.data.actions["allanimations_pistol"]
+
+    act = bpy.data.actions.get("allanimations_Object_5")
+    if act is None:
+        act = max(bpy.data.actions, key=lambda a: len(a.fcurves))
     if arm.animation_data is None:
         arm.animation_data_create()
     arm.animation_data.action = act
     f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
     print("BUILD accion del donante: %s  frames %d..%d  curvas=%d"
           % (act.name, f0, f1, len(act.fcurves)))
+    # Muestreo con toda la jerarquia del donante intacta y sincronizada
     A = sample_source(arm, gun, list(range(f0, f1 + 1)))
+
+    world = arm.matrix_world.copy()
+    strip_donor(arm, mesh, gun, world)
+    rename_bones(arm, mesh)
+    drop_extra_uvs(mesh)
     bpy.context.scene.frame_set(f0)
     update()
     ## `fist_frame` devuelve el marco en espacio de ARMADURA: ahi viven la pose y
@@ -935,7 +985,7 @@ def main() -> None:
 
     # --- bind = Idle t=0 ----------------------------------------------------
     bind = clip_targets(A, f0, Tg, breath_matrix(0.0))
-    bake_bind(arm, [mesh], bind)
+    bake_bind(arm, [mesh], bind, donor_scale=world.to_scale().x)
     ## AHORA si: con la malla y el reposo ya metricos, los objetos a identidad.
     ## El donante trae la armadura y la malla a 0.01 y los huesos a x100; hornear
     ## el bind lo deja todo en metros, y limpiar el transform del objeto es lo
@@ -984,6 +1034,24 @@ def main() -> None:
                     kp.interpolation = "LINEAR"
             print("BUILD clip %-12s %d frames (%.2f s) curvas=%d"
                   % (name, n + 1, dur, len(act_new.fcurves)))
+
+        # Verificacion del bounding box del mesh evaluado en cada clip
+        scene = bpy.context.scene
+        for name in ("Idle", "Fire", "Reload", "ReloadEmpty", "Inspect"):
+            arm.animation_data.action = bpy.data.actions[name]
+            dur = CLIPS[name]
+            n = int(round(dur * FPS))
+            max_dim = 0.0
+            for f in range(0, n + 1, max(1, n // 10)):
+                scene.frame_set(f)
+                update()
+                eval_mesh = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+                ev_data = eval_mesh.data
+                dim = [max(v.co[i] for v in ev_data.vertices) - min(v.co[i] for v in ev_data.vertices) for i in range(3)]
+                max_dim = max(max_dim, max(dim))
+            print("BUILD clip %-12s dimension maxima evaluada: %.3f m" % (name, max_dim))
+            assert max_dim < 0.80, "BUILD ABORTA: la malla explota en el clip %s (%.2f m > 0.80 m)" % (name, max_dim)
+
         arm.animation_data.action = bpy.data.actions["Idle"]
 
     ad = arm.animation_data

@@ -31,6 +31,7 @@ import tempfile
 from PIL import Image, ImageDraw
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.environ["PATH"] = os.path.expanduser("~/.local/bin:") + os.environ.get("PATH", "")
 OUT_DIR = os.path.join(REPO, "captures", "review")
 
 # Accion: (frames a grabar, camara lenta, selector de frames, columnas)
