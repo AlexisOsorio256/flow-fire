@@ -20,14 +20,14 @@ Thumbs.db
 captures/*
 !captures/.gdignore
 
-# Texturas extraídas de un .glb por el importador (derivadas del propio .glb).
-assets/models/*_Image_*.jpg
-assets/models/*_Image_*.png
-assets/models/*_Image_*.png.import
-assets/models/*_Image_*.jpg.import
-# Godot may extract the embedded PBR images from the generated RangeShell GLB
-# into these derived files; the GLB itself remains the only source asset.
-assets/models/range_shell_*.jpg
+# OJO: `assets/models/g19_pistol_Image_*.png` NO se ignoran. Antes eran copias
+# derivadas del .glb, pero el .glb ya no lleva texturas dentro (se quitaron
+# porque eran las MISMAS imagenes duplicadas, 10 MB): esos PNG son ahora la
+# fuente unica de los mapas del arma y el runtime los carga directamente.
+
+# Material de trabajo: fuentes de audio/modelos descargadas para esta pasada.
+# No es parte del juego (771 MB); se versiona su procedencia en CREDITS_*.md.
+downloads/
 assets/models/range_shell_*.png
 assets/models/range_shell_*.jpg.import
 assets/models/range_shell_*.png.import

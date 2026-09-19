@@ -34,6 +34,21 @@ extends Node3D
 ##   "el arma esta mal encuadrada" -> GlockViewmodel.GRIP_POS / GRIP_ROT
 
 const MODEL := "res://assets/models/g19_pistol.glb"
+## Mapas del arma. El .glb NO lleva texturas dentro: son estos PNG del repo, y
+## son los MISMOS byte a byte que el .glb embebia. Se sacaron porque embebidos
+## pesaban 10.186.698 bytes (el .glb entero pasaba de 10,05 MB) y aqui ya
+## estaban: era la misma imagen dos veces en el repositorio.
+##
+## Los cuatro se cargan SOLO como imagen de GPU. En disco el normal map de
+## 2048 px pesa 5 MB, pero en VRAM es la misma textura: por eso la duplicacion
+## costaba espacio de repositorio y de import, no memoria de video.
+const MAP_BASE_COLOR := "res://assets/models/g19_pistol_Image_3.png"
+## Mapa empaquetado metallic-roughness (verde = rugosidad, azul = metalico),
+## que es la convencion glTF. El shader `glock_pbr.gdshader` lee los canales
+## correctos; StandardMaterial3D no deja elegir canal y por eso hay shader.
+const MAP_SLIDE := "res://assets/models/g19_pistol_Image_4.png"
+const MAP_EMISSIVE := "res://assets/models/g19_pistol_Image_5.png"
+const MAP_NORMAL := "res://assets/models/g19_pistol_Image_6.png"
 ## Largo de la MALLA actual, extremo a extremo (174 mm medidos). No es la ficha:
 ## la Gen5 real mide 185 mm. El GLB canonico llega ya en metros; Godot solo
 ## VALIDA, no corrige en silencio (avisa si la escala se desvia >3%).
@@ -169,6 +184,7 @@ func build() -> bool:
 	_slide_travel = SLIDE_TRAVEL / model_scale
 	if not _build_cartridge():
 		return false
+	_bind_materials(root)
 
 	print("ARMA Glock 19 escala=", snappedf(model_scale, 0.0001),
 		" largo_modelo_m=", snappedf(measured_length, 0.001),
@@ -308,6 +324,39 @@ func grip_pivot() -> Vector3:
 	assert(grip != null, "Glock requiere Grip para definir el pivote")
 	var p_model: Vector3 = global_transform.affine_inverse() * grip.global_position
 	return p_model * model_scale
+
+
+## Engancha los mapas del repo a las mallas del arma. El .glb sale del
+## exportador sin texturas, asi que cada malla recibe un unico
+## StandardMaterial3D con los cuatro canales. Se hace una vez por superficie y
+## se comparte el material: el arma entera es UNA pieza para el renderer.
+func _bind_materials(root: Node) -> void:
+	var albedo: Texture2D = load(MAP_BASE_COLOR)
+	var orm: Texture2D = load(MAP_SLIDE)
+	var emissive: Texture2D = load(MAP_EMISSIVE)
+	var normal: Texture2D = load(MAP_NORMAL)
+	if albedo == null or orm == null or normal == null:
+		push_error("Faltan los mapas obligatorios de la Glock en assets/models")
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/glock_pbr.gdshader")
+	mat.resource_name = "Glock_PBR"
+	mat.set_shader_parameter("albedo_tex", albedo)
+	mat.set_shader_parameter("orm_tex", orm)
+	mat.set_shader_parameter("normal_tex", normal)
+	mat.set_shader_parameter("emission_tex", emissive)
+	mat.set_shader_parameter("normal_strength", 1.0)
+	mat.set_shader_parameter("emission_energy", 0.35)
+	var stack: Array = [root]
+	var bound := 0
+	while not stack.is_empty():
+		var node = stack.pop_back()
+		if node is MeshInstance3D:
+			(node as MeshInstance3D).material_override = mat
+			bound += 1
+		for c in node.get_children():
+			stack.append(c)
+	print("ARMA texturas externas enganchadas en %d mallas (glb sin texturas)" % bound)
 
 
 func _find_child(root: Node, node_name: String) -> Node3D:

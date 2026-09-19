@@ -1,6 +1,7 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="PackedScene" path="res://assets/models/range_shell.glb" id="1_shell"]
+[ext_resource type="Script" path="res://scripts/RangeShell.gd" id="2_shell"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
 size = Vector3(24, 0.3, 72)
@@ -18,6 +19,7 @@ size = Vector3(24, 4.2, 0.3)
 size = Vector3(20, 2.8, 0.45)
 
 [node name="RangeShell" type="Node3D"]
+script = ExtResource("2_shell")
 
 [node name="Visual" parent="." instance=ExtResource("1_shell")]
 
@@ -87,74 +89,48 @@ position = Vector3(0, 1.4, -63.5)
 [node name="Lighting" type="Node3D" parent="."]
 
 [node name="LampNearLeft" type="OmniLight3D" parent="Lighting"]
-position = Vector3(-5, 3.55, 2)
+position = Vector3(-5, 3.30, 2)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
-shadow_enabled = true
+light_energy = 7.5
+omni_range = 11.0
 
 [node name="LampNearRight" type="OmniLight3D" parent="Lighting"]
-position = Vector3(5, 3.55, 2)
+position = Vector3(5, 3.30, 2)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
-shadow_enabled = true
+light_energy = 7.5
+omni_range = 11.0
 
 [node name="LampMidLeft" type="OmniLight3D" parent="Lighting"]
-position = Vector3(-5, 3.55, -10)
+position = Vector3(-5, 3.30, -10)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
+light_energy = 7.5
+omni_range = 11.0
 
 [node name="LampMidRight" type="OmniLight3D" parent="Lighting"]
-position = Vector3(5, 3.55, -10)
+position = Vector3(5, 3.30, -10)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
+light_energy = 7.5
+omni_range = 11.0
 
 [node name="LampFarLeft" type="OmniLight3D" parent="Lighting"]
-position = Vector3(-5, 3.55, -22)
+position = Vector3(-5, 3.30, -22)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
+light_energy = 7.5
 omni_range = 13.0
 
 [node name="LampFarRight" type="OmniLight3D" parent="Lighting"]
-position = Vector3(5, 3.55, -22)
+position = Vector3(5, 3.30, -22)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
-
-[node name="LampEndLeft" type="OmniLight3D" parent="Lighting"]
-position = Vector3(-5, 3.55, -38)
-light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
-
-[node name="LampEndRight" type="OmniLight3D" parent="Lighting"]
-position = Vector3(5, 3.55, -38)
-light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
-
-[node name="LampBackLeft" type="OmniLight3D" parent="Lighting"]
-position = Vector3(-5, 3.55, -54)
-light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
-omni_range = 13.0
-
-[node name="LampBackRight" type="OmniLight3D" parent="Lighting"]
-position = Vector3(5, 3.55, -54)
-light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 6.0
+light_energy = 7.5
 omni_range = 13.0
 
 [node name="PostPendant" type="SpotLight3D" parent="Lighting"]
 position = Vector3(0, 2.85, 0.5)
 rotation_degrees = Vector3(-90, 0, 0)
 light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 30.0
-spot_range = 9.0
-spot_angle = 55.0
+light_energy = 9.0
+spot_range = 7.0
+spot_angle = 58.0
 shadow_enabled = true
 
 [node name="PostReflection" type="ReflectionProbe" parent="."]
