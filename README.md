@@ -129,19 +129,20 @@ rápido: el arma cabecea dentro del agarre, que es lo que hay que leer.
 
 **El `AnimationPlayer` solo anima huesos humanos y no decide nada.** Reproduce
 cinco clips —`Idle`, `Fire`, `Reload`, `ReloadEmpty`, `Inspect`— y quien los pide
-es `Glock.gd` en sus propios hitos, los mismos que ya mueven la corredera, el
-gatillo y el cargador. No hay `HandManager`, ni `ArmController`, ni IK, ni
-retarget, ni temporizadores paralelos: la recarga y la inspección comparten
-reloj con la mecánica porque cada clip dura exactamente lo que dura su hito.
+es `Glock.gd` en sus propios hitos, que siguen siendo la autoridad de corredera,
+gatillo y cargador. No hay `HandManager`, ni `ArmController` ni IK runtime.
+Los clips actuales son ventanas retimadas del donante DJMaesen a la duración
+total de cada hito; **la coincidencia de contactos internos (por ejemplo el
+asiento del cargador) todavía debe validarse visualmente contra la mecánica y no
+queda certificada por compartir duración total**.
 
-**Agarre a dos manos (*thumbs-forward*)**: Ambas manos permanecen visibles y
-activas en el encuadre de tiro. La mano derecha envuelve la empuñadura y controla
-el disparador con el dedo índice; la mano izquierda rellena el costado izquierdo
-y envuelve los dedos frontales, con ambos pulgares orientados hacia delante a lo
-largo del armazón. Durante la recarga (`Reload` / `ReloadEmpty`), la mano
-izquierda extrae el cargador vacío, alimenta el nuevo, asienta la base y libera
-la corredera a batería. En la inspección (`Inspect`), asiste la inclinación y el
-tirón suave de corredera para verificar la recámara.
+**Agarre a dos manos**: ambas manos permanecen visibles en el encuadre de tiro;
+la pose procede del donante DJMaesen y se coloca rígidamente sobre la empuñadura
+de nuestra G19. El builder no remodela la flexión de los dedos para ajustarla.
+`Reload`, `ReloadEmpty` e `Inspect` reutilizan y retiman ventanas de la tira
+animada del donante; su calidad anatómica, ausencia de clipping y sincronía con
+magwell/corredera son criterios de revisión visual, no invariantes demostradas
+por `VERIFY OK`.
 
 
 ## Rango de medición
@@ -181,9 +182,10 @@ Distancias medidas sobre `World.gd` (la línea de tiro es z = 0):
 La sala es interior. `RangeShell.tscn` contiene **12 OmniLight3D de relleno**
 distribuidas hasta z = -57 m y **1 SpotLight3D con sombra** sobre el puesto. Las
 estaciones de 35 y 50 m quedan dentro de la cobertura del conjunto; no hay sol
-atravesando el techo. El ambiente está controlado y la iluminación privada del
-viewmodel es tenue: sólo evita que la Glock y los brazos desaparezcan; las luces
-del mundo también alcanzan la capa del viewmodel.
+atravesando el techo. El ambiente está controlado. Las luces del mundo excluyen deliberadamente la
+capa 13 del viewmodel mediante `light_cull_mask = 4095`; Glock y brazos reciben
+únicamente el KEY/FILL tenue definido en `GlockViewmodel.gd`, además del
+postproceso fullscreen.
 
 ## Audio
 
