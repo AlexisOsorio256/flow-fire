@@ -348,8 +348,9 @@ func set_magazine_tumble(angle: float) -> void:
 # Materiales y capas
 # ---------------------------------------------------------------------------
 ## Todo el viewmodel va a su propia capa para aislar su KEY/FILL.
-## Las luces del mundo SI lo tocan (light_cull_mask por defecto es todo) y el
-## post bodycam (fullscreen sobre screen_texture) tambien lo procesa.
+## RangeShell excluye actualmente esta capa de sus luces de mundo con
+## light_cull_mask=4095; el post bodycam (fullscreen sobre screen_texture) sí
+## sigue procesando Glock y brazos.
 func _apply_viewmodel_layer(root_node: Node) -> void:
 	var stack: Array = [root_node]
 	while not stack.is_empty():
