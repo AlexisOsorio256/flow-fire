@@ -203,13 +203,23 @@ de 13,5–17,0 dB (un disparo real tiene cuerpo, no sólo pico), RMS de −14,7 
 para que ningún tiro suene flojo). En la mezcla el estampido queda **13,7–17,8
 dB por encima del impacto más fuerte** y es el pico más alto del proyecto.
 
-**Aviso de headroom, declarado y no escondido:** a la cadencia máxima (~13
-tiros/s) se solapan unos cinco estampidos de 382 ms; sus picos no suman en fase
-(el tono varía ±3,5 %) pero el RMS sumado sube ~7 dB. El bus `Master` NO lleva
-limitador y el contrato de este proyecto prohíbe el HardLimiter como sustituto
-de mezcla, así que el arreglo —si una captura a cadencia máxima recorta— va en
-el layout de buses, no en los WAV. Es previo a esta pasada: los disparos
-antiguos tenían el mismo pico de mezcla (−7,0 dBFS).
+**Headroom, medido en vez de supuesto.** A la cadencia máxima (~13 tiros/s) se
+solapan unos cinco estampidos de 382 ms. Sumando los WAV reales con su ganancia
+de mezcla, **alineados y sin decorrelación** (o sea, el caso peor absoluto,
+porque en el juego el tono varía ±3,5 % y los picos no suman en fase):
+
+```text
+una sola voz ...................... pico  -7,62 dBFS
+5 voces a 7 tiros/s ............... pico  -5,83 dBFS
+5 voces a 13 tiros/s .............. pico  -4,48 dBFS   muestras al tope: 0
+```
+
+La suma seca se queda 4,5 dB por debajo del techo incluso en el peor caso
+posible, así que **no hay recorte en el estampido mismo**. El bus `Range` añade
+reverb después, que es lo único que puede acercar ese pico al techo; por eso el
+`Master` NO lleva limitador: el contrato prohíbe el HardLimiter como sustituto
+de mezcla y, medido, no hace falta. Si algún día hiciera falta, el sitio es
+`default_bus_layout.tres`, no los WAV.
 
 ## Balística y física
 
