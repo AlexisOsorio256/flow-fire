@@ -10,14 +10,96 @@ var player: CharacterBody3D
 var hud: CanvasLayer
 var environment_node: WorldEnvironment
 
+## Banderas de PERFILADO (ver `_perf_overrides`). No son opciones de juego.
+var perf_no_shadows := false
+var perf_no_lights := false
+var perf_no_reflection := false
+var perf_no_fog := false
+var perf_no_glow := false
+var perf_no_world := false
+var perf_no_hud := false
+var perf_no_bodycam := false
+## Cuantas luces pueden proyectar sombra (perfilado). -1 = no tocar.
+var perf_shadow_casters := -1
+
 
 func _ready() -> void:
     randomize()
+    _perf_overrides()
     _setup_environment()
     _build_range_shell()
     _build_world()
     _build_player()
     _build_hud()
+    _apply_perf_overrides()
+
+
+## Ajustes de PERFILADO, no de juego. Solo se activan por linea de comandos
+## (`-- --no-shadows=1`) para poder medir el coste real de una luz, una sombra o
+## un grupo de geometria sobre el frame time. En una partida normal no hay
+## ninguna bandera y todo queda como lo deja el codigo.
+func _perf_overrides() -> void:
+    var args := OS.get_cmdline_user_args()
+    for a in args:
+        var kv := (a as String).split("=")
+        if kv.size() != 2:
+            continue
+        match kv[0]:
+            "--no-shadows":
+                perf_no_shadows = kv[1] == "1"
+            "--no-lights":
+                perf_no_lights = kv[1] == "1"
+            "--shadow-casters":
+                perf_shadow_casters = int(kv[1])
+            "--no-reflection":
+                perf_no_reflection = kv[1] == "1"
+            "--no-fog":
+                perf_no_fog = kv[1] == "1"
+            "--no-glow":
+                perf_no_glow = kv[1] == "1"
+            "--no-world":
+                perf_no_world = kv[1] == "1"
+            "--no-hud":
+                perf_no_hud = kv[1] == "1"
+            "--no-bodycam":
+                perf_no_bodycam = kv[1] == "1"
+
+
+## Aplica las banderas de perfilado ya con el arbol montado. Una sola pasada.
+func _apply_perf_overrides() -> void:
+    if perf_no_world and world != null:
+        world.visible = false
+        world.process_mode = Node.PROCESS_MODE_DISABLED
+    if perf_no_hud and hud != null:
+        hud.visible = false
+    if perf_no_bodycam:
+        # El shader bodycam es un efecto de pantalla completa: se apaga para
+        # medir lo que cuesta de verdad.
+        # El post bodycam es el ColorRect del HUD, no un nodo aparte: se apaga
+        # su material para poder medir lo que cuesta el efecto de pantalla.
+        if hud != null:
+            var post: Variant = hud.get("post")
+            if post != null and post is CanvasItem:
+                (post as CanvasItem).visible = false
+    if perf_no_reflection:
+        for node in find_children("*", "ReflectionProbe", true, false):
+            (node as ReflectionProbe).visible = false
+    if perf_no_lights:
+        for node in find_children("*", "Light3D", true, false):
+            (node as Light3D).visible = false
+    elif perf_no_shadows:
+        for node in find_children("*", "Light3D", true, false):
+            (node as Light3D).shadow_enabled = false
+    elif perf_shadow_casters >= 0:
+        var casters := find_children("*", "Light3D", true, false)
+        for index in range(casters.size()):
+            (casters[index] as Light3D).shadow_enabled = index < perf_shadow_casters
+    if perf_no_fog or perf_no_glow:
+        var env := environment_node.environment
+        if perf_no_fog:
+            env.fog_enabled = false
+        if perf_no_glow:
+            env.glow_enabled = false
 
 
 func _setup_environment() -> void:
@@ -41,11 +123,11 @@ func _setup_environment() -> void:
     # Sala cerrada: el ambiente es COLOR controlado, no cielo. El cielo solo
     # alimenta reflejos; la luz la ponen las luminarias con caida real.
     env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-    env.ambient_light_color = Color(0.44, 0.43, 0.42)
-    env.ambient_light_energy = 1.05
+    env.ambient_light_color = Color(0.62, 0.63, 0.68)
+    env.ambient_light_energy = 1.45
     env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
     env.tonemap_mode = Environment.TONE_MAPPER_ACES
-    env.tonemap_exposure = 1.1
+    env.tonemap_exposure = 1.05
     env.adjustment_enabled = true
     env.adjustment_contrast = 1.05
     env.adjustment_saturation = 1.0
@@ -89,7 +171,7 @@ func _build_player() -> void:
     player = PLAYER_SCRIPT.new()
     player.name = "Player"
     add_child(player)
-    player.global_position = Vector3(0, 0.05, 0)
+    player.global_position = Vector3(2.0, 0.05, 0.5)
     player.world = world
 
 
