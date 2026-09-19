@@ -25,6 +25,9 @@ captures/*
 # porque eran las MISMAS imagenes duplicadas, 10 MB): esos PNG son ahora la
 # fuente unica de los mapas del arma y el runtime los carga directamente.
 
-# Material de trabajo: fuentes de audio/modelos descargadas para esta pasada.
-# No es parte del juego (771 MB); se versiona su procedencia en CREDITS_*.md.
+# Material de trabajo: fuentes de audio y modelos descargadas para esta pasada.
+# No es parte del juego y no se versiona; su procedencia SI, en CREDITS_*.md.
+# El tamano no se escribe aqui a proposito: crece con cada fuente nueva y un
+# numero en un comentario solo puede quedarse viejo (llegó a decir 771 MB cuando
+# ya eran 1,3 GB).
 downloads/
