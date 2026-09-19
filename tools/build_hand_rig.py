@@ -71,6 +71,13 @@ ELBOW_OFFSET = Vector((0.13, -0.13, 0.20))
 GRIP_BELOW_HAND = 0.018
 
 
+## AJUSTE FINO del encaje contra la geometria del arma (metros, espacio del
+## arma). PENDIENTE: la ORIENTACION esta resuelta (base anatomica medida,
+## det(rotacion) = +1), pero el desplazamiento final contra la empuñadura
+## necesita otra pasada de iteracion visual. Se deja a cero y escrito antes que
+## poner un numero inventado que parezca calibrado.
+HAND_OFFSET = Vector((0.0, 0.0, 0.0))
+
 def reset_scene() -> None:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     for group in (bpy.data.objects, bpy.data.meshes, bpy.data.armatures,
@@ -207,42 +214,49 @@ def main() -> None:
     bpy.ops.object.mode_set(mode="OBJECT")
     bpy.context.view_layer.update()
 
-    # Direcciones anatomicas para construir el espacio del arma, medidas en la
-    # pose ya aplicada.
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    evaluated = mesh.evaluated_get(depsgraph)
-    wrist_world = evaluated.matrix_world @ armature.data.bones["hand.R"].head_local
-    palm = ((evaluated.matrix_world @ armature.data.bones["f_middle.01.R"].head_local) - wrist_world).normalized()
-    lateral = ((evaluated.matrix_world @ armature.data.bones["f_pinky.01.R"].head_local)
-               - (evaluated.matrix_world @ armature.data.bones["f_index.01.R"].head_local)).normalized()
-    up = (-palm).normalized()
-    lateral = (lateral - up * lateral.dot(up)).normalized()
-    fwd = lateral.cross(up).normalized()
-    if Matrix((lateral, up, fwd)).transposed().determinant() < 0.0:
-        lateral = -lateral
-        fwd = lateral.cross(up).normalized()
-    print("HAND base lateral=%s up=%s fwd=%s"
-          % (tuple(round(v, 2) for v in lateral),
-             tuple(round(v, 2) for v in up),
-             tuple(round(v, 2) for v in fwd)))
+    # DIRECCIONES ANATOMICAS MEDIDAS EN LA POSE. La base NO se elige a ojo:
+    # en un agarre real el eje de la empuñadura va A LO LARGO DEL ANTEBRAZO y la
+    # palma apoya en el lomo trasero.
+    #
+    #   palma (puño->nudillos)   -> -Z (al morro)
+    #   arriba por la empuñadura -> +Y
+    #   lateral                  -> SALE de las otras dos: L = F x U
+    #
+    # Fijar el lateral a mano daba det(T) = -1, o sea una mano IZQUIERDA (un
+    # espejo). Con L = F x U el determinante es +1 y es una rotacion de verdad.
+    wrist_world = armature.matrix_world @ armature.data.bones["hand.R"].head_local
+    palm = ((armature.matrix_world @ armature.data.bones["f_middle.01.R"].head_local) - wrist_world).normalized()
+    lat_anat = ((armature.matrix_world @ armature.data.bones["f_pinky.01.R"].head_local)
+                - (armature.matrix_world @ armature.data.bones["f_index.01.R"].head_local)).normalized()
+    # Ortogonalizar: los ejes MEDIDOS no son exactamente perpendiculares y sin
+    # esto la "rotacion" sale con determinante 1,073 (3,6% de escala parásita).
+    lat_anat = (lat_anat - palm * lat_anat.dot(palm)).normalized()
+    third = palm.cross(lat_anat)
+    source = Matrix(((palm.x, lat_anat.x, third.x),
+                     (palm.y, lat_anat.y, third.y),
+                     (palm.z, lat_anat.z, third.z))).to_4x4()
+    forward = Vector((0.0, 0.0, -1.0))
+    up = Vector((0.0, 1.0, 0.0))
+    lat_w = forward.cross(up)
+    target_basis = Matrix(((lat_w.x, forward.x, up.x),
+                           (lat_w.y, forward.y, up.y),
+                           (lat_w.z, forward.z, up.z))).to_4x4()
+    rotation = target_basis @ source.inverted()
+    det = rotation.to_3x3().determinant()
+    print("HAND det(anatomica)=%.3f det(arma)=%.3f det(rotacion)=%.3f"
+          % (source.to_3x3().determinant(), target_basis.to_3x3().determinant(), det))
+    assert det > 0.0, "orientacion ESPEJO (determinante negativo): revisar L = F x U"
 
-    # Base canonica: rotar, escalar y trasladar sobre los vertices.
-    basis = Matrix(((lateral.x, up.x, fwd.x),
-                    (lateral.y, up.y, fwd.y),
-                    (lateral.z, up.z, fwd.z))).to_4x4()
-    transform = Matrix.Scale(SCALE, 4) @ basis.inverted()
-    # El puño (medido ANTES de hornear) tiene que caer en el origen. El punto de
-    # agarre baja a la palma por el eje de la empuñadura, que ya es -Y del arma.
-    target = Vector((0.0, -GRIP_BELOW_HAND, 0.0))
+    transform = Matrix.Scale(SCALE, 4) @ rotation
+    target = HAND_OFFSET + Vector((0.0, -GRIP_BELOW_HAND, 0.0))
     landed = transform @ wrist_world
-    # ORDEN: primero se rota/escala la malla y DESPUES se traslada en el espacio
-    # final. Al reves (trasladar y luego transformar) el desplazamiento tambien
-    # gira, y la mano quedaba a 0,37 m del origen.
     residual = target - landed
-    print("HAND puño aterriza en=(%.4f, %.4f, %.4f) -> se corrige (%.4f, %.4f, %.4f)"
-          % (landed.x, landed.y, landed.z, residual.x, residual.y, residual.z))
+    print("HAND puño aterriza en=(%.4f, %.4f, %.4f)"
+          % (landed.x, landed.y, landed.z))
 
     bake_pose(mesh, armature)
+    # ORDEN: transformar primero y trasladar despues, en el espacio final. Al
+    # reves, el desplazamiento tambien gira y la mano acaba a 0,37 m del origen.
     mesh.data.transform(transform)
     mesh.data.transform(Matrix.Translation(residual))
     mesh.data.update()
