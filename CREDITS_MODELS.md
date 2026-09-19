@@ -49,52 +49,41 @@
   extraccion el metal sale satinado como el autor. Los `*_Image_*.png` son
   derivados ignorados que el importador regenera, no otra representacion. Ajustes de importacion de esas texturas (disco, los regenera el importador): VRAM + mipmaps en las cuatro; `Image_6` (normal) marcada como normal map.
 
-## Brazos — BAMEN (LOS BRAZOS)
+## Brazos — DJMaesen (LOS BRAZOS)
 
-- Archivo: `assets/models/fps_arms.glb` (8,0 MB). Lleva **2 mallas** (brazo y
-  mano, **13.728 triangulos**), **2 materiales** (`FPS_Arm`, `FPS_Hand`) y
-  **6 texturas de 1024²** (baseColor, metallicRoughness y normal de cada
-  material; el donante las traia a 2048² para la mano y se han bajado). Esqueleto
-  **deform-only de 42 huesos**, renombrados a nombres legibles (`root`, `chest`,
-  `upper_arm.L`, `forearm.L`, `hand.L`, `palm.L`, `f_index.01.L`...): sin IK, sin
-  constraints y sin huesos de autoria.
+- Archivo: `assets/models/fps_arms.glb` (6,2 MB). Lleva **1 malla** (`Arms_DJ`,
+  **13.536 triangulos**), **1 material** (`arms`) y **3 texturas de 1024²**
+  (baseColor, metallicRoughness y normal). Esqueleto **deform-only de 51 huesos**,
+  renombrados a nombres canónicos legibles (`root`, `chest`, `upper_arm.L/R`,
+  `forearm.L/R`, `hand.L/R`, dedos completos): sin IK, sin constraints y sin huesos
+  de autoría.
 - Contiene **exactamente cinco clips**, con estos nombres y estas duraciones, que
   son las de la mecanica de `scripts/Glock.gd`:
 
   | clip | duracion | hito mecanico |
   |---|---|---|
-  | `Idle` | 3,00 s | bucle de agarre |
+  | `Idle` | 3,00 s | bucle de agarre a dos manos |
   | `Fire` | 0,26 s | latigazo por disparo |
   | `Reload` | 2,10 s | `RELOAD_TOTAL` |
   | `ReloadEmpty` | 2,35 s | `RELOAD_EMPTY_TOTAL` |
   | `Inspect` | 2,00 s | `INSPECT_TOTAL` |
 
-- Fuente: **BAMEN**, "FREE [FPS Arms] GameReady - RIGGED" —
-  https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f
+- Fuente: **DJMaesen**, "animated pistol" —
+  https://sketchfab.com/3d-models/animated-pistol-bd896167e7ca44f19597d3afe6a8d83f
 - Licencia: **CC-BY-4.0**, la que trae el `license.txt` del propio paquete:
   `license type: CC-BY-4.0` / `requirements: Author must be credited. Commercial
   use is allowed.` **Esta licencia OBLIGA a atribuir**, asi que la cadena de
   credito que pide el autor va literal aqui:
-  *This work is based on "FREE [FPS Arms] GameReady - RIGGED"
-  (https://sketchfab.com/3d-models/free-fps-arms-gameready-rigged-296d30fc705b4dff85c2c8a2d2724e7f)
-  by BAMEN (https://sketchfab.com/bamenwo05) licensed under CC-BY-4.0
+  *This work is based on "animated pistol"
+  (https://sketchfab.com/3d-models/animated-pistol-bd896167e7ca44f19597d3afe6a8d83f)
+  by DJMaesen (https://sketchfab.com/DJMaesen) licensed under CC-BY-4.0
   (http://creativecommons.org/licenses/by/4.0/)*
-- El GLB de BAMEN que está versionado es hoy la **fuente canónica de producción**.
-  La pasada que lo generó limpió la malla `Icosphere`, retiró diez huesos
-  `_end`, bajó las texturas de mano a 1024² y ajustó el agarre sobre nuestra
-  G19. Ese proceso ya no coincide con el `tools/build_arms.py` actual.
-- **Estado del builder actual:** `tools/build_arms.py` apunta al donante
-  "animated pistol" de DJMaesen como experimento de reemplazo. La normalización
-  de escala/bind de ese donante sigue fallando su propia verificación y el
-  builder aborta antes de exportar. Por tanto **NO reconstruye el BAMEN actual
-  ni es todavía ruta de producción**. El donante BAMEN permanece disponible en
-  `downloads/models/bamen_fps_arms/` localmente, pero `downloads/` está
-  ignorado por Git.
-- Godot extrae las seis texturas a `assets/models/fps_arms_FPS_*.png`: quedan
-  **duplicadas** (dentro del GLB y fuera), 5,6 MB. Se declara en vez de
-  esconderse. La alternativa sin duplicar seria incrustarlas en BasisU, y ese
-  modo lee el mapa ORM como sRGB — el mismo fallo que ya obligo a extraer las del
-  arma.
+- El GLB de DJMaesen generado con `tools/build_arms.py` es la **fuente canónica
+  de producción**. Pasa `VERIFY OK` (`tools/build_arms.py --verify-only`),
+  cumple las invariantes de `tools/check_weapon.tscn`, y entrega el agarre humano
+  moderno a dos manos (*thumbs-forward*) solicitado en la constitución.
+- Godot extrae las tres texturas a `assets/models/fps_arms_arms_*.png`.
+
 
 ## RangeShell — geometria original de FlowFire
 

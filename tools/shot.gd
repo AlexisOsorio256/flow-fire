@@ -34,6 +34,8 @@ var _player: Node = null
 var _weapon: Node = null
 var _view: Viewport = null
 var _shots := 0
+var _hero_step := 0
+var _hero_timer := 0.0
 
 
 func _ready() -> void:
@@ -138,6 +140,12 @@ func _aim(yaw: float, pitch: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if action == "hero_normal":
+		_process_hero_normal(delta)
+		return
+	if action == "hero_slow":
+		_process_hero_slow(delta)
+		return
 	_frame += 1
 	_game_ms += delta * 1000.0
 	if _frame == warmup - 2:
@@ -153,6 +161,159 @@ func _process(delta: float) -> void:
 	elif _frame >= warmup + total:
 		print("SHOT action=%s frames=%d disparos=%d dir=%s" % [action, total, _shots, out_dir])
 		get_tree().quit()
+
+
+func _process_hero_normal(delta: float) -> void:
+	_hero_timer += delta
+	match _hero_step:
+		0:
+			# 1.5s Idle
+			if _hero_timer >= 1.5:
+				_hero_step = 1
+				_hero_timer = 0.0
+		1:
+			# Caminar / mover ligeramente 1.6s
+			if _player != null:
+				var fwd := Vector3(-sin(_player.get("yaw")), 0.0, -cos(_player.get("yaw")))
+				_player.set("velocity", fwd * 2.2)
+			if _hero_timer >= 1.6:
+				if _player != null:
+					_player.set("velocity", Vector3.ZERO)
+				_hero_step = 2
+				_hero_timer = 0.0
+		2:
+			# Pausa post-movimiento 0.5s
+			if _hero_timer >= 0.5:
+				_hero_step = 3
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.set_aim(true)
+		3:
+			# ADS asentado 0.8s
+			if _hero_timer >= 0.8:
+				_hero_step = 4
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.press_trigger()
+		4:
+			# ADS Tiro 1
+			if _hero_timer >= 0.08 and _weapon != null:
+				_weapon.release_trigger()
+			if _hero_timer >= 0.5:
+				_hero_step = 5
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.press_trigger()
+		5:
+			# ADS Tiro 2
+			if _hero_timer >= 0.08 and _weapon != null:
+				_weapon.release_trigger()
+			if _hero_timer >= 0.5:
+				_hero_step = 6
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.press_trigger()
+		6:
+			# ADS Tiro 3
+			if _hero_timer >= 0.08 and _weapon != null:
+				_weapon.release_trigger()
+			if _hero_timer >= 0.6:
+				_hero_step = 7
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.set_aim(false)
+		7:
+			# Volver a Hip 0.6s
+			if _hero_timer >= 0.6:
+				_hero_step = 8
+				_hero_timer = 0.0
+		8:
+			# Disparar continuo hasta ultimo cartucho y slide lock
+			if _weapon == null:
+				_hero_step = 9
+				return
+			var locked: bool = _weapon.get("slide_locked")
+			var ch: int = _weapon.get("chamber")
+			var mg: int = _weapon.get("mag")
+			if locked or (ch <= 0 and mg <= 0):
+				_weapon.release_trigger()
+				_hero_step = 9
+				_hero_timer = 0.0
+			else:
+				var cycle := fmod(_hero_timer, 0.16)
+				if cycle < 0.08:
+					_weapon.press_trigger()
+				else:
+					_weapon.release_trigger()
+		9:
+			# Slide lock visible e inequivoco: pausa 1.2s
+			if _hero_timer >= 1.2:
+				_hero_step = 10
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.start_reload(15)
+		10:
+			# Esperar ReloadEmpty
+			var reloading: bool = _weapon.get("reloading") if _weapon != null else false
+			if not reloading and _hero_timer >= 2.4:
+				_hero_step = 11
+				_hero_timer = 0.0
+		11:
+			# Pausa en bateria 0.8s
+			if _hero_timer >= 0.8:
+				_hero_step = 12
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.press_trigger()
+		12:
+			# Tiro post-recarga
+			if _hero_timer >= 0.08 and _weapon != null:
+				_weapon.release_trigger()
+			if _hero_timer >= 0.6:
+				_hero_step = 13
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.inspect_weapon()
+		13:
+			# Inspect
+			var inspecting: bool = _weapon.get("inspecting") if _weapon != null else false
+			if not inspecting and _hero_timer >= 2.1:
+				_hero_step = 14
+				_hero_timer = 0.0
+		14:
+			# Pausa final 1.0s
+			if _hero_timer >= 1.0:
+				print("HERO_NORMAL finalizado con exito")
+				get_tree().quit()
+
+
+func _process_hero_slow(delta: float) -> void:
+	_hero_timer += delta
+	match _hero_step:
+		0:
+			# Warmup en hip (0.08s en game time = ~1s real)
+			if _hero_timer >= 0.08:
+				_hero_step = 1
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.force_fire_once()
+		1:
+			# Esperar disparo normal (recoil, fogonazo, gas, corredera 39mm, cañon, casquillo)
+			# 0.35s game time = ~4.4s real a 0.08x
+			if _hero_timer >= 0.35:
+				_hero_step = 2
+				_hero_timer = 0.0
+				if _weapon != null:
+					_weapon.set("mag", 0)
+					_weapon.set("chamber", 1)
+					_weapon.set("slide_locked", false)
+					_weapon.force_fire_once()
+		2:
+			# Segundo disparo en seco -> slide lock visible y bloqueo atras
+			# 0.40s game time = ~5s real
+			if _hero_timer >= 0.40:
+				print("HERO_SLOW finalizado con exito")
+				get_tree().quit()
 
 
 func _trigger() -> void:

@@ -92,36 +92,42 @@ position = Vector3(0, 1.4, -63.5)
 position = Vector3(-5, 3.30, 2)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 7.5
+light_cull_mask = 4095
 omni_range = 11.0
 
 [node name="LampNearRight" type="OmniLight3D" parent="Lighting"]
 position = Vector3(5, 3.30, 2)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 7.5
+light_cull_mask = 4095
 omni_range = 11.0
 
 [node name="LampMidLeft" type="OmniLight3D" parent="Lighting"]
 position = Vector3(-5, 3.30, -10)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 7.5
+light_cull_mask = 4095
 omni_range = 11.0
 
 [node name="LampMidRight" type="OmniLight3D" parent="Lighting"]
 position = Vector3(5, 3.30, -10)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 7.5
+light_cull_mask = 4095
 omni_range = 11.0
 
 [node name="LampFarLeft" type="OmniLight3D" parent="Lighting"]
 position = Vector3(-5, 3.30, -22)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 10.0
+light_cull_mask = 4095
 omni_range = 16.0
 
 [node name="LampFarRight" type="OmniLight3D" parent="Lighting"]
 position = Vector3(5, 3.30, -22)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 10.0
+light_cull_mask = 4095
 omni_range = 16.0
 
 [node name="PostPendant" type="SpotLight3D" parent="Lighting"]
@@ -129,6 +135,7 @@ position = Vector3(0, 2.85, 0.5)
 rotation_degrees = Vector3(-90, 0, 0)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 9.0
+light_cull_mask = 4095
 spot_range = 7.0
 spot_angle = 58.0
 shadow_enabled = true
@@ -137,37 +144,44 @@ shadow_enabled = true
 position = Vector3(-5, 3.30, -34)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 11.0
+light_cull_mask = 4095
 omni_range = 16.0
 
 [node name="LampGroup3Right" type="OmniLight3D" parent="Lighting"]
 position = Vector3(5, 3.30, -34)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 11.0
+light_cull_mask = 4095
 omni_range = 16.0
 
 [node name="LampGroup4Left" type="OmniLight3D" parent="Lighting"]
 position = Vector3(-5, 3.30, -46)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 12.0
+light_cull_mask = 4095
 omni_range = 17.0
 
 [node name="LampGroup4Right" type="OmniLight3D" parent="Lighting"]
 position = Vector3(5, 3.30, -46)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 12.0
+light_cull_mask = 4095
 omni_range = 17.0
 
 [node name="LampZeroLeft" type="OmniLight3D" parent="Lighting"]
 position = Vector3(-5, 3.30, -57)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 12.0
+light_cull_mask = 4095
 omni_range = 17.0
 
 [node name="LampZeroRight" type="OmniLight3D" parent="Lighting"]
 position = Vector3(5, 3.30, -57)
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 12.0
+light_cull_mask = 4095
 omni_range = 17.0
+
 
 [node name="PostReflection" type="ReflectionProbe" parent="."]
 position = Vector3(0, 1.9, -1.5)

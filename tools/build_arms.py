@@ -632,7 +632,7 @@ def apply_targets(arm, targets: dict) -> None:
         pb = arm.pose.bones[name]
         pb.rotation_mode = "QUATERNION"
         pb.matrix = m
-        update()
+    update()
 
 
 

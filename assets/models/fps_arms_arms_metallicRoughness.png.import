@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://blgkwpu1ybtuj"
-path="res://.godot/imported/fps_arms_FPS_Arm_normal.png-5c296887648847c6f406b9c31116aa17.ctex"
+uid="uid://cdny38irxhn7"
+path="res://.godot/imported/fps_arms_arms_metallicRoughness.png-4d40e5c5e0a2abd1d19eb0f236cbf2e7.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "fafa090504b01735bfebd09a82563897"
+"md5": "f380ecb09c589e7c3e0090b38c23f457"
 }
 
 [deps]
 
-source_file="res://assets/models/fps_arms_FPS_Arm_normal.png"
-dest_files=["res://.godot/imported/fps_arms_FPS_Arm_normal.png-5c296887648847c6f406b9c31116aa17.ctex"]
+source_file="res://assets/models/fps_arms_arms_metallicRoughness.png"
+dest_files=["res://.godot/imported/fps_arms_arms_metallicRoughness.png-4d40e5c5e0a2abd1d19eb0f236cbf2e7.ctex"]
 
 [params]
 

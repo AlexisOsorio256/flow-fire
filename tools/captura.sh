@@ -17,6 +17,7 @@
 # forma de capturar a su resolucion. En :77 (Xvfb) no abre nada pero renderiza
 # con llvmpipe.
 set -u
+export PATH="$HOME/.local/bin:$PATH"
 cd "$(dirname "$0")/.."
 ACTION="${1:-downrange}"; shift || true
 DISP="${SHOT_DISPLAY:-:0}"
@@ -57,6 +58,38 @@ if [ "$ACTION" = "evidencia" ]; then
   run drywall   --warmup=40 --total=18 --stride=3 --time-scale=0.5
   echo
   echo "Ahora MIRALAS. Una captura que nadie abre no es evidencia."
+  exit 0
+fi
+
+if [ "$ACTION" = "record_normal" ]; then
+  OUT="${SHOT_OUT:-captures/hero_normal.mp4}"
+  rm -f "$OUT"
+  echo "Grabando video hero_normal en $OUT..."
+  ffmpeg -y -f x11grab -video_size "$RES" -framerate 30 -i "$DISP.0" \
+    -f pulse -i alsa_output.pci-0000_00_1f.3.analog-stereo.monitor \
+    -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac "$OUT" > /dev/null 2>&1 &
+  FFMPEG_PID=$!
+  sleep 0.5
+  DISPLAY="$DISP" godot4 --path . --resolution "$RES" tools/shot.tscn -- "--action=hero_normal" "$@"
+  kill -INT $FFMPEG_PID 2>/dev/null || true
+  wait $FFMPEG_PID 2>/dev/null || true
+  echo "Video listo: $OUT ($(ls -lh "$OUT" 2>/dev/null | awk '{print $5}'))"
+  exit 0
+fi
+
+if [ "$ACTION" = "record_slow" ]; then
+  OUT="${SHOT_OUT:-captures/hero_slow.mp4}"
+  rm -f "$OUT"
+  echo "Grabando video hero_slow en $OUT..."
+  ffmpeg -y -f x11grab -video_size "$RES" -framerate 30 -i "$DISP.0" \
+    -f pulse -i alsa_output.pci-0000_00_1f.3.analog-stereo.monitor \
+    -c:v libx264 -preset veryfast -pix_fmt yuv420p -c:a aac "$OUT" > /dev/null 2>&1 &
+  FFMPEG_PID=$!
+  sleep 0.5
+  DISPLAY="$DISP" godot4 --path . --resolution "$RES" tools/shot.tscn -- "--action=hero_slow" "--time-scale=0.08" "$@"
+  kill -INT $FFMPEG_PID 2>/dev/null || true
+  wait $FFMPEG_PID 2>/dev/null || true
+  echo "Video listo: $OUT ($(ls -lh "$OUT" 2>/dev/null | awk '{print $5}'))"
   exit 0
 fi
 

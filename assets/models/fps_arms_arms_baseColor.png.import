@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://trjht0nofa20"
-path="res://.godot/imported/fps_arms_FPS_Hand_normal.png-1a7b943d6741ad15bbe935441b302560.ctex"
+uid="uid://b4h8svupivlwy"
+path="res://.godot/imported/fps_arms_arms_baseColor.png-febd76adb878d00e9fb70995039b18c8.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "2020f6fb583ea5d710efc9e98aad3b2b"
+"md5": "a9f79fda883349b222c3a8a68a49f05e"
 }
 
 [deps]
 
-source_file="res://assets/models/fps_arms_FPS_Hand_normal.png"
-dest_files=["res://.godot/imported/fps_arms_FPS_Hand_normal.png-1a7b943d6741ad15bbe935441b302560.ctex"]
+source_file="res://assets/models/fps_arms_arms_baseColor.png"
+dest_files=["res://.godot/imported/fps_arms_arms_baseColor.png-febd76adb878d00e9fb70995039b18c8.ctex"]
 
 [params]
 

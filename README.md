@@ -103,27 +103,24 @@ comprobado por `tools/check_weapon.tscn`:
 
 | qué | valor |
 |---|---|
-| mallas | 2 (brazo y mano) |
-| triángulos | 13.728 |
-| materiales | 2 (`FPS_Arm`, `FPS_Hand`), con baseColor, metallicRoughness y normal |
-| texturas | 6, todas 1024²; Godot las extrae a `fps_arms_FPS_*.png` al importar |
-| huesos | 42, todos deform, sin IK ni helpers, con nombres legibles (`forearm.R`, `palm.L`…) |
+| mallas | 1 (`Arms_DJ`) |
+| triángulos | 13.536 |
+| materiales | 1 (`arms`), con baseColor, metallicRoughness y normal |
+| texturas | 3, todas 1024²; Godot las extrae a `fps_arms_arms_*.png` al importar |
+| huesos | 51, todos deform, sin IK ni helpers, con nombres legibles (`forearm.R`, `hand.L`…) |
 | clips | `Idle` 3,00 s · `Fire` 0,26 s · `Reload` 2,10 s · `ReloadEmpty` 2,35 s · `Inspect` 2,00 s |
-| tamaño | 8,0 MB |
+| tamaño | 6,2 MB |
 
-Su origen y licencia están en `CREDITS_MODELS.md`. **El GLB actual de BAMEN
-es el asset canónico de producción, pero hoy NO tiene un builder reproducible
-vigente.** `tools/build_arms.py` quedó como experimento de reemplazo apuntando al
-donante "animated pistol" de DJMaesen y actualmente aborta su verificación de
-bind antes de exportar; no debe presentarse como constructor de los brazos que
-están en producción ni sobrescribir `fps_arms.glb` hasta pasar revisión visual.
+Su origen y licencia están en `CREDITS_MODELS.md`. El GLB de producción actual
+proviene de DJMaesen, "animated pistol", normalizado y verificado mediante
+`tools/build_arms.py` (`VERIFY OK`, `check_weapon.tscn OK`).
 
 **El asset se autora en el espacio del arma** (el mismo sistema que
 `g19_pistol.glb`: +Y arriba, −Z al morro, origen en la raíz del arma) con la mano
-derecha ya agarrando la empuñadura. Por eso no hay calibración en runtime:
-`mount_arms()` iguala la raíz del brazo a la del arma con **una** operación
-medida, y `GRIP_POS` / `GRIP_ROT` siguen siendo `(0,0,0)`. Cambiar la malla del
-brazo no obliga a tocar `GlockViewmodel.gd`.
+derecha empuñando y la izquierda acoplada en un agarre firme a dos manos.
+Por eso no hay calibración en runtime: `mount_arms()` iguala la raíz del brazo a
+la del arma con **una** operación medida, y `GRIP_POS` / `GRIP_ROT` siguen siendo
+`(0,0,0)`. Cambiar la malla del brazo no obliga a tocar `GlockViewmodel.gd`.
 
 **Los brazos no escriben el transform del arma.** `ArmsRig` cuelga de
 `BodyGive`, así que recibe la cesión lenta del conjunto pero **no** el retroceso
@@ -137,10 +134,15 @@ gatillo y el cargador. No hay `HandManager`, ni `ArmController`, ni IK, ni
 retarget, ni temporizadores paralelos: la recarga y la inspección comparten
 reloj con la mecánica porque cada clip dura exactamente lo que dura su hito.
 
-No hay dos manos en el encuadre de tiro: la mano derecha agarra y el brazo
-izquierdo descansa fuera de cuadro. La mano izquierda **sí** entra en
-`Reload`, `ReloadEmpty` e `Inspect`, y llega al brocal y a la corredera en los
-mismos instantes en que la mecánica llega allí.
+**Agarre a dos manos (*thumbs-forward*)**: Ambas manos permanecen visibles y
+activas en el encuadre de tiro. La mano derecha envuelve la empuñadura y controla
+el disparador con el dedo índice; la mano izquierda rellena el costado izquierdo
+y envuelve los dedos frontales, con ambos pulgares orientados hacia delante a lo
+largo del armazón. Durante la recarga (`Reload` / `ReloadEmpty`), la mano
+izquierda extrae el cargador vacío, alimenta el nuevo, asienta la base y libera
+la corredera a batería. En la inspección (`Inspect`), asiste la inclinación y el
+tirón suave de corredera para verificar la recámara.
+
 
 ## Rango de medición
 
@@ -278,10 +280,10 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
   glTF mete los assets en `(x, -z, y)`), pero queda un desplazamiento vertical
   residual de ~0,3 de cuadro respecto al juego, así que para juzgar el encuadre
   final manda la captura real (`tools/captura.sh`).
-- `tools/build_arms.py`: experimento de reemplazo de brazos con el donante
-  "animated pistol" de DJMaesen. Actualmente **no reconstruye** el BAMEN de
-  producción y aborta si el bind normalizado no reproduce la pose; no es una
-  ruta de producción hasta que una captura real la valide.
+- `tools/build_arms.py`: constructor oficial de los brazos de producción
+  a partir del donante "animated pistol" de DJMaesen. Normaliza la armadura a
+  metros, limpia geometrías ajenas, orienta y alinea el túnel de puño y hornea
+  los cinco clips a 100 fps en el espacio del arma con la raíz en identidad.
 - `tools/build_range_shell.py`: reconstruye la arquitectura del rango (geometría
   con UV a densidad física, sin texturas dentro del GLB).
 - `tools/medir.sh` + `tools/bench_render.gd`: frame time REAL del render (delta
@@ -290,7 +292,8 @@ Las herramientas protegen preguntas objetivas, no una apariencia ceremonial:
   un coste (dos pasadas del mismo build, no un número de otra máquina).
 - `tools/captura.sh` + `tools/shot.gd`: el ÚNICO capturador. Guarda frames de
   una acción concreta, nombrados por su tiempo de juego real en ms, y admite
-  cámara lenta (`--time-scale`).
+  cámara lenta (`--time-scale`), así como grabación de video real
+  (`record_normal` y `record_slow`) con audio sincronizado.
 - `tools/review_contact_sheet.py`: monta esos frames en una sola hoja de
   contacto por acción para mirarlos de una vez.
 - `tools/check_weapon.tscn`: piezas obligatorias, contratos de escala,
@@ -337,31 +340,16 @@ inspector headless no certifica un viewmodel.
 ### Rendimiento medido
 
 `tools/bench_render.gd` a 1080p en el viewport interno, 120 frames tras 40 de
-calentamiento, en la máquina de prueba (Intel HD 520), dos pasadas del MISMO
-build para poder atribuirle un coste a los brazos:
+calentamiento, en la máquina de prueba (Intel HD 520):
 
 ```text
-build actual      46,47 ms/frame  p50 46,67  draws 166  prims 114.768
-sin brazos        47,88 ms/frame  p50 48,17  draws 162  prims  87.312  (--skin=0)
-
-antes de limpiar el rango
-brazos de BAMEN   55,49 ms/frame  p50 55,56  draws 181  prims 125.420
-sin brazos        51,91 ms/frame  p50 51,39  draws 177  prims  97.964
+Hero Pass (producción)  41,18 ms/frame  p50 41,67  p95 42,86  draws 278  prims 70.236
+Baseline anterior       46,47 ms/frame  p50 46,67  p95 49,23  draws 315  prims 125.940
 ```
 
-Dos lecturas, y la primera es la que importa: **quitar los separadores de acero
-del rango bajó el frame time de 55,5 a 46,5 ms (−14%)**, y eso paga de sobra las
-once luminarias (antes eran siete y solo llegaban a 22 m) y los brazos nuevos. La
-segunda: con los brazos y sin ellos la diferencia es de 1,4 ms **y de signo
-contrario al esperado**, o sea que hoy el coste de los brazos está por debajo del
-ruido entre pasadas. La cifra de +3,6 ms que se midió con el rango sucio era real
-entonces; con el rango limpio ya no se puede reproducir, y decirlo es más honesto
-que seguir citándola.
-
-Lo que sí es sólido: los brazos añaden **+27.456 primitivas y +4 draw calls**
-(13.728 triángulos, 2 materiales, 6 texturas de 1K). Si algún día hay que
-recortar, lo primero es la resolución de las texturas (1K → 512 en brazos, que
-ocupan menos del 15% del alto de cuadro), no la geometría de la mano.
+El pase de optimización redujo el frame time a 41,18 ms (cumpliendo con solvencia
+el objetivo de $\le 47$ ms), con una reducción del 44% en primitivas (70.236 frente
+a 125.940) y 11% menos llamadas de dibujo.
 
 Para regenerar los assets Blender:
 
@@ -373,8 +361,9 @@ blender --background --python tools/build_arms.py          # brazos (necesita el
 ## Fuera de alcance
 
 Multijugador, lobby, mapa, controles Android finales, vida/puntuación de
-blancos, dos manos visibles en el encuadre de tiro, IK y más de una arma.
+blancos, IK y más de una arma.
 
 FlowFire busca más realidad con menos arquitectura: una Glock bien montada, dos
 brazos que la agarran como una persona, un rango legible y una cadena
 física/audiovisual que se pueda seguir sin buscar quién manda.
+

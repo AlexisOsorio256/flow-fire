@@ -84,6 +84,10 @@ var _cache: Dictionary = {}
 
 func _ready() -> void:
     _rebind(find_children("*", "MeshInstance3D", true, false))
+    var lighting := get_node_or_null("Lighting")
+    if lighting != null:
+        for light in lighting.find_children("*", "Light3D", true, false):
+            (light as Light3D).light_cull_mask = 4095
 
 
 func _rebind(nodes: Array) -> void:
